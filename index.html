@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Green Coffee — Specialty Coffee</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+:root{
+  --black:#0a0a08;
+  --deep:#111110;
+  --surface:#191917;
+  --card:#1f1f1d;
+  --border:#2e2e2b;
+  --border-light:#3a3a36;
+  --gold:#c9a84c;
+  --gold-dim:#9a7a30;
+  --gold-soft:rgba(201,168,76,0.12);
+  --gold-glow:rgba(201,168,76,0.06);
+  --green:#3d6b47;
+  --green-bright:#5a9e68;
+  --white:#f5f3ee;
+  --muted:#8a8a7e;
+  --muted2:#5a5a52;
+  --pink:#e91e8c;
+}
+
+html{scroll-behavior:smooth}
+
+body{
+  font-family:'DM Sans',sans-serif;
+  background:var(--black);
+  color:var(--white);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+/* ── HERO ── */
+.hero{
+  position:relative;
+  min-height:100svh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:60px 24px 80px;
+  overflow:hidden;
+  text-align:center;
+}
+
+.hero-bg{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse 80% 60% at 50% 30%, rgba(61,107,71,0.18) 0%, transparent 70%),
+             radial-gradient(ellipse 60% 40% at 80% 80%, rgba(201,168,76,0.08) 0%, transparent 60%),
+             var(--black);
+}
+
+.hero-grain{
+  position:absolute;inset:0;
+  opacity:0.04;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-size:200px;
+  pointer-events:none;
+}
+
+.hero-ring{
+  position:absolute;
+  width:500px;height:500px;
+  border-radius:50%;
+  border:1px solid rgba(201,168,76,0.06);
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  animation:ringPulse 6s ease-in-out infinite;
+}
+.hero-ring:nth-child(2){width:700px;height:700px;animation-delay:2s;border-color:rgba(201,168,76,0.03)}
+.hero-ring:nth-child(3){width:900px;height:900px;animation-delay:4s;border-color:rgba(61,107,71,0.04)}
+
+@keyframes ringPulse{
+  0%,100%{opacity:0.4;transform:translate(-50%,-50%) scale(1)}
+  50%{opacity:1;transform:translate(-50%,-50%) scale(1.02)}
+}
+
+.hero-content{position:relative;z-index:2}
+
+.brand-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  border:1px solid rgba(201,168,76,0.3);
+  border-radius:40px;
+  padding:6px 18px;
+  margin-bottom:32px;
+  backdrop-filter:blur(8px);
+}
+.brand-badge-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:var(--gold);
+  animation:dotBlink 2s ease-in-out infinite;
+}
+@keyframes dotBlink{0%,100%{opacity:1}50%{opacity:0.3}}
+.brand-badge span{
+  font-size:11px;font-weight:500;
+  letter-spacing:2px;text-transform:uppercase;
+  color:var(--gold);
+}
+
+.hero-logo{
+  font-family:'Cormorant Garamond',serif;
+  font-size:clamp(52px,14vw,88px);
+  font-weight:600;
+  line-height:0.92;
+  letter-spacing:-1px;
+  color:var(--white);
+  margin-bottom:6px;
+}
+.hero-logo em{
+  font-style:italic;
+  color:var(--gold);
+}
+
+.hero-tagline{
+  font-size:13px;font-weight:300;
+  letter-spacing:4px;text-transform:uppercase;
+  color:var(--muted);
+  margin-bottom:48px;
+}
+
+.hero-pay-buttons{
+  display:flex;flex-direction:column;gap:12px;
+  width:100%;max-width:340px;
+  margin:0 auto;
+}
+
+.btn-primary{
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:18px 28px;
+  background:linear-gradient(135deg, var(--gold) 0%, #e8c06a 50%, var(--gold) 100%);
+  background-size:200% 100%;
+  border:none;border-radius:14px;
+  color:#1a1200;
+  font-family:'DM Sans',sans-serif;
+  font-size:15px;font-weight:500;
+  cursor:pointer;
+  text-decoration:none;
+  transition:all 0.3s ease;
+  animation:shimmer 4s ease-in-out infinite;
+}
+@keyframes shimmer{
+  0%,100%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(201,168,76,0.35)}
+.btn-primary:active{transform:translateY(0)}
+
+.btn-secondary{
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:17px 28px;
+  background:transparent;
+  border:1px solid var(--border-light);
+  border-radius:14px;
+  color:var(--white);
+  font-family:'DM Sans',sans-serif;
+  font-size:15px;font-weight:400;
+  cursor:pointer;
+  text-decoration:none;
+  transition:all 0.25s ease;
+}
+.btn-secondary:hover{border-color:var(--gold-dim);background:var(--gold-glow)}
+
+.btn-icon-wrap{
+  width:28px;height:28px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+
+/* scroll cue */
+.scroll-cue{
+  position:absolute;bottom:32px;left:50%;transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  opacity:0.4;z-index:2;
+  animation:cueFloat 2.5s ease-in-out infinite;
+}
+@keyframes cueFloat{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(6px)}}
+.scroll-cue span{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--muted)}
+
+/* ── SECTION SHARED ── */
+section{padding:80px 24px}
+.section-label{
+  font-size:10px;letter-spacing:3px;text-transform:uppercase;
+  color:var(--gold);font-weight:500;
+  margin-bottom:12px;
+}
+.section-title{
+  font-family:'Cormorant Garamond',serif;
+  font-size:clamp(32px,8vw,48px);
+  font-weight:600;
+  line-height:1.1;
+  margin-bottom:8px;
+}
+.section-title em{font-style:italic;color:var(--gold)}
+.section-sub{
+  font-size:14px;color:var(--muted);font-weight:300;
+  line-height:1.7;margin-bottom:40px;
+}
+
+/* ── MENU ── */
+#menu{background:var(--deep)}
+
+.menu-categories{
+  display:flex;gap:8px;
+  overflow-x:auto;
+  padding-bottom:8px;
+  margin-bottom:32px;
+  scrollbar-width:none;
+}
+.menu-categories::-webkit-scrollbar{display:none}
+
+.cat-btn{
+  flex-shrink:0;
+  padding:8px 20px;
+  border-radius:40px;
+  border:1px solid var(--border);
+  background:transparent;
+  color:var(--muted);
+  font-family:'DM Sans',sans-serif;
+  font-size:13px;font-weight:400;
+  cursor:pointer;
+  transition:all 0.2s;
+  white-space:nowrap;
+}
+.cat-btn.active{
+  background:var(--gold);
+  border-color:var(--gold);
+  color:#1a1200;font-weight:500;
+}
+.cat-btn:hover:not(.active){border-color:var(--border-light);color:var(--white)}
+
+.menu-grid{display:flex;flex-direction:column;gap:2px}
+
+.menu-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 0;
+  border-bottom:1px solid var(--border);
+  gap:12px;
+  cursor:pointer;
+  transition:all 0.2s;
+}
+.menu-item:last-child{border-bottom:none}
+.menu-item:hover .menu-item-name{color:var(--gold)}
+
+.menu-item-info{flex:1}
+.menu-item-name{
+  font-size:15px;font-weight:400;
+  color:var(--white);
+  margin-bottom:4px;
+  transition:color 0.2s;
+}
+.menu-item-desc{font-size:12px;color:var(--muted);font-weight:300}
+
+.menu-item-right{display:flex;align-items:center;gap:16px;flex-shrink:0}
+.menu-item-price{
+  font-family:'Cormorant Garamond',serif;
+  font-size:18px;font-weight:600;
+  color:var(--gold);
+  white-space:nowrap;
+}
+.menu-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:var(--green-bright);
+  flex-shrink:0;
+}
+
+.menu-section-hidden{display:none}
+.menu-section-hidden.visible{display:block}
+
+/* ── QR PAYMENT ── */
+#payment{
+  background:var(--surface);
+  position:relative;overflow:hidden;
+}
+#payment::before{
+  content:'';position:absolute;
+  top:-200px;right:-200px;
+  width:500px;height:500px;
+  border-radius:50%;
+  background:radial-gradient(circle, rgba(201,168,76,0.05) 0%, transparent 70%);
+  pointer-events:none;
+}
+
+.payment-grid{
+  display:flex;flex-direction:column;gap:20px;
+}
+
+.payment-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:20px;
+  overflow:hidden;
+  transition:border-color 0.25s;
+}
+.payment-card:hover{border-color:var(--border-light)}
+
+.payment-card-header{
+  padding:20px 20px 0;
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:20px;
+}
+.payment-card-icon{
+  width:44px;height:44px;
+  border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.payment-card-icon.momo{background:linear-gradient(135deg,#ae2070,#e91e8c)}
+.payment-card-icon.qr{background:linear-gradient(135deg,#1a6b3a,#2d9e5f)}
+.payment-card-title{font-size:16px;font-weight:500;margin-bottom:2px}
+.payment-card-sub{font-size:12px;color:var(--muted);font-weight:300}
+
+.qr-container{
+  margin:0 20px 20px;
+  background:#fff;
+  border-radius:16px;
+  padding:20px;
+  display:flex;flex-direction:column;align-items:center;gap:12px;
+}
+.qr-img{
+  width:160px;height:160px;
+  border-radius:8px;
+  display:block;
+}
+.qr-store-name{
+  font-family:'DM Sans',sans-serif;
+  font-size:14px;font-weight:500;color:#111;
+}
+.qr-id{font-size:11px;color:#888;font-family:monospace}
+
+.momo-transfer-btn{
+  display:flex;align-items:center;gap:12px;
+  margin:0 20px 20px;
+  padding:16px 18px;
+  background:linear-gradient(135deg,rgba(174,32,112,0.15),rgba(233,30,140,0.1));
+  border:1px solid rgba(233,30,140,0.3);
+  border-radius:14px;
+  cursor:pointer;
+  text-decoration:none;
+  color:var(--white);
+  transition:all 0.25s;
+}
+.momo-transfer-btn:hover{border-color:rgba(233,30,140,0.6);background:rgba(233,30,140,0.15)}
+.momo-transfer-btn-text{flex:1}
+.momo-transfer-btn-title{font-size:14px;font-weight:500;margin-bottom:2px}
+.momo-transfer-btn-sub{font-size:12px;color:var(--muted);font-weight:300}
+.momo-transfer-btn-arrow{
+  width:28px;height:28px;border-radius:50%;
+  background:rgba(233,30,140,0.2);
+  display:flex;align-items:center;justify-content:center;
+}
+
+.banks-row{
+  display:flex;align-items:center;gap:6px;
+  padding:0 20px 20px;
+  flex-wrap:wrap;
+}
+.bank-tag{
+  font-size:11px;font-weight:500;
+  color:var(--muted);
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:4px 10px;
+}
+.bank-more{font-size:11px;color:var(--green-bright);font-weight:500;padding:4px 4px}
+
+/* ── INFO (Hours + Address) ── */
+#info{background:var(--deep)}
+
+.info-cards{display:flex;flex-direction:column;gap:16px}
+
+.info-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:24px;
+}
+.info-card-header{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:20px;
+}
+.info-icon{
+  width:40px;height:40px;border-radius:12px;
+  background:var(--gold-soft);
+  display:flex;align-items:center;justify-content:center;
+}
+.info-card-title{font-size:14px;font-weight:500;color:var(--white)}
+.info-card-sub{font-size:12px;color:var(--muted)}
+
+.hours-list{display:flex;flex-direction:column;gap:10px}
+.hour-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 14px;
+  background:var(--surface);
+  border-radius:10px;
+}
+.hour-day{font-size:13px;color:var(--muted);font-weight:300}
+.hour-time{font-size:13px;font-weight:500}
+.hour-badge{
+  font-size:10px;font-weight:500;
+  padding:2px 10px;border-radius:20px;
+  letter-spacing:0.5px;
+}
+.hour-badge.open{background:rgba(90,158,104,0.2);color:var(--green-bright)}
+.hour-badge.closed{background:rgba(255,255,255,0.06);color:var(--muted)}
+
+.address-block{
+  display:flex;flex-direction:column;gap:14px;
+}
+.address-row{display:flex;gap:12px;align-items:flex-start}
+.address-icon-sm{
+  width:32px;height:32px;border-radius:8px;
+  background:var(--surface);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-top:2px;
+}
+.address-text{font-size:14px;font-weight:400;line-height:1.5}
+.address-hint{font-size:12px;color:var(--muted);margin-top:2px}
+
+.map-btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;margin-top:16px;
+  padding:14px;
+  border:1px solid var(--border-light);
+  border-radius:12px;
+  background:transparent;
+  color:var(--white);
+  font-family:'DM Sans',sans-serif;
+  font-size:13px;font-weight:500;
+  cursor:pointer;
+  text-decoration:none;
+  transition:all 0.2s;
+}
+.map-btn:hover{background:var(--surface);border-color:var(--gold-dim)}
+
+/* ── CONTACT ── */
+#contact{
+  background:var(--black);
+  text-align:center;
+  padding:60px 24px 80px;
+}
+
+.contact-buttons{
+  display:flex;flex-direction:column;gap:12px;
+  max-width:320px;margin:0 auto 48px;
+}
+
+.contact-btn{
+  display:flex;align-items:center;gap:14px;
+  padding:16px 20px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background:var(--card);
+  color:var(--white);
+  font-family:'DM Sans',sans-serif;
+  font-size:14px;font-weight:400;
+  cursor:pointer;
+  text-decoration:none;
+  transition:all 0.2s;
+  text-align:left;
+}
+.contact-btn:hover{border-color:var(--border-light);background:var(--surface);transform:translateY(-1px)}
+.contact-btn-icon{
+  width:36px;height:36px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.contact-btn-text{}
+.contact-btn-label{font-size:13px;color:var(--muted);font-weight:300}
+
+.footer-logo{
+  font-family:'Cormorant Garamond',serif;
+  font-size:28px;font-weight:600;
+  color:var(--muted2);
+  margin-bottom:8px;
+}
+.footer-logo em{font-style:italic;color:var(--gold-dim)}
+.footer-copy{font-size:11px;color:var(--muted2);letter-spacing:1px}
+
+/* ── NAV BAR (bottom) ── */
+.nav-bar{
+  position:fixed;bottom:0;left:0;right:0;
+  background:rgba(10,10,8,0.92);
+  backdrop-filter:blur(16px);
+  border-top:1px solid var(--border);
+  display:flex;
+  padding:12px 0 max(12px, env(safe-area-inset-bottom));
+  z-index:100;
+}
+.nav-item{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
+  cursor:pointer;
+  text-decoration:none;
+  color:var(--muted);
+  font-size:10px;font-weight:400;
+  letter-spacing:0.5px;
+  transition:color 0.2s;
+  border:none;background:none;font-family:'DM Sans',sans-serif;
+}
+.nav-item.active{color:var(--gold)}
+.nav-item svg{transition:transform 0.2s}
+.nav-item:hover svg{transform:translateY(-2px)}
+
+/* separator line on hero bottom */
+.section-divider{
+  width:40px;height:1px;
+  background:linear-gradient(to right, transparent, var(--gold-dim), transparent);
+  margin:0 auto 40px;
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<section class="hero" id="home">
+  <div class="hero-bg"></div>
+  <div class="hero-grain"></div>
+  <div class="hero-ring"></div>
+  <div class="hero-ring"></div>
+  <div class="hero-ring"></div>
+
+  <div class="hero-content">
+    <div class="brand-badge">
+      <div class="brand-badge-dot"></div>
+      <span>Specialty Coffee · HCMC</span>
+    </div>
+
+    <h1 class="hero-logo">Green<br><em>Coffee</em></h1>
+    <p class="hero-tagline">From bean to cup</p>
+
+    <div class="hero-pay-buttons">
+      <a href="https://me.momo.vn/kiethtt" class="btn-primary">
+        <div class="btn-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <rect x="2" y="5" width="20" height="14" rx="3" stroke="#1a1200" stroke-width="2"/>
+            <path d="M2 10h20" stroke="#1a1200" stroke-width="2"/>
+          </svg>
+        </div>
+        Thanh toán qua MoMo
+      </a>
+      <a href="#payment" class="btn-secondary">
+        <div class="btn-icon-wrap">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <path d="M14 14h3v3M17 17h3M14 20h3"/>
+          </svg>
+        </div>
+        Quét mã QR
+      </a>
+    </div>
+  </div>
+
+  <div class="scroll-cue">
+    <span>Khám phá</span>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M12 5v14M5 13l7 7 7-7"/>
+    </svg>
+  </div>
+</section>
+
+<!-- ═══════════════ MENU ═══════════════ -->
+<section id="menu">
+  <div class="section-label">Thực đơn</div>
+  <h2 class="section-title">Đồ uống<br><em>đặc sắc</em></h2>
+  <p class="section-sub">Cà phê rang xay tươi mỗi ngày — phục vụ từ sáng sớm đến tối khuya.</p>
+  <div class="section-divider"></div>
+
+  <div class="menu-categories">
+    <button class="cat-btn active" onclick="filterMenu('espresso',this)">Espresso</button>
+    <button class="cat-btn" onclick="filterMenu('viet',this)">Cà phê Việt</button>
+    <button class="cat-btn" onclick="filterMenu('cold',this)">Cold Brew</button>
+    <button class="cat-btn" onclick="filterMenu('noncoffe',this)">Non-coffee</button>
+  </div>
+
+  <div class="menu-grid" id="menuGrid">
+    <!-- espresso -->
+    <div class="menu-item" data-cat="espresso">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Espresso</div>
+        <div class="menu-item-desc">Đậm đặc, body dày, hậu vị ngọt</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">35k</span><div class="menu-dot"></div></div>
+    </div>
+    <div class="menu-item" data-cat="espresso">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Americano</div>
+        <div class="menu-item-desc">Espresso pha loãng, sạch vị</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">40k</span><div class="menu-dot"></div></div>
+    </div>
+    <div class="menu-item" data-cat="espresso">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Flat White</div>
+        <div class="menu-item-desc">Double shot · milk velvety</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">55k</span><div class="menu-dot"></div></div>
+    </div>
+    <div class="menu-item" data-cat="espresso">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Latte</div>
+        <div class="menu-item-desc">Creamy, nhẹ nhàng, cân bằng</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">55k</span><div class="menu-dot"></div></div>
+    </div>
+    <div class="menu-item" data-cat="espresso">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Cappuccino</div>
+        <div class="menu-item-desc">Foam dày, espresso mạnh</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">50k</span><div class="menu-dot"></div></div>
+    </div>
+    <!-- viet -->
+    <div class="menu-item" data-cat="viet" style="display:none">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Cà phê đen đá</div>
+        <div class="menu-item-desc">Robusta truyền thống, phin nhỏ giọt</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">30k</span><div class="menu-dot"></div></div>
+    </div>
+    <div class="menu-item" data-cat="viet" style="display:none">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Cà phê sữa đá</div>
+        <div class="menu-item-desc">Đậm đà, ngọt thanh, kem béo</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">35k</span><div class="menu-dot"></div></div>
+    </div>
+    <div class="menu-item" data-cat="viet" style="display:none">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Bạc xỉu</div>
+        <div class="menu-item-desc">Sữa nhiều, cà phê nhẹ</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">35k</span><div class="menu-dot"></div></div>
+    </div>
+    <div class="menu-item" data-cat="viet" style="display:none">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Cà phê trứng</div>
+        <div class="menu-item-desc">Kem trứng béo ngậy, kiểu Hà Nội</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">45k</span><div class="menu-dot"></div></div>
+    </div>
+    <!-- cold -->
+    <div class="menu-item" data-cat="cold" style="display:none">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Cold Brew Classic</div>
+        <div class="menu-item-desc">Ủ lạnh 18h, mượt mà, low acid</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">60k</span><div class="menu-dot"></div></div>
+    </div>
+    <div class="menu-item" data-cat="cold" style="display:none">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Cold Brew Tonic</div>
+        <div class="menu-item-desc">Cold brew + tonic water + citrus</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">65k</span><div class="menu-dot"></div></div>
+    </div>
+    <div class="menu-item" data-cat="cold" style="display:none">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Nitro Cold Brew</div>
+        <div class="menu-item-desc">Nitrogen-infused, creamy foam tự nhiên</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">70k</span><div class="menu-dot"></div></div>
+    </div>
+    <!-- noncoffee -->
+    <div class="menu-item" data-cat="noncoffe" style="display:none">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Matcha Latte</div>
+        <div class="menu-item-desc">Ceremonial grade, milk foam</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">60k</span><div class="menu-dot"></div></div>
+    </div>
+    <div class="menu-item" data-cat="noncoffe" style="display:none">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Chocolate Đen</div>
+        <div class="menu-item-desc">70% cacao, hot hoặc iced</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">55k</span><div class="menu-dot"></div></div>
+    </div>
+    <div class="menu-item" data-cat="noncoffe" style="display:none">
+      <div class="menu-item-info">
+        <div class="menu-item-name">Trà Ô Long Sữa</div>
+        <div class="menu-item-desc">High mountain oolong, milk foam</div>
+      </div>
+      <div class="menu-item-right"><span class="menu-item-price">50k</span><div class="menu-dot"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ PAYMENT ═══════════════ -->
+<section id="payment">
+  <div class="section-label">Thanh toán</div>
+  <h2 class="section-title">Nhanh &<br><em>tiện lợi</em></h2>
+  <p class="section-sub">Chuyển khoản MoMo hoặc quét QR — không cần tiền mặt.</p>
+  <div class="section-divider"></div>
+
+  <div class="payment-grid">
+
+    <!-- MoMo transfer -->
+    <div class="payment-card">
+      <div class="payment-card-header">
+        <div class="payment-card-icon momo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="9" stroke="#fff" stroke-width="1.5"/>
+            <path d="M8 12c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="12" cy="14" r="1.5" fill="#fff"/>
+          </svg>
+        </div>
+        <div>
+          <div class="payment-card-title">Chuyển tiền MoMo</div>
+          <div class="payment-card-sub">Huỳnh Trần Tuấn Kiệt · ****538</div>
+        </div>
+      </div>
+      <a href="https://me.momo.vn/kiethtt" class="momo-transfer-btn">
+        <div class="btn-icon-wrap" style="flex-shrink:0">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <rect width="24" height="24" rx="8" fill="url(#mm)"/>
+            <defs><linearGradient id="mm" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#ae2070"/><stop offset="1" stop-color="#e91e8c"/></linearGradient></defs>
+            <text x="3" y="17" font-size="9" font-weight="800" fill="#fff" font-family="Arial">mo</text>
+            <text x="3" y="24" font-size="9" font-weight="800" fill="rgba(255,255,255,0.7)" font-family="Arial">mo</text>
+          </svg>
+        </div>
+        <div class="momo-transfer-btn-text">
+          <div class="momo-transfer-btn-title">Mở app chuyển tiền</div>
+          <div class="momo-transfer-btn-sub">Miễn phí · Tức thì · An toàn</div>
+        </div>
+        <div class="momo-transfer-btn-arrow">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e91e8c" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </a>
+    </div>
+
+    <!-- Store QR -->
+    <div class="payment-card">
+      <div class="payment-card-header">
+        <div class="payment-card-icon qr">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <path d="M14 14h3v3M17 17h3M14 20h3"/>
+          </svg>
+        </div>
+        <div>
+          <div class="payment-card-title">QR Cửa hàng</div>
+          <div class="payment-card-sub">Nhận từ mọi ví & ngân hàng</div>
+        </div>
+      </div>
+      <div class="qr-container">
+        <img
+          src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https://me.momo.vn/kiethtt&color=1a6b3a&bgcolor=ffffff&margin=2"
+          alt="QR Code Green Coffee"
+          class="qr-img"
+          onerror="this.style.background='#f0f0f0'"
+        />
+        <div class="qr-store-name">Green Coffee</div>
+        <div class="qr-id">COM-QRC ID: 3224177</div>
+      </div>
+      <div class="banks-row">
+        <span class="bank-tag">MoMo</span>
+        <span class="bank-tag">MB</span>
+        <span class="bank-tag">BIDV</span>
+        <span class="bank-tag">ACB</span>
+        <span class="bank-tag">Sacombank</span>
+        <span class="bank-more">+50 ngân hàng</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════════ INFO ═══════════════ -->
+<section id="info">
+  <div class="section-label">Thông tin</div>
+  <h2 class="section-title">Tìm<br><em>chúng tôi</em></h2>
+  <p class="section-sub">Ghé thăm Green Coffee — không gian yên tĩnh giữa lòng thành phố.</p>
+  <div class="section-divider"></div>
+
+  <div class="info-cards">
+
+    <!-- Hours -->
+    <div class="info-card">
+      <div class="info-card-header">
+        <div class="info-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.5" stroke-linecap="round">
+            <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>
+          </svg>
+        </div>
+        <div>
+          <div class="info-card-title">Giờ mở cửa</div>
+          <div class="info-card-sub">Phục vụ 7 ngày / tuần</div>
+        </div>
+      </div>
+      <div class="hours-list">
+        <div class="hour-row">
+          <span class="hour-day">Thứ 2 – Thứ 6</span>
+          <span class="hour-time">7:00 – 22:00</span>
+          <span class="hour-badge open">Mở</span>
+        </div>
+        <div class="hour-row">
+          <span class="hour-day">Thứ 7</span>
+          <span class="hour-time">7:00 – 23:00</span>
+          <span class="hour-badge open">Mở</span>
+        </div>
+        <div class="hour-row">
+          <span class="hour-day">Chủ Nhật</span>
+          <span class="hour-time">8:00 – 21:00</span>
+          <span class="hour-badge open">Mở</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Address -->
+    <div class="info-card">
+      <div class="info-card-header">
+        <div class="info-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.5" stroke-linecap="round">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+            <circle cx="12" cy="9" r="2.5"/>
+          </svg>
+        </div>
+        <div>
+          <div class="info-card-title">Địa chỉ</div>
+          <div class="info-card-sub">TP. Hồ Chí Minh</div>
+        </div>
+      </div>
+      <div class="address-block">
+        <div class="address-row">
+          <div class="address-icon-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.5"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+          </div>
+          <div>
+            <div class="address-text">Green Coffee, TP. HCM</div>
+            <div class="address-hint">Cập nhật địa chỉ chính xác trong phần cài đặt</div>
+          </div>
+        </div>
+        <div class="address-row">
+          <div class="address-icon-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.5"><path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.95.68l1.45 4.36a1 1 0 01-.23 1.02L8.91 10.5S10 13 12 15s4.5 3.09 4.5 3.09l1.44-1.54a1 1 0 011.02-.23l4.36 1.45a1 1 0 01.68.95V19a2 2 0 01-2 2h-1C7.61 21 3 16.39 3 10V9V5z"/></svg>
+          </div>
+          <div>
+            <div class="address-text">Liên hệ qua MoMo / Zalo</div>
+            <div class="address-hint">Bấm nút bên dưới để nhắn tin</div>
+          </div>
+        </div>
+      </div>
+      <a href="https://maps.google.com/?q=Green+Coffee+Ho+Chi+Minh" target="_blank" class="map-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+        Xem trên Google Maps
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
+      </a>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════════ CONTACT ═══════════════ -->
+<section id="contact">
+  <div class="section-label" style="text-align:center">Liên hệ</div>
+  <h2 class="section-title" style="text-align:center;margin-bottom:8px">Kết nối<br><em>với chúng tôi</em></h2>
+  <p class="section-sub" style="text-align:center;max-width:280px;margin:0 auto 40px">Đặt bàn, hỏi menu, hay chỉ muốn nói xin chào — chúng tôi luôn sẵn sàng.</p>
+
+  <div class="contact-buttons">
+    <a href="https://me.momo.vn/kiethtt" class="contact-btn">
+      <div class="contact-btn-icon" style="background:linear-gradient(135deg,rgba(174,32,112,0.3),rgba(233,30,140,0.2))">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e91e8c" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M8 12c0-2.2 1.8-4 4-4s4 1.8 4 4"/><circle cx="12" cy="14" r="1.5" fill="#e91e8c" stroke="none"/></svg>
+      </div>
+      <div class="contact-btn-text">
+        <div>MoMo</div>
+        <div class="contact-btn-label">me.momo.vn/kiethtt</div>
+      </div>
+    </a>
+    <a href="https://zalo.me/0000000000" class="contact-btn">
+      <div class="contact-btn-icon" style="background:rgba(0,120,255,0.15)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4a9eff" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      </div>
+      <div class="contact-btn-text">
+        <div>Zalo</div>
+        <div class="contact-btn-label">Nhắn tin nhanh</div>
+      </div>
+    </a>
+    <a href="tel:+84000000000" class="contact-btn">
+      <div class="contact-btn-icon" style="background:rgba(90,158,104,0.2)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5a9e68" stroke-width="1.5"><path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.95.68l1.45 4.36a1 1 0 01-.23 1.02L8.91 10.5S10 13 12 15s4.5 3.09 4.5 3.09l1.44-1.54a1 1 0 011.02-.23l4.36 1.45a1 1 0 01.68.95V19a2 2 0 01-2 2h-1C7.61 21 3 16.39 3 10V9V5z"/></svg>
+      </div>
+      <div class="contact-btn-text">
+        <div>Gọi điện</div>
+        <div class="contact-btn-label">Đặt bàn / hỏi thông tin</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="footer-logo">Green <em>Coffee</em></div>
+  <div class="footer-copy">© 2025 · Specialty Coffee HCMC</div>
+</section>
+
+<!-- ═══════════════ NAV BAR ═══════════════ -->
+<nav class="nav-bar">
+  <a href="#home" class="nav-item active" id="nav-home">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 12L12 3l9 9"/><path d="M9 21V12h6v9"/></svg>
+    Trang chủ
+  </a>
+  <a href="#menu" class="nav-item" id="nav-menu">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+    Menu
+  </a>
+  <a href="#payment" class="nav-item" id="nav-payment">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg>
+    Thanh toán
+  </a>
+  <a href="#info" class="nav-item" id="nav-info">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+    Địa chỉ
+  </a>
+</nav>
+
+<div style="height:80px"></div>
+
+<script>
+function filterMenu(cat, btn){
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.menu-item').forEach(item=>{
+    item.style.display = item.dataset.cat === cat ? 'flex' : 'none';
+  });
+}
+
+// Active nav on scroll
+const sections = ['home','menu','payment','info','contact'];
+const navItems = {
+  home: document.getElementById('nav-home'),
+  menu: document.getElementById('nav-menu'),
+  payment: document.getElementById('nav-payment'),
+  info: document.getElementById('nav-info'),
+  contact: document.getElementById('nav-info'),
+};
+window.addEventListener('scroll', ()=>{
+  let current = 'home';
+  sections.forEach(id=>{
+    const el = document.getElementById(id);
+    if(el && window.scrollY >= el.offsetTop - 100) current = id;
+  });
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  if(navItems[current]) navItems[current].classList.add('active');
+});
+</script>
+</body>
+</html>
