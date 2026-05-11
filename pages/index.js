@@ -3,7 +3,7 @@ import Head from 'next/head'
 
 export default function Home() {
   const [form, setForm] = useState({
-    orderInfo: ' ',
+    orderInfo: 'Thanh Toán đơn hàng tại GreenCoffee',
     amount:    '50000',
   })
   const [loading, setLoading] = useState(false)
