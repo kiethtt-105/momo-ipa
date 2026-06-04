@@ -51,7 +51,7 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Thanh Toán MoMo</title>
+        <title>CỔNG THANH TOÁN MOMO</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/Main.png" type="image/png" />
         <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -201,8 +201,8 @@ export default function Home() {
         <div className="logo">
           <div className="logo-circle">M</div>
           <div>
-            <div className="logo-text">MoMo</div>
-            <div className="logo-sub">Cổng thanh toán</div>
+            <div className="logo-text">MOMO</div>
+            <div className="logo-sub">Cổng thanh toán by IPA </div>
           </div>
         </div>
 
