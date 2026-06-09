@@ -1,43 +1,35 @@
 import { verifyIpnSignature } from '../../../lib/momo'
+import { Redis } from '@upstash/redis'
 
-// In production: lưu vào DB thật (PostgreSQL, MongoDB, ...)
-// Demo: in-memory store (reset khi redeploy)
-const orderStore = global.orderStore || (global.orderStore = new Map())
+const redis = Redis.fromEnv()
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).end()
-  }
+  if (req.method !== 'POST') return res.status(405).end()
 
   const body = req.body
   console.log('[MoMo IPN] Received:', JSON.stringify(body))
 
-  // 1. Xác thực chữ ký
-  const isValid = verifyIpnSignature(body)
-  if (!isValid) {
+  if (!verifyIpnSignature(body)) {
     console.error('[MoMo IPN] Invalid signature!')
     return res.status(400).json({ message: 'Invalid signature' })
   }
 
   const { orderId, transId, resultCode, amount, payType, orderInfo } = body
 
-  // 2. Lưu kết quả giao dịch
-  orderStore.set(orderId, {
+  const record = {
     orderId,
     transId,
     resultCode,
     amount,
     payType,
     orderInfo,
-    paidAt:  new Date().toISOString(),
-    status:  resultCode === 0 ? 'PAID' : 'FAILED',
-  })
+    paidAt: new Date().toISOString(),
+    status: resultCode === 0 ? 'PAID' : 'FAILED',
+  }
 
-  console.log(`[MoMo IPN] Order ${orderId} → ${resultCode === 0 ? '✅ PAID' : '❌ FAILED'} (transId: ${transId})`)
+  // Lưu từng order theo key, thêm vào list index
+  await redis.hset('momo:orders', { [orderId]: JSON.stringify(record) })
 
-  // 3. MoMo yêu cầu trả 204 (hoặc 200) ngay
+  console.log(`[MoMo IPN] Order ${orderId} → ${record.status}`)
   return res.status(204).end()
 }
-
-// Export để /api/momo/status dùng chung store
-export { orderStore }
