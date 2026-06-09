@@ -272,12 +272,13 @@ export default function AdminPage() {
 const CSS = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --mm: #a50064; --mm-d: #8a0054; --mm-dd: #6e0043;
+    --mm: #ae0070; --mm-d: #920060; --mm-dd: #760050;
     --mm-soft: #f9eaf4; --mm-border: #e8c4d8; --mm-pale: #fdf5fa;
     --text: #1a0a10; --muted: #7a4060;
     --bg: #f5f0f3; --surface: #ffffff; --surface2: #fdf0f8;
   }
-  body { font-family: 'Be Vietnam Pro', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  html, body { height: 100%; }
+  body { font-family: 'Be Vietnam Pro', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; margin: 0; }
 
   /* ── MOMO MARK ── */
   .mm-mark {
@@ -328,7 +329,7 @@ const CSS = `
   .login-btn:active { background: var(--mm-dd); transform: scale(.99); }
 
   /* ── LAYOUT ── */
-  .page { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+  .page { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; margin: 0; }
   @media(max-width:768px) { .page { grid-template-columns: 1fr; } .sidebar { display: none; } }
 
   /* ── SIDEBAR ── */
