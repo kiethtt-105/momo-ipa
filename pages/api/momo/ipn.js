@@ -20,25 +20,37 @@ export default async function handler(req, res) {
   }
 
   const { orderId, transId, resultCode, amount, payType, orderInfo } = body
+  const isPaid = parseInt(resultCode) === 0
 
-  // 2. Lưu vào Redis
+  // FIX BUG 1: Không ghi đè nếu đã có record PAID từ trước
+  const existing = await redis.hget('momo:orders', orderId)
+  if (existing) {
+    const prev = typeof existing === 'string' ? JSON.parse(existing) : existing
+    if (prev.status === 'PAID') {
+      console.log(`[MoMo IPN] Order ${orderId} already PAID — skipping overwrite`)
+      return res.status(204).end()
+    }
+  }
+
+  const now = new Date().toISOString()
+
+  // FIX BUG 2 + 3: paidAt chỉ set khi PAID, amount luôn là number
   const record = {
     orderId,
     transId:    transId   || '',
-    amount:     amount    || 0,
+    amount:     parseInt(amount) || 0,   // FIX BUG 3: parseInt
     payType:    payType   || '',
     orderInfo:  orderInfo || '',
     resultCode: parseInt(resultCode),
-    paidAt:     new Date().toISOString(),
-    status:     parseInt(resultCode) === 0 ? 'PAID' : 'FAILED',
+    paidAt:     isPaid ? now : null,     // FIX BUG 2: null nếu thất bại
+    status:     isPaid ? 'PAID' : 'FAILED',
     source:     'ipn',
-    createdAt:  new Date().toISOString(),
+    createdAt:  now,
   }
 
   await redis.hset('momo:orders', { [orderId]: JSON.stringify(record) })
 
-  console.log(`[MoMo IPN] Order ${orderId} → ${parseInt(resultCode) === 0 ? '✅ PAID' : '❌ FAILED'} (transId: ${transId})`)
+  console.log(`[MoMo IPN] Order ${orderId} → ${isPaid ? '✅ PAID' : '❌ FAILED'} (transId: ${transId})`)
 
-  // 3. MoMo yêu cầu trả 204 ngay
   return res.status(204).end()
 }

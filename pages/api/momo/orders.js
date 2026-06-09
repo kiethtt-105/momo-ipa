@@ -9,8 +9,10 @@ const redis = new Redis({
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
 
+  // FIX BUG 4: guard undefined — nếu env chưa set thì từ chối hết
   const { key } = req.query
-  if (key !== process.env.ADMIN_SECRET_KEY) {
+  const secret = process.env.ADMIN_SECRET_KEY
+  if (!secret || !key || key !== secret) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 

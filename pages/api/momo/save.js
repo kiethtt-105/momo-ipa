@@ -12,20 +12,23 @@ export default async function handler(req, res) {
   const { orderId, transId, amount, payType, orderInfo, resultCode } = req.body
   if (!orderId) return res.status(400).json({ error: 'Thiếu orderId' })
 
-  // Chỉ lưu nếu IPN chưa lưu trước đó
+  // Idempotency: chỉ lưu nếu IPN chưa lưu trước đó
   const existing = await redis.hget('momo:orders', orderId)
   if (existing) return res.status(200).json({ ok: true, source: 'existing' })
+
+  const isPaid = parseInt(resultCode) === 0
+  const now = new Date().toISOString()
 
   const record = {
     orderId,
     transId:    transId   || '',
-    amount:     amount    || 0,
+    amount:     parseInt(amount) || 0,   // FIX BUG 3: parseInt
     payType:    payType   || '',
     orderInfo:  orderInfo || '',
     resultCode: parseInt(resultCode || 0),
-    paidAt:     new Date().toISOString(),
-    createdAt:  new Date().toISOString(),
-    status:     parseInt(resultCode) === 0 ? 'PAID' : 'FAILED',
+    paidAt:     isPaid ? now : null,     // FIX BUG 2: null nếu thất bại
+    createdAt:  now,
+    status:     isPaid ? 'PAID' : 'FAILED',
     source:     'redirect',
   }
 
