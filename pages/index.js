@@ -1,36 +1,40 @@
 import { useState } from 'react'
 import Head from 'next/head'
 
+const QUICK = [10000, 20000, 50000, 100000, 200000, 500000]
+
 export default function Home() {
   const [form, setForm] = useState({
-    orderInfo: ` Thanh Toán  ${Date.now()}`,
-    amount:    '50000',
+    orderInfo: `Thanh Toán ${Date.now()}`,
+    amount: '50000',
   })
   const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState('')
+  const [error, setError] = useState('')
 
-  const handleChange = e =>
-    setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+  const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+
+  const handleAmountChange = e => {
+    const raw = e.target.value.replace(/\D/g, '')
+    setForm(f => ({ ...f, amount: raw }))
+  }
 
   const handlePay = async () => {
     setError('')
     const amt = parseInt(form.amount)
     if (!form.orderInfo.trim()) return setError('Vui lòng nhập nội dung thanh toán')
     if (isNaN(amt) || amt < 1000) return setError('Số tiền tối thiểu 1.000 VND')
-    if (amt > 50_000_000)         return setError('Số tiền tối đa 50.000.000 VND')
+    if (amt > 50_000_000) return setError('Số tiền tối đa 50.000.000 VND')
 
     setLoading(true)
     try {
       const orderId = `${Date.now()}`
       const res = await fetch('/api/momo/create', {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ orderId, amount: amt, orderInfo: form.orderInfo }),
+        body: JSON.stringify({ orderId, amount: amt, orderInfo: form.orderInfo }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Lỗi không xác định')
-
-      // Chuyển thẳng sang trang MoMo
       window.location.href = data.payUrl
     } catch (e) {
       setError(e.message)
@@ -38,234 +42,339 @@ export default function Home() {
     }
   }
 
-  const fmt = v => {
-    const n = parseInt(v.replace(/\D/g, '')) || 0
-    return n.toLocaleString('vi-VN')
-  }
-
-  const handleAmountChange = e => {
-    const raw = e.target.value.replace(/\D/g, '')
-    setForm(f => ({ ...f, amount: raw }))
-  }
+  const displayAmt = form.amount
+    ? parseInt(form.amount).toLocaleString('vi-VN')
+    : ''
 
   return (
     <>
       <Head>
-        <title>CỔNG THANH TOÁN MOMO</title>
+        <title>Cổng Thanh Toán MoMo</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/Main.png" type="image/png" />
-        <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </Head>
 
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+          --pink:       #d81b60;
+          --pink-light: #f06292;
+          --pink-pale:  #fce4ec;
+          --pink-glow:  rgba(216,27,96,.18);
+          --bg:         #0f0a0d;
+          --surface:    #1a1117;
+          --surface2:   #221520;
+          --border:     rgba(216,27,96,.2);
+          --border2:    rgba(255,255,255,.06);
+          --text:       #f5eef2;
+          --muted:      #9e7a8e;
+          --success:    #4ade80;
+        }
+
         body {
-          font-family: 'Be Vietnam Pro', sans-serif;
-          background: #fdf0f8;
+          font-family: 'Inter', sans-serif;
+          background: var(--bg);
           min-height: 100vh;
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 20px;
+          color: var(--text);
         }
-        .card {
-          background: #fff;
-          border-radius: 24px;
-          padding: 40px 36px;
-          width: 100%;
-          max-width: 420px;
-          box-shadow: 0 8px 40px rgba(216,45,139,.15);
-          border: 1px solid #f0d0e5;
-        }
-        .logo {
-          display: flex; align-items: center; gap: 10px;
-          margin-bottom: 32px;
-        }
-        .logo-circle {
-          width: 44px; height: 44px; border-radius: 14px;
-          background: linear-gradient(135deg,#e8237c,#d82d8b);
-          display: flex; align-items: center; justify-content: center;
-          color: #fff; font-size: 22px; font-weight: 900;
-          box-shadow: 0 4px 16px rgba(216,45,139,.35);
-        }
-        .logo-text { font-size: 20px; font-weight: 800; color: #1a0a14; }
-        .logo-sub  { font-size: 12px; color: #b0809a; font-weight: 500; margin-top: 1px; }
 
-        label {
-          display: block;
-          font-size: 12px; font-weight: 700;
-          color: #9a6070;
-          text-transform: uppercase; letter-spacing: .6px;
-          margin-bottom: 7px;
-        }
-        input[type=text], input[type=number], textarea {
-          width: 100%; padding: 13px 16px;
-          border: 1.5px solid #f0d0e5;
-          border-radius: 12px;
-          font-family: 'Be Vietnam Pro', sans-serif;
-          font-size: 15px; color: #1a0a14;
-          background: #fdf0f8;
-          outline: none;
-          transition: border .2s, box-shadow .2s, background .2s;
-        }
-        input:focus, textarea:focus {
-          border-color: #d82d8b;
-          box-shadow: 0 0 0 3px rgba(216,45,139,.1);
-          background: #fff;
-        }
-        .field { margin-bottom: 18px; }
-
-        .amount-wrapper {
-          position: relative;
-        }
-        .amount-wrapper input {
-          padding-right: 55px;
-          font-size: 22px; font-weight: 800; color: #d82d8b;
-          letter-spacing: -.5px;
-        }
-        .amount-unit {
-          position: absolute; right: 16px; top: 50%;
-          transform: translateY(-50%);
-          font-size: 13px; font-weight: 700; color: #b0809a;
+        /* ── Ambient glow ── */
+        body::before {
+          content: '';
+          position: fixed;
+          top: -200px; left: 50%;
+          transform: translateX(-50%);
+          width: 600px; height: 600px;
+          background: radial-gradient(circle, rgba(216,27,96,.15) 0%, transparent 70%);
           pointer-events: none;
+          z-index: 0;
         }
 
-        .quick-amounts {
-          display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;
+        .wrap {
+          width: 100%; max-width: 420px;
+          position: relative; z-index: 1;
         }
-        .qa-btn {
-          padding: 6px 13px;
-          border: 1.5px solid #f0d0e5;
-          border-radius: 999px;
-          background: #fff;
-          font-size: 12px; font-weight: 600; color: #b0809a;
+
+        /* ── Brand bar ── */
+        .brand {
+          display: flex; align-items: center; gap: 12px;
+          margin-bottom: 32px; padding: 0 2px;
+        }
+        .brand-mark {
+          width: 40px; height: 40px;
+          background: var(--pink);
+          border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 18px; font-weight: 900; color: #fff;
+          font-family: 'Space Grotesk', sans-serif;
+          box-shadow: 0 0 24px var(--pink-glow);
+          flex-shrink: 0;
+        }
+        .brand-info {}
+        .brand-name {
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 16px; font-weight: 700;
+          color: var(--text); letter-spacing: -.2px;
+        }
+        .brand-tag {
+          font-size: 11px; color: var(--muted);
+          letter-spacing: .3px; margin-top: 1px;
+        }
+
+        /* ── Card ── */
+        .card {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 20px;
+          padding: 28px;
+          box-shadow: 0 0 0 1px rgba(255,255,255,.03),
+                      0 24px 48px rgba(0,0,0,.4);
+        }
+
+        /* ── Amount display ── */
+        .amount-display {
+          text-align: center;
+          padding: 28px 0 24px;
+          border-bottom: 1px solid var(--border2);
+          margin-bottom: 24px;
+        }
+        .amount-label {
+          font-size: 11px; font-weight: 600;
+          color: var(--muted); text-transform: uppercase;
+          letter-spacing: 1px; margin-bottom: 12px;
+        }
+        .amount-row {
+          display: flex; align-items: baseline;
+          justify-content: center; gap: 8px;
+        }
+        .amount-input {
+          background: transparent; border: none; outline: none;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 48px; font-weight: 700;
+          color: var(--text);
+          text-align: right;
+          width: auto; min-width: 60px; max-width: 260px;
+          caret-color: var(--pink);
+        }
+        .amount-input::placeholder { color: var(--surface2); }
+        .amount-currency {
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 18px; font-weight: 600;
+          color: var(--muted);
+        }
+        .amount-sub {
+          font-size: 12px; color: var(--muted);
+          margin-top: 8px; letter-spacing: .2px;
+        }
+
+        /* ── Quick amounts ── */
+        .quick-grid {
+          display: grid; grid-template-columns: repeat(3, 1fr);
+          gap: 8px; margin-bottom: 24px;
+        }
+        .qa {
+          background: var(--surface2);
+          border: 1px solid var(--border2);
+          border-radius: 10px;
+          padding: 10px 6px;
+          text-align: center;
+          font-size: 12px; font-weight: 600;
+          color: var(--muted);
           cursor: pointer; transition: all .15s;
-          font-family: inherit;
+          font-family: 'Inter', sans-serif;
         }
-        .qa-btn:hover {
-          border-color: #d82d8b; color: #d82d8b; background: #fdf0f8;
+        .qa:hover {
+          border-color: var(--border);
+          color: var(--pink-light);
+          background: rgba(216,27,96,.06);
+        }
+        .qa.active {
+          border-color: var(--pink);
+          color: var(--pink);
+          background: rgba(216,27,96,.1);
         }
 
+        /* ── Field ── */
+        .field { margin-bottom: 20px; }
+        .field-label {
+          font-size: 11px; font-weight: 600;
+          color: var(--muted); text-transform: uppercase;
+          letter-spacing: .8px; margin-bottom: 8px;
+          display: block;
+        }
+        .field-input {
+          width: 100%; padding: 12px 14px;
+          background: var(--surface2);
+          border: 1px solid var(--border2);
+          border-radius: 12px;
+          color: var(--text);
+          font-family: 'Inter', sans-serif;
+          font-size: 14px;
+          outline: none; transition: border .15s, box-shadow .15s;
+        }
+        .field-input:focus {
+          border-color: rgba(216,27,96,.5);
+          box-shadow: 0 0 0 3px rgba(216,27,96,.08);
+        }
+        .field-input::placeholder { color: var(--muted); opacity: .6; }
+
+        /* ── Error ── */
+        .error {
+          display: flex; align-items: center; gap: 8px;
+          background: rgba(239,68,68,.08);
+          border: 1px solid rgba(239,68,68,.25);
+          border-radius: 10px; padding: 10px 14px;
+          color: #f87171; font-size: 13px; font-weight: 500;
+          margin-bottom: 16px;
+        }
+
+        /* ── Pay button ── */
         .pay-btn {
-          width: 100%; padding: 16px;
+          width: 100%; padding: 15px;
           border-radius: 14px; border: none;
-          background: linear-gradient(135deg,#e8237c,#d82d8b);
-          color: #fff; font-family: 'Be Vietnam Pro', sans-serif;
-          font-size: 16px; font-weight: 800;
-          cursor: pointer;
-          box-shadow: 0 6px 24px rgba(216,45,139,.35);
-          transition: all .2s;
+          background: var(--pink);
+          color: #fff;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 16px; font-weight: 700;
+          cursor: pointer; transition: all .2s;
           display: flex; align-items: center; justify-content: center; gap: 10px;
-          margin-top: 8px;
           letter-spacing: .2px;
+          box-shadow: 0 8px 24px rgba(216,27,96,.4);
+          position: relative; overflow: hidden;
+        }
+        .pay-btn::before {
+          content: '';
+          position: absolute; inset: 0;
+          background: linear-gradient(135deg, rgba(255,255,255,.12) 0%, transparent 50%);
+          pointer-events: none;
         }
         .pay-btn:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 10px 32px rgba(216,45,139,.45);
+          box-shadow: 0 12px 32px rgba(216,27,96,.5);
         }
-        .pay-btn:disabled { opacity: .65; cursor: not-allowed; transform: none; }
+        .pay-btn:active:not(:disabled) { transform: translateY(0); }
+        .pay-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
-        .error-box {
-          background: #fef2f2; border: 1.5px solid #fca5a5;
-          border-radius: 10px; padding: 11px 14px;
-          color: #b91c1c; font-size: 13px; font-weight: 600;
-          margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+        /* ── Footer note ── */
+        .foot {
+          display: flex; align-items: center; justify-content: center; gap: 6px;
+          margin-top: 18px; font-size: 11px; color: var(--muted);
         }
-
-        .divider {
-          border: none; border-top: 1px solid #f0d0e5;
-          margin: 24px 0;
-        }
-        .secure-note {
-          text-align: center; font-size: 11px; color: #c09ab0;
-          display: flex; align-items: center; justify-content: center; gap: 5px;
-          margin-top: 16px;
+        .foot-dot {
+          width: 3px; height: 3px; border-radius: 50%;
+          background: var(--muted); opacity: .4;
         }
 
-        .spinner {
-          width: 20px; height: 20px;
-          border: 3px solid rgba(255,255,255,.3);
+        /* ── Spinner ── */
+        .spin {
+          width: 18px; height: 18px;
+          border: 2.5px solid rgba(255,255,255,.3);
           border-top-color: #fff;
           border-radius: 50%;
-          animation: spin .65s linear infinite;
+          animation: rot .6s linear infinite; flex-shrink: 0;
         }
-        @keyframes spin { to { transform: rotate(360deg) } }
+        @keyframes rot { to { transform: rotate(360deg) } }
 
-        @media(max-width:480px){
-          .card { padding: 28px 20px; }
+        @media(max-width:480px) {
+          .card { padding: 20px; }
+          .amount-input { font-size: 40px; }
         }
       `}</style>
 
-      <div className="card">
-        {/* Logo */}
-        <div className="logo">
-          <div className="logo-circle">M</div>
-          <div>
-            <div className="logo-text">MOMO</div>
-            <div className="logo-sub">Cổng thanh toán by IPA </div>
+      <div className="wrap">
+        <div className="brand">
+          <div className="brand-mark">M</div>
+          <div className="brand-info">
+            <div className="brand-name">MoMo Payment</div>
+            <div className="brand-tag">Cổng thanh toán bảo mật · IPA</div>
           </div>
         </div>
 
-        {/* Amount */}
-        <div className="field">
-          <label>Số tiền thanh toán</label>
-          <div className="amount-wrapper">
-            <input
-              type="text"
-              inputMode="numeric"
-              value={form.amount ? parseInt(form.amount).toLocaleString('vi-VN') : ''}
-              onChange={handleAmountChange}
-              placeholder="0"
-            />
-            <span className="amount-unit">VND</span>
+        <div className="card">
+          {/* Amount */}
+          <div className="amount-display">
+            <div className="amount-label">Số tiền</div>
+            <div className="amount-row">
+              <input
+                className="amount-input"
+                type="text"
+                inputMode="numeric"
+                value={displayAmt}
+                onChange={handleAmountChange}
+                placeholder="0"
+                size={displayAmt.length || 1}
+                style={{ width: `${Math.max(displayAmt.length, 1) * 30}px` }}
+              />
+              <span className="amount-currency">₫</span>
+            </div>
+            {form.amount && (
+              <div className="amount-sub">
+                {parseInt(form.amount).toLocaleString('vi-VN')} đồng
+              </div>
+            )}
           </div>
-          <div className="quick-amounts">
-            {[10000,20000,50000,100000,200000,500000].map(v => (
-              <button key={v} className="qa-btn"
-                onClick={() => setForm(f => ({ ...f, amount: String(v) }))}>
-                {v.toLocaleString('vi-VN')}
+
+          {/* Quick select */}
+          <div className="quick-grid">
+            {QUICK.map(v => (
+              <button
+                key={v}
+                className={`qa ${parseInt(form.amount) === v ? 'active' : ''}`}
+                onClick={() => setForm(f => ({ ...f, amount: String(v) }))}
+              >
+                {v >= 1000000
+                  ? `${v / 1000000}M`
+                  : `${v / 1000}K`}
               </button>
             ))}
           </div>
-        </div>
 
-        {/* Order info */}
-        <div className="field">
-          <label>Nội dung thanh toán</label>
-          <input
-            type="text"
-            name="orderInfo"
-            value={form.orderInfo}
-            onChange={handleChange}
-            placeholder="VD: Thanh toán đơn hàng #12345"
-            maxLength={255}
-          />
-        </div>
+          {/* Order info */}
+          <div className="field">
+            <label className="field-label">Nội dung</label>
+            <input
+              className="field-input"
+              type="text"
+              name="orderInfo"
+              value={form.orderInfo}
+              onChange={handleChange}
+              placeholder="VD: Thanh toán đơn hàng #12345"
+              maxLength={255}
+            />
+          </div>
 
-        <hr className="divider" />
-
-        {/* Error */}
-        {error && (
-          <div className="error-box">⚠️ {error}</div>
-        )}
-
-        {/* Pay button */}
-        <button className="pay-btn" onClick={handlePay} disabled={loading}>
-          {loading ? (
-            <><div className="spinner" /> Đang xử lý...</>
-          ) : (
-            <>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" fill="rgba(255,255,255,.2)"/>
-                <path d="M8 12l3 3 5-5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              Thanh toán {form.amount ? parseInt(form.amount).toLocaleString('vi-VN') : 0} VND
-            </>
+          {error && (
+            <div className="error">
+              <span>⚠</span> {error}
+            </div>
           )}
-        </button>
 
-        <div className="secure-note">
-          🔒 Bảo mật bởi MoMo · Mã hóa SSL
+          <button className="pay-btn" onClick={handlePay} disabled={loading}>
+            {loading ? (
+              <><div className="spin" />Đang xử lý…</>
+            ) : (
+              <>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14l-4-4 1.41-1.41L11 13.17l6.59-6.59L19 8l-8 8z" fill="currentColor"/>
+                </svg>
+                Thanh toán {displayAmt || '0'} ₫
+              </>
+            )}
+          </button>
+
+          <div className="foot">
+            <span>🔒 SSL</span>
+            <span className="foot-dot" />
+            <span>Bảo mật MoMo</span>
+            <span className="foot-dot" />
+            <span>Mã hóa đầu cuối</span>
+          </div>
         </div>
       </div>
     </>
