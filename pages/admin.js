@@ -49,7 +49,7 @@ export default function AdminPage() {
   const countPending = orders.filter(o => o.status === 'PENDING').length
 
   const statusMeta = {
-    PAID:      { label: 'Thành công', color: '#16a34a', bg: '#dcfce7' },
+    PAID:      { label: 'Thành công', color: '#15803d', bg: '#dcfce7' },
     FAILED:    { label: 'Thất bại',   color: '#dc2626', bg: '#fee2e2' },
     PENDING:   { label: 'Chờ xử lý', color: '#d97706', bg: '#fef9c3' },
     CANCELLED: { label: 'Đã huỷ',    color: '#7c3aed', bg: '#ede9fe' },
@@ -83,7 +83,16 @@ export default function AdminPage() {
       <style>{CSS}</style>
       <div className="login-wrap">
         <div className="login-card">
-          <div className="lc-logo"><div className="brand-mark">M</div></div>
+          <div className="lc-logo">
+            <div className="mm-mark">
+              <svg viewBox="0 0 30 30" fill="none" width="28" height="28">
+                <circle cx="9.5" cy="15" r="6" fill="white" />
+                <circle cx="20.5" cy="15" r="6" fill="white" />
+                <circle cx="9.5" cy="15" r="3" fill="#a50064" />
+                <circle cx="20.5" cy="15" r="3" fill="#a50064" />
+              </svg>
+            </div>
+          </div>
           <div className="lc-title">Quản lý giao dịch</div>
           <div className="lc-sub">Đăng nhập để xem dashboard</div>
           <div className={`pw-wrap ${pwError ? 'err' : ''}`}>
@@ -119,7 +128,14 @@ export default function AdminPage() {
         <aside className="sidebar">
           <div className="sb-top">
             <div className="sb-brand">
-              <div className="brand-mark sm">M</div>
+              <div className="mm-mark sm">
+                <svg viewBox="0 0 30 30" fill="none" width="22" height="22">
+                  <circle cx="9.5" cy="15" r="6" fill="white" />
+                  <circle cx="20.5" cy="15" r="6" fill="white" />
+                  <circle cx="9.5" cy="15" r="3" fill="#a50064" />
+                  <circle cx="20.5" cy="15" r="3" fill="#a50064" />
+                </svg>
+              </div>
               <div>
                 <div className="sb-name">MoMo Admin</div>
                 <div className="sb-tag">Dashboard</div>
@@ -128,7 +144,7 @@ export default function AdminPage() {
             <nav className="sb-nav">
               {FILTERS.map(f => {
                 const sm = statusMeta[f.key]
-                const dotColor = sm ? sm.color : '#b06080'
+                const dotColor = sm ? sm.color : '#a50064'
                 return (
                   <button key={f.key}
                     className={`nav-item ${filter === f.key ? 'active' : ''}`}
@@ -182,7 +198,7 @@ export default function AdminPage() {
           <div className="stats-grid">
             <div className="stat-card">
               <div className="stat-k">Tổng thu</div>
-              <div className="stat-v pink">{fmt(totalPaid)} <span className="stat-u">₫</span></div>
+              <div className="stat-v mm">{fmt(totalPaid)} <span className="stat-u">₫</span></div>
             </div>
             <div className="stat-card">
               <div className="stat-k">Thành công</div>
@@ -256,52 +272,42 @@ export default function AdminPage() {
 const CSS = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --pink: #d81b60; --pink-hover: #c01755; --pink-active: #ad134c;
-    --pink-soft: #fce4ec; --pink-border: #f8bbd0; --pink-pale: #fdf5f8;
-    --text: #1a0a10; --text2: #5a2a3a; --muted: #b06080;
-    --bg: #fff8fb; --surface: #ffffff; --surface2: #fdf0f5;
+    --mm: #a50064; --mm-d: #8a0054; --mm-dd: #6e0043;
+    --mm-soft: #f9eaf4; --mm-border: #e8c4d8; --mm-pale: #fdf5fa;
+    --text: #1a0a10; --muted: #7a4060;
+    --bg: #f5f0f3; --surface: #ffffff; --surface2: #fdf0f8;
   }
   body { font-family: 'Be Vietnam Pro', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-  .brand-mark {
-    width: 44px; height: 44px; border-radius: 14px;
-    background: var(--pink); display: flex; align-items: center; justify-content: center;
-    font-size: 20px; font-weight: 900; color: #fff; flex-shrink: 0;
-    box-shadow: 0 4px 16px rgba(216,27,96,.35);
-    transition: transform .2s, box-shadow .2s;
+  /* ── MOMO MARK ── */
+  .mm-mark {
+    width: 44px; height: 44px; border-radius: 13px;
+    background: var(--mm); display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; box-shadow: 0 4px 14px rgba(165,0,100,.32);
   }
-  .brand-mark:hover { transform: scale(1.06); box-shadow: 0 6px 22px rgba(216,27,96,.45); }
-  .brand-mark.sm { width: 36px; height: 36px; border-radius: 11px; font-size: 16px; }
+  .mm-mark.sm { width: 36px; height: 36px; border-radius: 10px; }
 
   /* ── LOGIN ── */
   .login-wrap {
     min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px;
     background: var(--bg);
   }
-  .login-wrap::before {
-    content: ''; position: fixed; top: 0; left: 0; right: 0; height: 260px;
-    background: linear-gradient(180deg, #fce4ec 0%, transparent 100%);
-    pointer-events: none;
-  }
   .login-card {
-    background: var(--surface); border: 1.5px solid var(--pink-border);
-    border-radius: 20px; padding: 40px 36px;
+    background: var(--surface);
+    border-radius: 16px; padding: 40px 36px;
     width: 100%; max-width: 360px; text-align: center;
-    box-shadow: 0 8px 32px rgba(216,27,96,.12);
-    position: relative; z-index: 1;
-    transition: box-shadow .3s;
+    box-shadow: 0 2px 16px rgba(165,0,100,.10);
   }
-  .login-card:hover { box-shadow: 0 12px 40px rgba(216,27,96,.16); }
   .lc-logo { display: flex; justify-content: center; margin-bottom: 18px; }
   .lc-title { font-size: 22px; font-weight: 900; margin-bottom: 4px; }
   .lc-sub   { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
   .pw-wrap {
     display: flex; align-items: center; gap: 10px;
-    background: var(--surface2); border: 1.5px solid var(--pink-border);
-    border-radius: 12px; padding: 0 14px; margin-bottom: 8px;
+    background: var(--surface2); border: 1.5px solid var(--mm-border);
+    border-radius: 10px; padding: 0 14px; margin-bottom: 8px;
     transition: border .15s, box-shadow .15s;
   }
-  .pw-wrap:focus-within { border-color: var(--pink); box-shadow: 0 0 0 3px rgba(216,27,96,.1); }
+  .pw-wrap:focus-within { border-color: var(--mm); box-shadow: 0 0 0 3px rgba(165,0,100,.1); }
   .pw-wrap.err { border-color: #fca5a5; }
   .pw-ico { color: var(--muted); flex-shrink: 0; display: flex; }
   .pw-input {
@@ -309,24 +315,17 @@ const CSS = `
     font-family: 'Be Vietnam Pro', sans-serif; font-size: 14px;
     color: var(--text); padding: 13px 0;
   }
-  .pw-input::placeholder { color: var(--muted); opacity: .6; }
+  .pw-input::placeholder { color: var(--muted); opacity: .55; }
   .pw-err { font-size: 12px; color: #dc2626; font-weight: 600; margin-bottom: 10px; text-align: left; }
   .login-btn {
-    width: 100%; padding: 14px; border: none; border-radius: 12px;
-    background: var(--pink); color: #fff;
+    width: 100%; padding: 14px; border: none; border-radius: 10px;
+    background: var(--mm); color: #fff;
     font-family: 'Be Vietnam Pro', sans-serif; font-size: 15px; font-weight: 800;
-    cursor: pointer; box-shadow: 0 6px 20px rgba(216,27,96,.4);
-    transition: background .15s, transform .15s, box-shadow .15s;
-    position: relative; overflow: hidden;
+    cursor: pointer; box-shadow: 0 4px 14px rgba(165,0,100,.32);
+    transition: background .14s, transform .14s;
   }
-  .login-btn::before {
-    content: ''; position: absolute; top: 0; left: -100%; width: 60%; height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
-    transition: left .5s;
-  }
-  .login-btn:hover::before { left: 150%; }
-  .login-btn:hover { background: var(--pink-hover); transform: translateY(-2px); box-shadow: 0 10px 28px rgba(216,27,96,.45); }
-  .login-btn:active { background: var(--pink-active); transform: translateY(0) scale(.99); }
+  .login-btn:hover { background: var(--mm-d); transform: translateY(-1px); }
+  .login-btn:active { background: var(--mm-dd); transform: scale(.99); }
 
   /* ── LAYOUT ── */
   .page { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
@@ -334,37 +333,36 @@ const CSS = `
 
   /* ── SIDEBAR ── */
   .sidebar {
-    background: var(--surface); border-right: 1.5px solid var(--pink-border);
+    background: var(--surface); border-right: 1px solid var(--mm-border);
     padding: 22px 14px; display: flex; flex-direction: column;
-    position: sticky; top: 0; height: 100vh;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
   }
   .sb-top { flex: 1; }
   .sb-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; margin-bottom: 28px; }
-  .sb-name { font-size: 15px; font-weight: 800; color: var(--text); }
-  .sb-tag  { font-size: 10px; color: var(--muted); letter-spacing: .4px; }
+  .sb-name { font-size: 14px; font-weight: 800; color: var(--text); }
+  .sb-tag  { font-size: 10px; color: var(--muted); letter-spacing: .3px; }
   .sb-nav  { display: flex; flex-direction: column; gap: 2px; }
   .nav-item {
     display: flex; align-items: center; gap: 10px; padding: 9px 12px;
-    border-radius: 10px; border: none; background: transparent;
+    border-radius: 9px; border: none; background: transparent;
     font-family: 'Be Vietnam Pro', sans-serif; font-size: 13px; font-weight: 600;
     color: var(--muted); cursor: pointer; text-align: left;
-    transition: all .15s;
+    transition: all .13s;
   }
   .nav-item:hover { background: var(--surface2); color: var(--text); }
-  .nav-item.active { background: var(--pink-soft); color: var(--pink); }
-  .nav-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .nav-item.active { background: var(--mm-soft); color: var(--mm); }
+  .nav-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   .nav-lbl { flex: 1; }
   .nav-cnt {
     font-size: 11px; font-weight: 700; background: var(--surface2);
     padding: 2px 7px; border-radius: 999px; color: var(--muted);
   }
-  .nav-item.active .nav-cnt { background: rgba(216,27,96,.15); color: var(--pink); }
+  .nav-item.active .nav-cnt { background: rgba(165,0,100,.12); color: var(--mm); }
   .logout-btn {
     display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 12px;
-    border-radius: 10px; border: none; background: transparent;
+    border-radius: 9px; border: none; background: transparent;
     font-family: 'Be Vietnam Pro', sans-serif; font-size: 13px; font-weight: 600;
-    color: var(--muted); cursor: pointer; transition: all .15s;
-    margin-top: 8px;
+    color: var(--muted); cursor: pointer; transition: all .13s; margin-top: 8px;
   }
   .logout-btn:hover { background: #fee2e2; color: #dc2626; }
 
@@ -374,7 +372,7 @@ const CSS = `
 
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+    margin-bottom: 22px; flex-wrap: wrap; gap: 12px;
   }
   .page-title { font-size: 22px; font-weight: 900; color: var(--text); }
   .page-sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -382,28 +380,27 @@ const CSS = `
 
   .search-box {
     display: flex; align-items: center; gap: 8px;
-    background: var(--surface); border: 1.5px solid var(--pink-border);
-    border-radius: 10px; padding: 0 12px;
-    transition: border .15s, box-shadow .15s;
+    background: var(--surface); border: 1.5px solid var(--mm-border);
+    border-radius: 9px; padding: 0 12px;
+    transition: border .14s, box-shadow .14s;
   }
-  .search-box:focus-within { border-color: var(--pink); box-shadow: 0 0 0 3px rgba(216,27,96,.1); }
+  .search-box:focus-within { border-color: var(--mm); box-shadow: 0 0 0 3px rgba(165,0,100,.1); }
   .s-ico { color: var(--muted); flex-shrink: 0; }
   .search-inp {
     background: transparent; border: none; outline: none;
     font-family: 'Be Vietnam Pro', sans-serif; font-size: 13px;
     color: var(--text); padding: 9px 0; width: 180px;
   }
-  .search-inp::placeholder { color: var(--muted); opacity: .6; }
+  .search-inp::placeholder { color: var(--muted); opacity: .55; }
 
   .refresh-btn {
     display: flex; align-items: center; gap: 7px; padding: 9px 16px;
-    border-radius: 10px; border: 1.5px solid var(--pink-border);
+    border-radius: 9px; border: 1.5px solid var(--mm-border);
     background: var(--surface); color: var(--muted);
     font-family: 'Be Vietnam Pro', sans-serif; font-size: 13px; font-weight: 700;
-    cursor: pointer; transition: all .15s;
+    cursor: pointer; transition: all .13s;
   }
-  .refresh-btn:hover:not(:disabled) { border-color: var(--pink); color: var(--pink); background: var(--pink-soft); }
-  .refresh-btn:active:not(:disabled) { transform: scale(.97); }
+  .refresh-btn:hover:not(:disabled) { border-color: var(--mm); color: var(--mm); background: var(--mm-soft); }
   .refresh-btn:disabled { opacity: .5; cursor: not-allowed; }
   .rotating { animation: rot .7s linear infinite; }
   @keyframes rot { to { transform: rotate(360deg) } }
@@ -415,50 +412,46 @@ const CSS = `
   }
   @media(max-width:640px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
   .stat-card {
-    background: var(--surface); border: 1.5px solid var(--pink-border);
-    border-radius: 14px; padding: 16px 18px;
+    background: var(--surface); border: 1px solid var(--mm-border);
+    border-radius: 12px; padding: 16px 18px;
     transition: box-shadow .2s, transform .2s;
   }
-  .stat-card:hover {
-    box-shadow: 0 4px 16px rgba(216,27,96,.12);
-    transform: translateY(-2px);
-  }
+  .stat-card:hover { box-shadow: 0 3px 14px rgba(165,0,100,.1); transform: translateY(-1px); }
   .stat-k { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; }
   .stat-v { font-size: 26px; font-weight: 900; color: var(--text); }
-  .stat-v.pink  { color: var(--pink); }
-  .stat-v.green { color: #16a34a; }
+  .stat-v.mm    { color: var(--mm); }
+  .stat-v.green { color: #15803d; }
   .stat-v.red   { color: #dc2626; }
   .stat-u { font-size: 13px; font-weight: 500; color: var(--muted); }
 
   /* ── TABLE ── */
   .table-card {
-    background: var(--surface); border: 1.5px solid var(--pink-border);
-    border-radius: 16px; overflow: hidden;
-    box-shadow: 0 2px 12px rgba(216,27,96,.06);
+    background: var(--surface); border: 1px solid var(--mm-border);
+    border-radius: 14px; overflow: hidden;
   }
   .tbl-scroll { overflow-x: auto; }
   .tbl { width: 100%; border-collapse: collapse; min-width: 820px; }
-  .tbl thead tr { border-bottom: 1.5px solid var(--pink-border); background: var(--surface2); }
+  .tbl thead tr { border-bottom: 1.5px solid var(--mm-border); background: var(--surface2); }
   .tbl th {
     padding: 12px 16px; text-align: left;
     font-size: 10px; font-weight: 800; color: var(--muted);
     text-transform: uppercase; letter-spacing: .8px; white-space: nowrap;
   }
-  .tbl tbody tr { border-bottom: 1px solid var(--pink-border); transition: background .1s; }
+  .tbl tbody tr { border-bottom: 1px solid var(--mm-border); transition: background .1s; }
   .tbl tbody tr:last-child { border-bottom: none; }
-  .tbl tbody tr:hover { background: var(--pink-pale); }
+  .tbl tbody tr:hover { background: var(--mm-pale); }
   .tbl td { padding: 12px 16px; font-size: 13px; vertical-align: middle; }
 
   .badge {
     display: inline-flex; align-items: center; gap: 6px;
-    padding: 4px 11px; border-radius: 999px;
+    padding: 4px 10px; border-radius: 999px;
     font-size: 12px; font-weight: 700; white-space: nowrap;
   }
   .badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-  .amt-cell  { font-weight: 900; color: var(--pink); white-space: nowrap; font-size: 14px; }
-  .info-cell { max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mono-cell { font-family: monospace; font-size: 11px; color: var(--muted); }
-  .date-cell { white-space: nowrap; color: var(--muted); font-size: 12px; }
+  .amt-cell   { font-weight: 900; color: var(--mm); white-space: nowrap; font-size: 14px; }
+  .info-cell  { max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mono-cell  { font-family: monospace; font-size: 11px; color: var(--muted); }
+  .date-cell  { white-space: nowrap; color: var(--muted); font-size: 12px; }
   .muted-cell { color: var(--muted); }
 
   .empty { padding: 72px 24px; text-align: center; }
