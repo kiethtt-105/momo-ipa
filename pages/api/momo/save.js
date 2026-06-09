@@ -1,3 +1,7 @@
+// pages/api/momo/save.js
+// Được gọi từ /result khi MoMo redirect về với resultCode=0
+// Đây là backup cho IPN (IPN sandbox đôi khi không hoạt động)
+
 import { Redis } from '@upstash/redis'
 
 const redis = new Redis({
@@ -5,42 +9,35 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 })
 
-// Map resultCode MoMo → status
-function getStatus(resultCode) {
-  const code = parseInt(resultCode)
-  if (code === 0)    return 'PAID'
-  if (code === 1006) return 'CANCELLED' // User huỷ
-  if (code === 1005) return 'EXPIRED'   // Hết hạn
-  return 'FAILED'
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { orderId, transId, amount, payType, orderInfo, resultCode, message } = req.body
+  const { orderId, transId, amount, payType, orderInfo, resultCode } = req.body
+
   if (!orderId) return res.status(400).json({ error: 'Thiếu orderId' })
 
-  const status = getStatus(resultCode)
-
-  // Lấy record cũ (nếu có) để giữ lại createdAt
+  // Chỉ lưu nếu chưa có (IPN có thể đã lưu rồi)
   const existing = await redis.hget('momo:orders', orderId)
-  const old = existing ? (typeof existing === 'string' ? JSON.parse(existing) : existing) : {}
+  if (existing) return res.status(200).json({ ok: true, source: 'existing' })
 
   const record = {
     orderId,
-    amount:     amount    || old.amount    || 0,
-    orderInfo:  orderInfo || old.orderInfo || '',
-    transId:    transId   || null,
-    payType:    payType   || null,
-    resultCode: parseInt(resultCode ?? -1),
-    message:    message   || '',
-    status,
-    createdAt:  old.createdAt || new Date().toISOString(),
-    paidAt:     status === 'PAID' ? new Date().toISOString() : (old.paidAt || null),
-    updatedAt:  new Date().toISOString(),
+    transId:    transId   || '',
+    amount:     amount    || 0,
+    payType:    payType   || '',
+    orderInfo:  orderInfo || '',
+    resultCode: parseInt(resultCode || 0),
+    paidAt:     new Date().toISOString(),
+    status:     parseInt(resultCode) === 0 ? 'PAID' : 'FAILED',
+    source:     'redirect', // đánh dấu lưu từ redirect, không phải IPN
   }
 
   await redis.hset('momo:orders', { [orderId]: JSON.stringify(record) })
 
+<<<<<<< HEAD
   return res.status(200).json({ ok: true, status })
 }
+=======
+  return res.status(200).json({ ok: true, source: 'redirect' })
+}
+>>>>>>> parent of ca2464e (.)
