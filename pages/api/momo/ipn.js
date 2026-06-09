@@ -1,20 +1,13 @@
 import { verifyIpnSignature } from '../../../lib/momo'
+import { Redis } from '@upstash/redis'
 
-<<<<<<< HEAD
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL,
   token: process.env.KV_REST_API_TOKEN,
 })
-=======
-// In production: lưu vào DB thật (PostgreSQL, MongoDB, ...)
-// Demo: in-memory store (reset khi redeploy)
-const orderStore = global.orderStore || (global.orderStore = new Map())
->>>>>>> parent of 13dce33 (.)
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).end()
-  }
+  if (req.method !== 'POST') return res.status(405).end()
 
   const body = req.body
   console.log('[MoMo IPN] Received:', JSON.stringify(body))
@@ -28,31 +21,24 @@ export default async function handler(req, res) {
 
   const { orderId, transId, resultCode, amount, payType, orderInfo } = body
 
-  // 2. Lưu kết quả giao dịch
-  orderStore.set(orderId, {
+  // 2. Lưu vào Redis
+  const record = {
     orderId,
-    transId,
-    resultCode,
-    amount,
-    payType,
-    orderInfo,
-    paidAt:  new Date().toISOString(),
-    status:  resultCode === 0 ? 'PAID' : 'FAILED',
-  })
+    transId:    transId   || '',
+    amount:     amount    || 0,
+    payType:    payType   || '',
+    orderInfo:  orderInfo || '',
+    resultCode: parseInt(resultCode),
+    paidAt:     new Date().toISOString(),
+    status:     parseInt(resultCode) === 0 ? 'PAID' : 'FAILED',
+    source:     'ipn',
+    createdAt:  new Date().toISOString(),
+  }
 
-<<<<<<< HEAD
   await redis.hset('momo:orders', { [orderId]: JSON.stringify(record) })
-=======
-  console.log(`[MoMo IPN] Order ${orderId} → ${resultCode === 0 ? '✅ PAID' : '❌ FAILED'} (transId: ${transId})`)
->>>>>>> parent of 13dce33 (.)
 
-  // 3. MoMo yêu cầu trả 204 (hoặc 200) ngay
+  console.log(`[MoMo IPN] Order ${orderId} → ${parseInt(resultCode) === 0 ? '✅ PAID' : '❌ FAILED'} (transId: ${transId})`)
+
+  // 3. MoMo yêu cầu trả 204 ngay
   return res.status(204).end()
-<<<<<<< HEAD
 }
-=======
-}
-
-// Export để /api/momo/status dùng chung store
-export { orderStore }
->>>>>>> parent of 13dce33 (.)
