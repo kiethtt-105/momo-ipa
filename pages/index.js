@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import Head from 'next/head'
 
+const QUICK = [10000, 20000, 50000, 100000, 200000, 500000]
+
 export default function Home() {
   const [amount, setAmount] = useState('')
   const [loading, setLoading] = useState(false)
@@ -111,6 +113,24 @@ export default function Home() {
           color: #dc2626; margin-bottom: 16px;
         }
 
+        /* quick amounts */
+        .quick-grid {
+          display: grid; grid-template-columns: repeat(3, 1fr);
+          gap: 8px; margin-bottom: 24px;
+        }
+        .qa {
+          padding: 9px 4px; border-radius: 8px;
+          border: 1.5px solid #f0d0e4;
+          background: #fdf5f9;
+          font-family: 'Be Vietnam Pro', sans-serif;
+          font-size: 13px; font-weight: 700;
+          color: #a06080; cursor: pointer;
+          transition: all .13s; text-align: center;
+        }
+        .qa:hover { border-color: #ae0070; color: #ae0070; background: #fae8f2; }
+        .qa:active { transform: scale(.96); }
+        .qa.sel { border-color: #ae0070; background: #ae0070; color: #fff; }
+
         /* button */
         .btn {
           width: 100%; padding: 16px;
@@ -175,6 +195,18 @@ export default function Home() {
         </div>
         <div className="amt-hint">
           {amount && !error ? `${parseInt(amount).toLocaleString('vi-VN')} đồng` : ''}
+        </div>
+
+        <div className="quick-grid">
+          {QUICK.map(v => (
+            <button
+              key={v}
+              className={`qa ${parseInt(amount.replace(/\D/g,'')) === v ? 'sel' : ''}`}
+              onClick={() => { setError(''); setAmount(String(v)) }}
+            >
+              {v >= 1000000 ? `${v/1000000}M` : `${v/1000}K`}
+            </button>
+          ))}
         </div>
 
         {error && <div className="err">⚠ {error}</div>}
