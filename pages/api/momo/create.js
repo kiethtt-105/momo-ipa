@@ -1,4 +1,10 @@
 import { createMoMoPayment } from '../../../lib/momo'
+import { Redis } from '@upstash/redis'
+
+const redis = new Redis({
+  url:   process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+})
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -7,9 +13,8 @@ export default async function handler(req, res) {
 
   const { orderId, amount, orderInfo } = req.body
 
-  // --- Validate ---
   if (!orderId || !amount || !orderInfo) {
-    return res.status(400).json({ error: 'Thiếu thông tin bắt buộc: orderId, amount, orderInfo' })
+    return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' })
   }
 
   const amt = parseInt(amount)
@@ -27,12 +32,26 @@ export default async function handler(req, res) {
       })
     }
 
+    // Lưu order ngay với status PENDING
+    const record = {
+      orderId,
+      amount:    amt,
+      orderInfo,
+      status:    'PENDING',
+      createdAt: new Date().toISOString(),
+      paidAt:    null,
+      transId:   null,
+      payType:   null,
+      resultCode: null,
+    }
+    await redis.hset('momo:orders', { [orderId]: JSON.stringify(record) })
+
     return res.status(200).json({
-      payUrl:      result.payUrl,
-      deeplink:    result.deeplink,
-      qrCodeUrl:   result.qrCodeUrl,
-      orderId:     result.orderId,
-      requestId:   result.requestId,
+      payUrl:    result.payUrl,
+      deeplink:  result.deeplink,
+      qrCodeUrl: result.qrCodeUrl,
+      orderId:   result.orderId,
+      requestId: result.requestId,
     })
   } catch (err) {
     console.error('[MoMo] create error:', err)

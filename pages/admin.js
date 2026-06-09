@@ -54,8 +54,11 @@ export default function AdminPage() {
     .filter(o => o.status === 'PAID')
     .reduce((s, o) => s + parseInt(o.amount || 0), 0)
 
-  const countPaid   = orders.filter(o => o.status === 'PAID').length
-  const countFailed = orders.filter(o => o.status === 'FAILED').length
+  const countPaid      = orders.filter(o => o.status === 'PAID').length
+  const countFailed    = orders.filter(o => o.status === 'FAILED').length
+  const countPending   = orders.filter(o => o.status === 'PENDING').length
+  const countCancelled = orders.filter(o => o.status === 'CANCELLED').length
+  const countExpired   = orders.filter(o => o.status === 'EXPIRED').length
 
   // ─── Render login ──────────────────────────────────────────────────────────
   if (!authed) return (
@@ -139,15 +142,22 @@ export default function AdminPage() {
 
         {/* Filter tabs */}
         <div className="filter-row">
-          {['ALL','PAID','FAILED','PENDING'].map(f => (
+          {[
+            { key: 'ALL',       label: 'Tất cả',       icon: '📋' },
+            { key: 'PAID',      label: 'Thành công',   icon: '✅' },
+            { key: 'PENDING',   label: 'Chờ xử lý',   icon: '⏳' },
+            { key: 'FAILED',    label: 'Thất bại',     icon: '❌' },
+            { key: 'CANCELLED', label: 'Đã huỷ',       icon: '🚫' },
+            { key: 'EXPIRED',   label: 'Hết hạn',      icon: '⌛' },
+          ].map(({ key, label, icon }) => (
             <button
-              key={f}
-              className={`filter-btn ${filter === f ? 'active' : ''}`}
-              onClick={() => setFilter(f)}
+              key={key}
+              className={`filter-btn ${filter === key ? 'active' : ''}`}
+              onClick={() => setFilter(key)}
             >
-              {f === 'ALL' ? 'Tất cả' : f === 'PAID' ? '✅ Thành công' : f === 'FAILED' ? '❌ Thất bại' : '⏳ Chờ xử lý'}
+              {icon} {label}
               <span className="filter-count">
-                {f === 'ALL' ? orders.length : orders.filter(o => o.status === f).length}
+                {key === 'ALL' ? orders.length : orders.filter(o => o.status === key).length}
               </span>
             </button>
           ))}
@@ -170,7 +180,8 @@ export default function AdminPage() {
                   <th>Mã đơn</th>
                   <th>Mã GD MoMo</th>
                   <th>Hình thức</th>
-                  <th>Thời gian</th>
+                  <th>Tạo lúc</th>
+                  <th>Thanh toán lúc</th>
                 </tr>
               </thead>
               <tbody>
@@ -178,9 +189,11 @@ export default function AdminPage() {
                   <tr key={o.orderId || i}>
                     <td>
                       <span className={`badge badge-${(o.status||'').toLowerCase()}`}>
-                        {o.status === 'PAID' ? '✅ Thành công'
-                          : o.status === 'FAILED' ? '❌ Thất bại'
-                          : '⏳ Chờ'}
+                        {o.status === 'PAID'      ? '✅ Thành công'
+                          : o.status === 'FAILED'    ? '❌ Thất bại'
+                          : o.status === 'CANCELLED' ? '🚫 Đã huỷ'
+                          : o.status === 'EXPIRED'   ? '⌛ Hết hạn'
+                          : '⏳ Chờ xử lý'}
                       </span>
                     </td>
                     <td className="amount-cell">{fmt(o.amount)} ₫</td>
@@ -188,7 +201,8 @@ export default function AdminPage() {
                     <td className="mono">{o.orderId}</td>
                     <td className="mono">{o.transId || '—'}</td>
                     <td>{o.payType || '—'}</td>
-                    <td className="date-cell">{fmtDate(o.paidAt)}</td>
+                    <td className="date-cell">{fmtDate(o.createdAt)}</td>
+                    <td className="date-cell">{o.paidAt ? fmtDate(o.paidAt) : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -341,9 +355,11 @@ const css = `
   .table td { padding: 13px 16px; font-size: 13px; vertical-align: middle; }
 
   .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
-  .badge-paid    { background: #dcfce7; color: #15803d; }
-  .badge-failed  { background: #fee2e2; color: #b91c1c; }
-  .badge-pending { background: #fef9c3; color: #92400e; }
+  .badge-paid      { background: #dcfce7; color: #15803d; }
+  .badge-failed    { background: #fee2e2; color: #b91c1c; }
+  .badge-pending   { background: #fef9c3; color: #92400e; }
+  .badge-cancelled { background: #f3f4f6; color: #6b7280; }
+  .badge-expired   { background: #fef3c7; color: #b45309; }
 
   .amount-cell { font-weight: 800; color: #d82d8b; white-space: nowrap; }
   .mono        { font-family: monospace; font-size: 11px; color: #9a6070; }
