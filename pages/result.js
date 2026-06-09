@@ -5,26 +5,39 @@ import Link from 'next/link'
 
 export default function ResultPage() {
   const router = useRouter()
-  const [status, setStatus] = useState('loading') // loading | success | failed | pending
+  const [status, setStatus] = useState('loading')
   const [info,   setInfo]   = useState(null)
 
   useEffect(() => {
     if (!router.isReady) return
-    const { orderId, resultCode, transId, amount, payType, message } = router.query
+    const { orderId, resultCode, transId, amount, payType, message, orderInfo } = router.query
 
-    if (!orderId) {
-      setStatus('error')
-      return
-    }
+    if (!orderId) { setStatus('error'); return }
 
-    // resultCode từ redirectUrl
     const code = parseInt(resultCode)
+
     if (code === 0) {
       setStatus('success')
       setInfo({ orderId, transId, amount: parseInt(amount), payType, message })
+
+      // Lưu vào Redis (backup cho IPN — sandbox không gửi IPN)
+      fetch('/api/momo/save', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ orderId, transId, amount, payType, orderInfo, resultCode: 0 }),
+      }).catch(() => {}) // ignore lỗi, không ảnh hưởng UI
+
     } else if (resultCode !== undefined) {
       setStatus('failed')
       setInfo({ orderId, message, resultCode: code })
+
+      // Lưu giao dịch thất bại cũng vào Redis
+      fetch('/api/momo/save', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ orderId, transId, amount, payType, orderInfo, resultCode: code }),
+      }).catch(() => {})
+
     } else {
       // Không có resultCode → poll IPN status
       let attempts = 0
@@ -81,14 +94,12 @@ export default function ResultPage() {
         }
         .info-row {
           display: flex; justify-content: space-between; align-items: center;
-          padding: 8px 0; border-bottom: 1px solid #f0d0e5;
-          font-size: 13px;
+          padding: 8px 0; border-bottom: 1px solid #f0d0e5; font-size: 13px;
         }
         .info-row:last-child { border-bottom: none; padding-bottom: 0; }
         .info-label { color: #9a6070; font-weight: 500; }
         .info-value { font-weight: 700; color: #1a0a14; }
         .amount-val { font-size: 18px; color: #d82d8b; }
-
         .btn-home {
           display: block; width: 100%; padding: 14px;
           background: linear-gradient(135deg,#e8237c,#d82d8b);
@@ -99,14 +110,12 @@ export default function ResultPage() {
           box-shadow: 0 4px 16px rgba(216,45,139,.3);
         }
         .btn-home:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(216,45,139,.4); }
-
         .spinner {
           width: 48px; height: 48px; margin: 0 auto 20px;
           border: 4px solid #f0d0e5; border-top-color: #d82d8b;
           border-radius: 50%; animation: spin .7s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg) } }
-
         .success .title { color: #15803d; }
         .failed  .title { color: #b91c1c; }
         .pending .title { color: #c2410c; }
@@ -181,7 +190,7 @@ export default function ResultPage() {
           <div className="pending">
             <div className="icon">⏳</div>
             <div className="title">Đang chờ xác nhận</div>
-            <div className="subtitle">MoMo chưa phản hồi. Vui lòng kiểm tra lại sau hoặc liên hệ hỗ trợ.</div>
+            <div className="subtitle">MoMo chưa phản hồi. Vui lòng kiểm tra lại sau.</div>
             <Link href="/" className="btn-home">← Về trang chủ</Link>
           </div>
         )}
