@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react'
 import Head from 'next/head'
 
 export default function AdminPage() {
-  const [authed,   setAuthed]   = useState(false)
+  const [authed,   setAuthed]   = useState(() => {
+    if (typeof window === 'undefined') return false
+    return sessionStorage.getItem('momo_admin_authed') === '1'
+  })
   const [password, setPassword] = useState('')
   const [pwError,  setPwError]  = useState(false)
   const [orders,   setOrders]   = useState([])
@@ -12,6 +15,7 @@ export default function AdminPage() {
 
   const handleLogin = () => {
     if (password === (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'momo@admin')) {
+      sessionStorage.setItem('momo_admin_authed', '1')
       setAuthed(true)
       setPwError(false)
     } else {
@@ -109,7 +113,7 @@ export default function AdminPage() {
             <button className="refresh-btn" onClick={fetchOrders} disabled={loading}>
               {loading ? '⏳' : '🔄'} Làm mới
             </button>
-            <button className="logout-btn" onClick={() => setAuthed(false)}>Đăng xuất</button>
+            <button className="logout-btn" onClick={() => { sessionStorage.removeItem('momo_admin_authed'); setAuthed(false) }}>Đăng xuất</button>
           </div>
         </div>
 
