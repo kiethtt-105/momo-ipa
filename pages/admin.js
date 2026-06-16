@@ -1,373 +1,334 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Head from 'next/head'
 
-export default function AdminPage() {
-  const [authed, setAuthed] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return sessionStorage.getItem('momo_admin_authed') === '1'
-  })
-  const [password, setPassword] = useState('')
-  const [pwError, setPwError] = useState(false)
-  const [orders, setOrders] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [filter, setFilter] = useState('ALL')
-  const [search, setSearch] = useState('')
-  const [selectedOrders, setSelectedOrders] = useState(new Set())
-  const [detailOrder, setDetailOrder] = useState(null) // ← Modal chi tiết
+// ─── CONSTANTS ───────────────────────────────────────────────
+const REFRESH_INTERVAL = 3000 // 3s thay vì 1s — đủ realtime, không spam
+const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY || 'admin-secret123'
+const EXPIRE_MINUTES = 10
 
-  const handleLogin = () => {
-    if (password === (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'momo@admin')) {
-      sessionStorage.setItem('momo_admin_authed', '1')
-      setAuthed(true)
-      setPwError(false)
-    } else {
-      setPwError(true)
-      setPassword('')
-    }
+const STATUS_META = {
+  PAID:    { label: 'Thành công', color: '#16a34a', bg: '#dcfce7', dot: '#22c55e' },
+  FAILED:  { label: 'Thất bại',   color: '#dc2626', bg: '#fee2e2', dot: '#ef4444' },
+  PENDING: { label: 'Chờ xử lý',  color: '#d97706', bg: '#fef3c7', dot: '#f59e0b' },
+  EXPIRED: { label: 'Hết hạn',    color: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af' },
+}
+
+// ─── UTILS ───────────────────────────────────────────────────
+const fmt      = n  => parseInt(n || 0).toLocaleString('vi-VN')
+const fmtDate  = s  => s ? new Date(s).toLocaleString('vi-VN', { hour12: false }) : '—'
+const fmtMs    = ms => ms ? new Date(parseInt(ms)).toLocaleString('vi-VN', { hour12: false }) : '—'
+const decodeExtra = b64 => {
+  if (!b64) return null
+  try { return JSON.parse(atob(b64)) } catch { return b64 }
+}
+
+const normalizeStatus = (order) => {
+  let status = order.status || 'PENDING'
+  if (status === 'Chờ xử lý') status = 'PENDING'
+  if (status === 'Thành công') status = 'PAID'
+  if (status === 'Thất bại')   status = 'FAILED'
+  if (status === 'PENDING') {
+    const age = (Date.now() - new Date(order.createdAt)) / 60000
+    if (age > EXPIRE_MINUTES) status = 'EXPIRED'
   }
+  return { ...order, status }
+}
 
-  const fetchOrders = async (force = false) => {
-    if (loading) return
-    if (!force && selectedOrders.size > 0) return
+// ─── MAIN COMPONENT ──────────────────────────────────────────
+export default function AdminPage() {
+  const [authed, setAuthed] = useState(() =>
+    typeof window !== 'undefined' && sessionStorage.getItem('momo_admin_authed') === '1'
+  )
+  const [password,  setPassword]  = useState('')
+  const [pwError,   setPwError]   = useState(false)
+  const [orders,    setOrders]    = useState([])
+  const [fetching,  setFetching]  = useState(false)   // spinner nhỏ trên header
+  const [lastSync,  setLastSync]  = useState(null)    // timestamp lần cuối sync
+  const [filter,    setFilter]    = useState('ALL')
+  const [search,    setSearch]    = useState('')
+  const [selected,  setSelected]  = useState(new Set())
+  const [detail,    setDetail]    = useState(null)    // orderId đang xem modal
 
-    setLoading(true)
+  // Dùng ref để tránh stale closure trong interval
+  const ordersRef    = useRef([])
+  const fetchingRef  = useRef(false)
+  const selectedRef  = useRef(new Set())
+  const detailRef    = useRef(null)
+
+  // Đồng bộ ref ↔ state
+  useEffect(() => { ordersRef.current   = orders   }, [orders])
+  useEffect(() => { selectedRef.current = selected }, [selected])
+  useEffect(() => { detailRef.current   = detail   }, [detail])
+
+  // ── FETCH LOGIC (dùng ref, không phụ thuộc state) ──────────
+  const fetchOrders = useCallback(async ({ force = false } = {}) => {
+    // Guard: không fetch nếu đang fetch, trừ force
+    if (fetchingRef.current && !force) return
+
+    fetchingRef.current = true
+    setFetching(true)
+
     try {
-      const adminKey = process.env.NEXT_PUBLIC_ADMIN_KEY || 'admin-secret123'
-      const res = await fetch(`/api/momo/orders?key=${adminKey}`)
+      const res  = await fetch(`/api/momo/orders?key=${ADMIN_KEY}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-      const newOrders = data.orders || []
-      setOrders(newOrders)
+      const raw  = data.orders || []
 
-      if (selectedOrders.size > 0) {
-        const stillExist = Array.from(selectedOrders).filter(id =>
-          newOrders.some(order => order.orderId === id)
-        )
-        setSelectedOrders(new Set(stillExist))
+      setOrders(raw)
+      setLastSync(new Date())
+
+      // Cập nhật modal nếu đang mở — dùng ref để không stale
+      if (detailRef.current) {
+        const fresh = raw.find(o => o.orderId === detailRef.current)
+        if (fresh) setDetail(fresh.orderId) // giữ nguyên id, data lấy từ orders state
       }
 
-      // Cập nhật modal nếu đang mở
-      if (detailOrder) {
-        const updated = newOrders.find(o => o.orderId === detailOrder.orderId)
-        if (updated) setDetailOrder(normalizeOrder(updated))
+      // Dọn selected đã bị xóa
+      if (selectedRef.current.size > 0) {
+        const ids = new Set(raw.map(o => o.orderId))
+        const cleaned = new Set([...selectedRef.current].filter(id => ids.has(id)))
+        if (cleaned.size !== selectedRef.current.size) setSelected(cleaned)
       }
     } catch (err) {
-      console.error('Fetch orders error:', err)
+      console.error('[Admin] fetch error:', err)
+    } finally {
+      fetchingRef.current = false
+      setFetching(false)
     }
-    setLoading(false)
-  }
+  }, []) // không dependency → không bao giờ tạo lại
 
+  // ── INTERVAL — chỉ mount/unmount 1 lần ─────────────────────
   useEffect(() => {
     if (!authed) return
-    fetchOrders(true)
-    const iv = setInterval(() => fetchOrders(), 1000)
+    fetchOrders({ force: true })
+    const iv = setInterval(() => fetchOrders(), REFRESH_INTERVAL)
     return () => clearInterval(iv)
-  }, [authed, selectedOrders.size])
+  }, [authed, fetchOrders]) // fetchOrders stable → interval không restart
 
-  // Đóng modal khi nhấn Escape
+  // ── ESC đóng modal ─────────────────────────────────────────
   useEffect(() => {
-    const handleKey = (e) => { if (e.key === 'Escape') setDetailOrder(null) }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
+    const fn = e => { if (e.key === 'Escape') setDetail(null) }
+    window.addEventListener('keydown', fn)
+    return () => window.removeEventListener('keydown', fn)
   }, [])
 
-  const normalizeOrder = (order) => {
-    const now = new Date()
-    let status = order.status || 'PENDING'
-    if (status === 'Chờ xử lý') status = 'PENDING'
-    if (status === 'Thành công') status = 'PAID'
-    if (status === 'Thất bại') status = 'FAILED'
-    if (status === 'PENDING') {
-      const created = new Date(order.createdAt)
-      if ((now - created) / (1000 * 60) > 10) status = 'EXPIRED'
-    }
-    return { ...order, status }
+  // ── DERIVED DATA ────────────────────────────────────────────
+  const displayed = orders.map(normalizeStatus)
+
+  const counts = {
+    ALL:     displayed.length,
+    PAID:    displayed.filter(o => o.status === 'PAID').length,
+    FAILED:  displayed.filter(o => o.status === 'FAILED').length,
+    PENDING: displayed.filter(o => o.status === 'PENDING').length,
+    EXPIRED: displayed.filter(o => o.status === 'EXPIRED').length,
   }
+  const totalRevenue = displayed
+    .filter(o => o.status === 'PAID')
+    .reduce((s, o) => s + parseInt(o.amount || 0), 0)
 
-  const normalizeOrders = (list) => list.map(normalizeOrder)
-
-  const displayedOrders = normalizeOrders(orders)
-
-  const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
-  const fmtDate = s => s ? new Date(s).toLocaleString('vi-VN') : '—'
-  const fmtResponseTime = ms => {
-    if (!ms) return '—'
-    return new Date(parseInt(ms)).toLocaleString('vi-VN')
-  }
-  const decodeExtraData = (b64) => {
-    if (!b64) return null
-    try { return JSON.parse(atob(b64)) } catch { return b64 }
-  }
-
-  const countPaid    = displayedOrders.filter(o => o.status === 'PAID').length
-  const countFailed  = displayedOrders.filter(o => o.status === 'FAILED').length
-  const countPending = displayedOrders.filter(o => o.status === 'PENDING').length
-  const countExpired = displayedOrders.filter(o => o.status === 'EXPIRED').length
-  const totalOrders  = displayedOrders.length
-  const totalPaid    = displayedOrders.filter(o => o.status === 'PAID').reduce((s, o) => s + parseInt(o.amount || 0), 0)
-
-  const statusMeta = {
-    PAID:    { label: 'Thành công', color: '#16a34a', bg: 'rgba(232, 245, 233, 0.85)' },
-    FAILED:  { label: 'Thất bại',   color: '#dc2626', bg: 'rgba(255, 235, 235, 0.85)' },
-    PENDING: { label: 'Chờ xử lý',  color: '#d97706', bg: 'rgba(255, 243, 224, 0.85)' },
-    EXPIRED: { label: 'Hết hạn',    color: '#6c757d', bg: 'rgba(241, 243, 245, 0.85)' },
-  }
-
-  const FILTERS = [
-    { key: 'ALL',     label: 'Tất cả',     count: totalOrders },
-    { key: 'PAID',    label: 'Thành công', count: countPaid },
-    { key: 'PENDING', label: 'Chờ xử lý', count: countPending },
-    { key: 'FAILED',  label: 'Thất bại',  count: countFailed },
-    { key: 'EXPIRED', label: 'Hết hạn',   count: countExpired },
-  ]
-
-  const filteredOrders = displayedOrders
+  const filtered = displayed
     .filter(o => filter === 'ALL' || o.status === filter)
-    .filter(o =>
-      !search.trim() ||
-      o.orderId?.toLowerCase().includes(search.toLowerCase()) ||
-      o.orderInfo?.toLowerCase().includes(search.toLowerCase()) ||
-      (o.transId && o.transId.includes(search)) ||
-      (o.message && o.message.toLowerCase().includes(search.toLowerCase()))
-    )
+    .filter(o => {
+      const q = search.trim().toLowerCase()
+      if (!q) return true
+      return (
+        o.orderId?.toLowerCase().includes(q) ||
+        o.orderInfo?.toLowerCase().includes(q) ||
+        o.transId?.toString().includes(q) ||
+        o.message?.toLowerCase().includes(q)
+      )
+    })
 
-  const toggleSelect = (orderId) => {
-    const newSet = new Set(selectedOrders)
-    newSet.has(orderId) ? newSet.delete(orderId) : newSet.add(orderId)
-    setSelectedOrders(newSet)
+  // Đơn đang xem modal (lấy từ state orders để luôn fresh)
+  const detailOrder = detail ? displayed.find(o => o.orderId === detail) : null
+
+  // ── SELECT ──────────────────────────────────────────────────
+  const toggleOne = id => {
+    const s = new Set(selected)
+    s.has(id) ? s.delete(id) : s.add(id)
+    setSelected(s)
   }
+  const toggleAll = () =>
+    selected.size === filtered.length
+      ? setSelected(new Set())
+      : setSelected(new Set(filtered.map(o => o.orderId)))
 
-  const toggleSelectAll = () => {
-    selectedOrders.size === filteredOrders.length
-      ? setSelectedOrders(new Set())
-      : setSelectedOrders(new Set(filteredOrders.map(o => o.orderId)))
-  }
-
-  const performDelete = async (idsToDelete) => {
+  // ── DELETE ──────────────────────────────────────────────────
+  const doDelete = async (ids) => {
+    if (!confirm(`Xóa ${ids.length} đơn?\nKhông thể hoàn tác!`)) return
     try {
-      const adminKey = process.env.NEXT_PUBLIC_ADMIN_KEY || 'admin-secret123'
-      for (const orderId of idsToDelete) {
-        await fetch(`/api/momo/delete?key=${adminKey}`, {
+      await Promise.all(ids.map(id =>
+        fetch(`/api/momo/delete?key=${ADMIN_KEY}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId }),
+          body: JSON.stringify({ orderId: id }),
         })
-      }
-      if (detailOrder && idsToDelete.includes(detailOrder.orderId)) setDetailOrder(null)
-      await fetchOrders(true)
-      alert(`Đã xóa ${idsToDelete.length} đơn hàng`)
+      ))
+      if (detail && ids.includes(detail)) setDetail(null)
+      setSelected(s => { const n = new Set(s); ids.forEach(id => n.delete(id)); return n })
+      await fetchOrders({ force: true })
     } catch (err) {
       console.error(err)
       alert('Lỗi khi xóa')
     }
   }
 
-  const deleteOrder = async (orderId) => {
-    if (!confirm(`Xóa đơn ${orderId}?`)) return
-    await performDelete([orderId])
-  }
-
-  const deleteSelected = async () => {
-    if (selectedOrders.size === 0) return
-    if (!confirm(`Xóa ${selectedOrders.size} đơn đã chọn?\nKhông thể hoàn tác!`)) return
-    await performDelete(Array.from(selectedOrders))
-  }
-
-  // ============================
-  // MODAL CHI TIẾT ĐƠN HÀNG
-  // ============================
-  const DetailModal = ({ order, onClose }) => {
-    if (!order) return null
-    const sm = statusMeta[order.status] || statusMeta.PENDING
-    const extraDecoded = decodeExtraData(order.extraData)
-
-    const rows = [
-      { label: 'Trạng thái',      value: <span className="status-badge" style={{ background: sm.bg, color: sm.color }}>{sm.label}</span> },
-      { label: 'Số tiền',         value: <strong style={{ color: '#ae0070', fontSize: 18 }}>{fmt(order.amount)} ₫</strong> },
-      { label: 'Nội dung đơn',    value: order.orderInfo || '—' },
-      { label: 'Mã đơn',          value: <code className="code">{order.orderId}</code> },
-      { label: 'Request ID',      value: <code className="code">{order.requestId || '—'}</code> },
-      { label: 'Mã GD MoMo',      value: <code className="code">{order.transId || '—'}</code> },
-      { label: 'Hình thức TT',    value: order.payType ? <span className="paytype-badge">{order.payType}</span> : '—' },
-      { label: 'Loại đơn',        value: order.orderType || '—' },
-      { label: 'Result Code',     value: order.resultCode !== undefined ? (
-          <span style={{ fontFamily: 'monospace', color: order.resultCode === 0 ? '#16a34a' : '#dc2626' }}>
-            {order.resultCode}
-          </span>
-        ) : '—' },
-      { label: 'Message MoMo',    value: order.message || '—' },
-      { label: 'Tạo lúc',         value: fmtDate(order.createdAt) },
-      { label: 'MoMo phản hồi',   value: fmtResponseTime(order.responseTime) },
-      { label: 'Hoàn tất lúc',    value: fmtDate(order.paidAt) },
-      { label: 'Nguồn cập nhật',  value: order.source ? <span className="paytype-badge">{order.source}</span> : '—' },
-    ]
-
-    if (order.extraData) {
-      rows.push({
-        label: 'Extra Data',
-        value: (
-          <div style={{ background: 'rgba(0,0,0,0.04)', borderRadius: 8, padding: '8px 12px', fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all' }}>
-            {typeof extraDecoded === 'object'
-              ? JSON.stringify(extraDecoded, null, 2)
-              : extraDecoded}
-          </div>
-        )
-      })
-    }
-
-    return (
-      <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-card" onClick={e => e.stopPropagation()}>
-          <div className="modal-header">
-            <h2 className="modal-title">Chi tiết giao dịch</h2>
-            <button className="modal-close" onClick={onClose}>✕</button>
-          </div>
-          <div className="modal-body">
-            {rows.map((r, i) => (
-              <div key={i} className="detail-row">
-                <span className="detail-label">{r.label}</span>
-                <span className="detail-value">{r.value}</span>
-              </div>
-            ))}
-          </div>
-          <div className="modal-footer">
-            <button className="delete-btn-modal" onClick={() => { onClose(); deleteOrder(order.orderId) }}>
-              🗑️ Xóa giao dịch này
-            </button>
+  // ── LOGIN SCREEN ────────────────────────────────────────────
+  if (!authed) return (
+    <>
+      <Head>
+        <title>Admin · Đăng nhập</title>
+        <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+        <link rel="icon" type="image/png" href="/Main.png" />
+      </Head>
+      <div className="bg-wrap">
+        <Orbs /><style>{CSS}</style>
+        <div className="login-wrap">
+          <div className="login-card">
+            <div className="login-logo-box">
+              <img src="/Main.png" alt="Logo" className="login-logo" />
+            </div>
+            <h1 className="login-title">Quản trị viên</h1>
+            <p className="login-sub">Hệ thống quản lý giao dịch MoMo</p>
+            <div className={`pw-group ${pwError ? 'error' : ''}`}>
+              <input
+                type="password" placeholder="Mật khẩu quản trị"
+                value={password} autoFocus
+                onChange={e => { setPassword(e.target.value); setPwError(false) }}
+                onKeyDown={e => e.key === 'Enter' && login()}
+              />
+            </div>
+            {pwError && <p className="pw-error">⚠ Mật khẩu không chính xác</p>}
+            <button className="login-btn" onClick={login}>Đăng nhập</button>
           </div>
         </div>
       </div>
-    )
+    </>
+  )
+
+  function login() {
+    if (password === (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'momo@admin')) {
+      sessionStorage.setItem('momo_admin_authed', '1')
+      setAuthed(true); setPwError(false)
+    } else { setPwError(true); setPassword('') }
   }
 
-  // ============================
-  // LOGIN SCREEN
-  // ============================
-  if (!authed) {
-    return (
-      <>
-        <Head>
-          <title>Admin · Đăng nhập</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-          <link rel="icon" type="image/png" href="/Main.png" />
-        </Head>
-        <div className="bg-mesh-container">
-          <div className="orb orb-1"></div><div className="orb orb-2"></div>
-          <div className="orb orb-3"></div><div className="orb orb-4"></div>
-          <style>{CSS}</style>
-          <div className="login-wrap">
-            <div className="login-card">
-              <div className="login-logo-container">
-                <img src="/Main.png" alt="Logo" className="login-logo-img" />
-              </div>
-              <h1 className="title">Quản trị viên</h1>
-              <p className="subtitle">Đăng nhập vào hệ thống IPA</p>
-              <div className={`input-group ${pwError ? 'error' : ''}`}>
-                <input
-                  type="password" placeholder="Nhập mật khẩu quản trị"
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); setPwError(false) }}
-                  onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                  autoFocus
-                />
-              </div>
-              {pwError && <p className="error-text">⚠ Mật khẩu hệ thống không chính xác</p>}
-              <button className="login-btn" onClick={handleLogin}>Đăng nhập</button>
-            </div>
-          </div>
-        </div>
-      </>
-    )
-  }
+  // ── DASHBOARD ───────────────────────────────────────────────
+  const FILTERS = [
+    { key: 'ALL',     label: 'Tất cả'     },
+    { key: 'PAID',    label: 'Thành công' },
+    { key: 'PENDING', label: 'Chờ xử lý' },
+    { key: 'FAILED',  label: 'Thất bại'  },
+    { key: 'EXPIRED', label: 'Hết hạn'   },
+  ]
 
-  // ============================
-  // DASHBOARD
-  // ============================
   return (
     <>
       <Head>
         <title>Admin · Giao dịch MoMo</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
-      <div className="bg-mesh-container">
-        <div className="orb orb-1"></div><div className="orb orb-2"></div>
-        <div className="orb orb-3"></div><div className="orb orb-4"></div>
-        <style>{CSS}</style>
+      <div className="bg-wrap">
+        <Orbs /><style>{CSS}</style>
 
-        {/* MODAL */}
-        {detailOrder && <DetailModal order={detailOrder} onClose={() => setDetailOrder(null)} />}
+        {/* ── MODAL ── */}
+        {detailOrder && (
+          <DetailModal
+            order={detailOrder}
+            onClose={() => setDetail(null)}
+            onDelete={id => doDelete([id])}
+          />
+        )}
 
         <div className="dashboard">
-          <header className="fixed-header">
-            <div className="header-content">
-              <div className="logo">
-                <img src="/Main.png" alt="Logo" className="admin-header-logo" />
-                <span>MoMo Admin</span>
+          {/* ── HEADER ── */}
+          <header className="topbar">
+            <div className="topbar-inner">
+              {/* Logo + sync indicator */}
+              <div className="logo-area">
+                <img src="/Main.png" alt="" className="logo-img" />
+                <span className="logo-text">MoMo Admin</span>
+                <span className={`sync-dot ${fetching ? 'syncing' : 'idle'}`} title={lastSync ? `Sync: ${fmtDate(lastSync)}` : 'Chưa sync'} />
               </div>
 
-              <div className="filters">
+              {/* Filter tabs */}
+              <nav className="filter-tabs">
                 {FILTERS.map(f => (
-                  <button key={f.key} className={`filter-btn ${filter === f.key ? 'active' : ''}`} onClick={() => setFilter(f.key)}>
-                    {f.label} <span className="count">({f.count})</span>
+                  <button
+                    key={f.key}
+                    className={`ftab ${filter === f.key ? 'active' : ''}`}
+                    onClick={() => setFilter(f.key)}
+                  >
+                    {f.label}
+                    <span className={`ftab-count ${filter === f.key ? 'active' : ''}`}>
+                      {counts[f.key]}
+                    </span>
                   </button>
                 ))}
-              </div>
+              </nav>
 
-              <div className="header-right">
-                <div className="search-box">
+              {/* Right controls */}
+              <div className="topbar-right">
+                <div className="searchbox">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                   <input
-                    type="text" placeholder="Tìm mã đơn, nội dung, message..."
+                    type="text" placeholder="Tìm kiếm..."
                     value={search} onChange={e => setSearch(e.target.value)}
                   />
+                  {search && <button className="search-clear" onClick={() => setSearch('')}>✕</button>}
                 </div>
-                {selectedOrders.size > 0 && (
-                  <button className="bulk-delete-btn" onClick={deleteSelected}>
-                    🗑️ Xóa đã chọn ({selectedOrders.size})
+
+                {selected.size > 0 && (
+                  <button className="btn-danger" onClick={() => doDelete([...selected])}>
+                    🗑 Xóa ({selected.size})
                   </button>
                 )}
-                <button className="logout-btn" onClick={() => {
-                  sessionStorage.removeItem('momo_admin_authed')
-                  setAuthed(false)
-                }}>Đăng xuất</button>
+
+                <button className="btn-refresh" onClick={() => fetchOrders({ force: true })} disabled={fetching}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={fetching ? 'spin' : ''}>
+                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                    <path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                    <path d="M8 16H3v5"/>
+                  </svg>
+                </button>
+
+                <button className="btn-logout" onClick={() => { sessionStorage.removeItem('momo_admin_authed'); setAuthed(false) }}>
+                  Đăng xuất
+                </button>
               </div>
             </div>
           </header>
 
-          <main className="main-content">
+          {/* ── MAIN ── */}
+          <main className="main">
+
             {/* STAT CARDS */}
-            <div className="stats-grid">
-              <div className="stat-card total">
-                <div className="stat-label">TỔNG DOANH THU</div>
-                <div className="stat-value">{fmt(totalPaid)} ₫</div>
-              </div>
-              <div className="stat-card success">
-                <div className="stat-label">THÀNH CÔNG</div>
-                <div className="stat-value">{countPaid} GD</div>
-              </div>
-              <div className="stat-card failed">
-                <div className="stat-label">THẤT BẠI</div>
-                <div className="stat-value">{countFailed} GD</div>
-              </div>
-              <div className="stat-card total-orders">
-                <div className="stat-label">TỔNG ĐƠN HÀNG</div>
-                <div className="stat-value">{totalOrders} GD</div>
-              </div>
+            <div className="stat-grid">
+              <StatCard label="Doanh thu" value={`${fmt(totalRevenue)} ₫`} color="var(--mm)" sub={`${counts.PAID} giao dịch thành công`} />
+              <StatCard label="Thành công" value={`${counts.PAID} GD`} color="#16a34a" sub={`${counts.PAID ? Math.round(counts.PAID / counts.ALL * 100) : 0}% tỉ lệ thành công`} />
+              <StatCard label="Thất bại" value={`${counts.FAILED} GD`} color="#dc2626" sub={`${counts.EXPIRED} đơn hết hạn`} />
+              <StatCard label="Tổng đơn" value={`${counts.ALL} GD`} color="#374151" sub={`${counts.PENDING} đang chờ xử lý`} />
             </div>
 
             {/* TABLE */}
-            <div className="table-container">
-              {filteredOrders.length === 0 ? (
-                <div className="empty-state">Không tìm thấy giao dịch nào phù hợp</div>
+            <div className="table-wrap">
+              {filtered.length === 0 ? (
+                <div className="empty">
+                  <div className="empty-icon">🔍</div>
+                  <div className="empty-text">Không tìm thấy giao dịch nào</div>
+                </div>
               ) : (
-                <div className="table-responsive">
-                  <table className="data-table">
+                <div className="table-scroll">
+                  <table className="tbl">
                     <thead>
                       <tr>
-                        <th style={{ width: 40 }}>
+                        <th className="th-check">
                           <input
                             type="checkbox"
-                            checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0}
-                            onChange={toggleSelectAll}
+                            checked={selected.size > 0 && selected.size === filtered.length}
+                            ref={el => el && (el.indeterminate = selected.size > 0 && selected.size < filtered.length)}
+                            onChange={toggleAll}
                           />
                         </th>
                         <th>Trạng thái</th>
@@ -379,43 +340,52 @@ export default function AdminPage() {
                         <th>Result</th>
                         <th>Tạo lúc</th>
                         <th>Hoàn tất</th>
-                        <th style={{ textAlign: 'center' }}>Thao tác</th>
+                        <th className="th-action">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredOrders.map(o => {
-                        const sm = statusMeta[o.status] || statusMeta.PENDING
-                        const isSelected = selectedOrders.has(o.orderId)
+                      {filtered.map(o => {
+                        const sm  = STATUS_META[o.status] || STATUS_META.PENDING
+                        const sel = selected.has(o.orderId)
                         return (
                           <tr
                             key={o.orderId}
-                            className={`${isSelected ? 'selected-row' : ''} clickable-row`}
-                            onClick={() => setDetailOrder(o)}
+                            className={`trow ${sel ? 'sel' : ''}`}
+                            onClick={() => setDetail(o.orderId)}
                           >
-                            <td onClick={e => e.stopPropagation()}>
-                              <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(o.orderId)} />
+                            <td className="td-check" onClick={e => e.stopPropagation()}>
+                              <input type="checkbox" checked={sel} onChange={() => toggleOne(o.orderId)} />
                             </td>
                             <td>
-                              <span className="status-badge" style={{ background: sm.bg, color: sm.color }}>
+                              <span className="badge" style={{ background: sm.bg, color: sm.color }}>
+                                <span className="badge-dot" style={{ background: sm.dot }} />
                                 {sm.label}
                               </span>
                             </td>
-                            <td className="amount">{fmt(o.amount)} ₫</td>
-                            <td className="info" title={o.orderInfo}>{o.orderInfo || '—'}</td>
-                            <td className="code">{o.orderId}</td>
-                            <td className="code">{o.transId || '—'}</td>
-                            <td><span className="paytype-badge">{o.payType || '—'}</span></td>
+                            <td className="td-amount">{fmt(o.amount)} ₫</td>
+                            <td className="td-info" title={o.orderInfo}>{o.orderInfo || '—'}</td>
+                            <td className="td-code">{o.orderId}</td>
+                            <td className="td-code">{o.transId || '—'}</td>
+                            <td>
+                              {o.payType
+                                ? <span className="chip">{o.payType}</span>
+                                : <span className="muted">—</span>}
+                            </td>
                             <td>
                               {o.resultCode !== undefined
-                                ? <span style={{ fontFamily: 'monospace', fontSize: 13, color: o.resultCode === 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
-                                    {o.resultCode}
+                                ? <span className="result-code" style={{ color: o.resultCode === 0 ? '#16a34a' : '#dc2626' }}>
+                                    {o.resultCode === 0 ? '✓ 0' : `✗ ${o.resultCode}`}
                                   </span>
-                                : '—'}
+                                : <span className="muted">—</span>}
                             </td>
-                            <td className="date">{fmtDate(o.createdAt)}</td>
-                            <td className="date">{o.paidAt ? fmtDate(o.paidAt) : '—'}</td>
-                            <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                              <button className="delete-btn" onClick={() => deleteOrder(o.orderId)} title="Xóa giao dịch này">🗑️</button>
+                            <td className="td-date">{fmtDate(o.createdAt)}</td>
+                            <td className="td-date">{o.paidAt ? fmtDate(o.paidAt) : <span className="muted">—</span>}</td>
+                            <td className="td-action" onClick={e => e.stopPropagation()}>
+                              <button className="btn-del-row" onClick={() => doDelete([o.orderId])} title="Xóa">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                                </svg>
+                              </button>
                             </td>
                           </tr>
                         )
@@ -424,6 +394,21 @@ export default function AdminPage() {
                   </table>
                 </div>
               )}
+
+              {/* Footer table */}
+              <div className="table-footer">
+                <span className="table-count">
+                  {filtered.length} giao dịch
+                  {filter !== 'ALL' && ` · lọc theo "${FILTERS.find(f=>f.key===filter)?.label}"`}
+                  {search && ` · tìm "${search}"`}
+                </span>
+                {lastSync && (
+                  <span className="last-sync">
+                    Cập nhật lúc {lastSync.toLocaleTimeString('vi-VN')}
+                    {fetching && ' · đang tải...'}
+                  </span>
+                )}
+              </div>
             </div>
           </main>
         </div>
@@ -432,184 +417,464 @@ export default function AdminPage() {
   )
 }
 
+// ─── SUB COMPONENTS ──────────────────────────────────────────
+
+function Orbs() {
+  return <>
+    <div className="orb orb1"/><div className="orb orb2"/>
+    <div className="orb orb3"/><div className="orb orb4"/>
+  </>
+}
+
+function StatCard({ label, value, color, sub }) {
+  return (
+    <div className="scard">
+      <div className="scard-label">{label}</div>
+      <div className="scard-value" style={{ color }}>{value}</div>
+      {sub && <div className="scard-sub">{sub}</div>}
+    </div>
+  )
+}
+
+function DetailModal({ order, onClose, onDelete }) {
+  const sm = STATUS_META[order.status] || STATUS_META.PENDING
+  const extra = decodeExtra(order.extraData)
+
+  const copyText = text => {
+    navigator.clipboard?.writeText(text)
+  }
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="modal-hd">
+          <div>
+            <div className="modal-hd-label">Chi tiết giao dịch</div>
+            <div className="modal-hd-id">{order.orderId}</div>
+          </div>
+          <button className="modal-x" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Status + amount hero */}
+        <div className="modal-hero" style={{ background: sm.bg }}>
+          <span className="badge" style={{ background: 'white', color: sm.color }}>
+            <span className="badge-dot" style={{ background: sm.dot }} />
+            {sm.label}
+          </span>
+          <div className="modal-amount" style={{ color: sm.color }}>
+            {fmt(order.amount)} ₫
+          </div>
+          <div className="modal-orderinfo">{order.orderInfo || '—'}</div>
+        </div>
+
+        {/* Detail rows */}
+        <div className="modal-body">
+          <Section title="Thông tin giao dịch">
+            <Row label="Mã đơn"        value={order.orderId}   mono copy={() => copyText(order.orderId)} />
+            <Row label="Request ID"    value={order.requestId} mono copy={() => copyText(order.requestId)} />
+            <Row label="Mã GD MoMo"    value={order.transId}   mono copy={() => copyText(order.transId)} />
+          </Section>
+
+          <Section title="Kết quả">
+            <Row label="Result Code" value={
+              order.resultCode !== undefined
+                ? <span style={{ fontFamily: 'monospace', fontWeight: 700, color: order.resultCode === 0 ? '#16a34a' : '#dc2626' }}>
+                    {order.resultCode === 0 ? `✓ ${order.resultCode} — Thành công` : `✗ ${order.resultCode}`}
+                  </span>
+                : null
+            } />
+            <Row label="Message"     value={order.message} />
+            <Row label="Loại đơn"    value={order.orderType} />
+            <Row label="Hình thức"   value={order.payType ? <span className="chip">{order.payType}</span> : null} />
+            <Row label="Nguồn"       value={order.source  ? <span className="chip">{order.source}</span>  : null} />
+          </Section>
+
+          <Section title="Thời gian">
+            <Row label="Tạo lúc"        value={fmtDate(order.createdAt)} />
+            <Row label="MoMo phản hồi"  value={fmtMs(order.responseTime)} />
+            <Row label="Hoàn tất lúc"   value={fmtDate(order.paidAt)} />
+          </Section>
+
+          {order.extraData && (
+            <Section title="Extra Data">
+              <div className="extra-block">
+                {typeof extra === 'object' ? JSON.stringify(extra, null, 2) : extra}
+              </div>
+            </Section>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="modal-ft">
+          <button className="btn-del-modal" onClick={() => { onClose(); onDelete(order.orderId) }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+              <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+            </svg>
+            Xóa giao dịch
+          </button>
+          <button className="btn-close-modal" onClick={onClose}>Đóng</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Section({ title, children }) {
+  return (
+    <div className="msection">
+      <div className="msection-title">{title}</div>
+      {children}
+    </div>
+  )
+}
+
+function Row({ label, value, mono, copy }) {
+  if (!value && value !== 0) return null
+  return (
+    <div className="mrow">
+      <span className="mrow-label">{label}</span>
+      <span className={`mrow-value ${mono ? 'mono' : ''}`}>
+        {value}
+        {copy && value && value !== '—' && (
+          <button className="copy-btn" onClick={copy} title="Copy">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+          </button>
+        )}
+      </span>
+    </div>
+  )
+}
+
+// ─── CSS ─────────────────────────────────────────────────────
 const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
   :root {
-    --mm: #ae0070;
+    --mm:      #ae0070;
+    --mm-light:#fff0f7;
     --success: #16a34a;
-    --danger: #dc2626;
+    --danger:  #dc2626;
     --warning: #d97706;
-    --text-main: #1a0413;
-    --muted: #6c757d;
-    --border-color: rgba(174, 0, 112, 0.12);
-    --surface: rgba(255, 255, 255, 0.88);
+    --muted:   #6b7280;
+    --border:  rgba(174,0,112,0.1);
+    --surface: rgba(255,255,255,0.92);
+    --text:    #111827;
+    --font:    'Inter', sans-serif;
   }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--font); color: var(--text); }
 
-  .bg-mesh-container {
-    position: relative; min-height: 100vh; width: 100vw;
-    background-color: #f3e9ed; overflow-x: hidden;
+  /* ── BG ── */
+  .bg-wrap { position: relative; min-height: 100vh; width: 100vw; background: #f5edf2; overflow-x: hidden; }
+  .orb { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.55; z-index: 0; pointer-events: none; }
+  .orb1 { top:-5%; left:-5%; width:45vw; height:45vw; background:#ff9cb7; animation: om1 7s infinite alternate ease-in-out; }
+  .orb2 { bottom:-5%; right:-5%; width:55vw; height:55vw; background:#b0bec5; animation: om2 9s infinite alternate ease-in-out; }
+  .orb3 { top:20%; right:-5%; width:40vw; height:40vw; background:#dfb2ea; animation: om3 8s infinite alternate ease-in-out; }
+  .orb4 { bottom:-5%; left:5%; width:35vw; height:35vw; background:#80cbc4; animation: om1 8.5s infinite alternate ease-in-out; }
+  @keyframes om1 { 0%{transform:translate(0,0)scale(1)} 50%{transform:translate(8vw,4vh)scale(1.15)} 100%{transform:translate(-4vw,7vh)scale(0.9)} }
+  @keyframes om2 { 0%{transform:translate(0,0)scale(1.1)} 50%{transform:translate(-10vw,-6vh)scale(0.9)} 100%{transform:translate(6vw,4vh)scale(1.1)} }
+  @keyframes om3 { 0%{transform:translate(0,0)scale(0.9)} 50%{transform:translate(-5vw,7vh)scale(1.2)} 100%{transform:translate(7vw,-4vh)scale(1)} }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+    background: rgba(255,255,255,0.88);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 16px rgba(174,0,112,0.06);
+  }
+  .topbar-inner {
+    max-width: 1600px; margin: 0 auto;
+    padding: 0 24px;
+    height: 60px;
+    display: flex; align-items: center; gap: 20px;
   }
 
-  .orb { position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.65; z-index: 0; pointer-events: none; transform: translate3d(0,0,0); }
-  .orb-1 { top: -5%; left: -5%; width: 45vw; height: 45vw; background: #ff9cb7; animation: orbMove1 6s infinite alternate ease-in-out; }
-  .orb-2 { bottom: -5%; right: -5%; width: 55vw; height: 55vw; background: #b0bec5; animation: orbMove2 8s infinite alternate ease-in-out; }
-  .orb-3 { top: 20%; right: -5%; width: 40vw; height: 40vw; background: #dfb2ea; animation: orbMove3 7s infinite alternate ease-in-out; }
-  .orb-4 { bottom: -5%; left: 5%; width: 35vw; height: 35vw; background: #80cbc4; animation: orbMove1 7.5s infinite alternate ease-in-out; }
+  .logo-area { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+  .logo-img { width: 30px; height: 30px; border-radius: 8px; object-fit: contain; }
+  .logo-text { font-size: 17px; font-weight: 800; color: var(--mm); letter-spacing: -0.3px; }
+  .sync-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    transition: background 0.3s;
+  }
+  .sync-dot.idle    { background: #22c55e; }
+  .sync-dot.syncing { background: #f59e0b; animation: pulse 0.8s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-  @keyframes orbMove1 { 0% { transform: translate(0,0) scale(1); } 50% { transform: translate(8vw,4vh) scale(1.15); } 100% { transform: translate(-4vw,7vh) scale(0.9); } }
-  @keyframes orbMove2 { 0% { transform: translate(0,0) scale(1.1); } 50% { transform: translate(-10vw,-6vh) scale(0.9); } 100% { transform: translate(6vw,4vh) scale(1.1); } }
-  @keyframes orbMove3 { 0% { transform: translate(0,0) scale(0.9); } 50% { transform: translate(-5vw,7vh) scale(1.2); } 100% { transform: translate(7vw,-4vh) scale(1); } }
+  .filter-tabs { display: flex; gap: 2px; flex: 1; justify-content: center; }
+  .ftab {
+    padding: 6px 14px; border: none; border-radius: 8px;
+    background: transparent; font-size: 13px; font-weight: 600;
+    color: var(--muted); cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; gap: 6px; font-family: var(--font);
+  }
+  .ftab:hover { background: var(--mm-light); color: var(--mm); }
+  .ftab.active { background: var(--mm); color: #fff; }
+  .ftab-count {
+    font-size: 11px; font-weight: 700;
+    background: rgba(0,0,0,0.08); color: inherit;
+    padding: 2px 7px; border-radius: 20px; line-height: 1.4;
+  }
+  .ftab.active .ftab-count { background: rgba(255,255,255,0.25); }
 
-  .bg-mesh-container::before {
-    content: ''; position: absolute; inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3e%3cfilter id='noiseFilter'%3e%3cturbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3e%3c/filter%3e%3crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3e%3c/svg%3e");
-    opacity: 0.5; z-index: 1; pointer-events: none;
+  .topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+  .searchbox {
+    position: relative; display: flex; align-items: center;
+  }
+  .searchbox svg { position: absolute; left: 11px; color: var(--muted); pointer-events: none; }
+  .searchbox input {
+    padding: 7px 32px 7px 34px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: rgba(255,255,255,0.7); font-size: 13px;
+    font-family: var(--font); width: 220px; color: var(--text);
+    transition: all 0.2s;
+  }
+  .searchbox input:focus { outline: none; border-color: var(--mm); background: #fff; box-shadow: 0 0 0 3px rgba(174,0,112,0.08); width: 260px; }
+  .search-clear {
+    position: absolute; right: 10px; background: none; border: none;
+    font-size: 12px; color: var(--muted); cursor: pointer; line-height: 1;
   }
 
-  .dashboard { padding-top: 85px; position: relative; z-index: 2; will-change: transform; }
-
-  .fixed-header {
-    position: fixed; top: 0; left: 0; right: 0;
-    background: rgba(255,255,255,0.9); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
-    z-index: 100; border-bottom: 1px solid var(--border-color);
+  .btn-danger { background: var(--danger); color: #fff; border: none; padding: 7px 14px; border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font); }
+  .btn-refresh {
+    width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--border);
+    background: rgba(255,255,255,0.7); cursor: pointer; display: flex; align-items: center; justify-content: center;
+    color: var(--muted); transition: all 0.15s;
   }
-  .header-content { max-width: 1600px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+  .btn-refresh:hover { border-color: var(--mm); color: var(--mm); background: var(--mm-light); }
+  .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-logout { padding: 7px 14px; border-radius: 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.7); font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; font-family: var(--font); }
+  .btn-logout:hover { color: var(--danger); border-color: var(--danger); background: #fff; }
 
-  .logo { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 800; color: var(--text-main); letter-spacing: -0.5px; }
-  .admin-header-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: contain; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { animation: spin 0.8s linear infinite; }
 
-  .filters { display: flex; gap: 6px; flex-wrap: wrap; }
-  .filter-btn { padding: 8px 16px; border: 1px solid rgba(174,0,112,0.15); border-radius: 10px; background: rgba(255,255,255,0.7); font-size: 13px; font-weight: 600; color: #495057; cursor: pointer; transition: all 0.2s; }
-  .filter-btn:hover { border-color: var(--mm); color: var(--mm); background: #fff0f7; }
-  .filter-btn.active { background: var(--mm); color: #fff; border-color: var(--mm); }
-  .filter-btn .count { font-size: 11px; opacity: 0.8; margin-left: 2px; }
+  /* ── MAIN ── */
+  .dashboard { padding-top: 60px; position: relative; z-index: 1; }
+  .main { max-width: 1600px; margin: 0 auto; padding: 24px; }
 
-  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .search-box input { padding: 9px 16px; border: 1px solid rgba(174,0,112,0.15); border-radius: 10px; width: 280px; font-size: 14px; background: rgba(255,255,255,0.7); font-family: inherit; transition: all 0.2s; }
-  .search-box input:focus { outline: none; border-color: var(--mm); background: #fff; box-shadow: 0 0 0 3px rgba(174,0,112,0.08); }
+  /* ── STAT CARDS ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+  @media(max-width:900px) { .stat-grid { grid-template-columns: repeat(2,1fr); } }
+  .scard {
+    background: var(--surface);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-radius: 16px; padding: 20px 22px;
+    border: 1px solid rgba(255,255,255,0.7);
+    box-shadow: 0 2px 20px rgba(174,0,112,0.04);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .scard:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(174,0,112,0.08); }
+  .scard-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.6px; text-transform: uppercase; }
+  .scard-value { font-size: 26px; font-weight: 800; margin-top: 6px; letter-spacing: -0.5px; }
+  .scard-sub { font-size: 12px; color: var(--muted); margin-top: 5px; }
 
-  .bulk-delete-btn { background: var(--danger); color: white; border: none; padding: 9px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
-  .logout-btn { background: rgba(255,255,255,0.7); color: #495057; border: 1px solid rgba(174,0,112,0.15); padding: 9px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
-  .logout-btn:hover { background: #fff; color: var(--danger); }
+  /* ── TABLE ── */
+  .table-wrap {
+    background: var(--surface);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.7);
+    box-shadow: 0 4px 30px rgba(0,0,0,0.04);
+    overflow: hidden;
+  }
+  .table-scroll { overflow-x: auto; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 1100px; }
+  .tbl thead tr { background: rgba(245,237,242,0.8); }
+  .tbl th {
+    padding: 13px 16px; text-align: left;
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    letter-spacing: 0.5px; text-transform: uppercase;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .th-check, .td-check { width: 44px; text-align: center !important; }
+  .th-action, .td-action { width: 56px; text-align: center !important; }
 
-  .main-content { max-width: 1600px; margin: 0 auto; padding: 24px; position: relative; z-index: 2; }
+  .tbl td { padding: 14px 16px; border-bottom: 1px solid rgba(174,0,112,0.03); vertical-align: middle; }
+  .trow { cursor: pointer; transition: background 0.1s; }
+  .trow:hover { background: rgba(255,255,255,0.6); }
+  .trow.sel  { background: rgba(174,0,112,0.05) !important; }
+  .trow:last-child td { border-bottom: none; }
 
-  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 24px; }
-  .stat-card { background: var(--surface); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.6); box-shadow: 0 10px 30px rgba(174,0,112,0.02); will-change: transform; }
-  .stat-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.5px; }
-  .stat-value { font-size: 28px; font-weight: 800; margin-top: 6px; letter-spacing: -0.5px; }
-  .total .stat-value { color: var(--mm); }
-  .success .stat-value { color: var(--success); }
-  .failed .stat-value { color: var(--danger); }
-  .total-orders .stat-value { color: #212529; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 11px; border-radius: 20px;
+    font-size: 12px; font-weight: 700; white-space: nowrap;
+  }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
-  .table-container { background: var(--surface); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.6); box-shadow: 0 20px 40px rgba(0,0,0,0.02); will-change: transform; }
-  .table-responsive { width: 100%; overflow-x: auto; }
+  .td-amount { font-weight: 800; color: var(--mm); font-size: 14px; white-space: nowrap; }
+  .td-info { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; }
+  .td-code { font-family: monospace; font-size: 12px; color: #4b5563; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+  .td-date { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .chip { background: rgba(0,0,0,0.06); padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+  .result-code { font-family: monospace; font-size: 13px; font-weight: 700; }
+  .muted { color: #9ca3af; }
 
-  .data-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; min-width: 1100px; }
-  .data-table th { background: rgba(235,225,230,0.7); padding: 16px; font-weight: 700; color: #495057; border-bottom: 1px solid var(--border-color); }
-  .data-table td { padding: 16px; border-bottom: 1px solid rgba(174,0,112,0.04); color: #212529; vertical-align: middle; }
-  .data-table tr:hover { background: rgba(255,255,255,0.5); }
-  .data-table tr.selected-row { background: rgba(174,0,112,0.06) !important; }
-  .clickable-row { cursor: pointer; }
+  .btn-del-row {
+    width: 30px; height: 30px; border-radius: 7px; border: none;
+    background: transparent; color: #9ca3af; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .btn-del-row:hover { background: #fee2e2; color: var(--danger); }
 
-  .status-badge { padding: 6px 12px; border-radius: 8px; font-weight: 700; font-size: 12px; display: inline-block; }
-  .amount { font-weight: 800; color: var(--mm); font-size: 15px; }
-  .info { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-  .code { font-family: monospace; font-size: 13px; background: rgba(255,255,255,0.7); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(174,0,112,0.05); color: #495057; }
-  .date { font-size: 13px; color: var(--muted); }
-  .paytype-badge { background: rgba(0,0,0,0.05); padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+  .table-footer {
+    padding: 12px 20px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--muted);
+  }
+  .table-count { font-weight: 600; }
+  .last-sync { font-style: italic; }
 
-  .delete-btn { background: transparent; border: none; font-size: 16px; cursor: pointer; color: var(--danger); padding: 6px; border-radius: 6px; }
-  .delete-btn:hover { background: rgba(255,235,235,0.9); }
-  .empty-state { padding: 60px; text-align: center; color: var(--muted); font-weight: 500; }
+  .empty { padding: 72px 24px; text-align: center; }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-text { font-size: 15px; font-weight: 600; color: var(--muted); }
 
-  /* ===== MODAL ===== */
-  .modal-overlay {
-    position: fixed; inset: 0; z-index: 999;
-    background: rgba(26, 4, 19, 0.45);
-    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  /* ── MODAL ── */
+  .overlay {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(17,7,13,0.5);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
     display: flex; align-items: center; justify-content: center;
     padding: 20px;
-    animation: fadeIn 0.18s ease;
+    animation: fadein 0.15s ease;
   }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fadein { from{opacity:0} to{opacity:1} }
+  .modal {
+    background: #fff; border-radius: 20px;
+    width: 100%; max-width: 520px; max-height: 88vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.2), 0 0 0 1px rgba(174,0,112,0.08);
+    animation: slideup 0.2s ease;
+    overflow: hidden;
+  }
+  @keyframes slideup { from{transform:translateY(16px);opacity:0} to{transform:none;opacity:1} }
 
-  .modal-card {
-    background: rgba(255,255,255,0.97);
-    border-radius: 20px;
-    width: 100%;
-    max-width: 560px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 30px 80px rgba(174,0,112,0.18);
-    border: 1px solid rgba(255,255,255,0.8);
-    animation: slideUp 0.2s ease;
+  .modal-hd {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 20px 22px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    flex-shrink: 0;
   }
-  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-  .modal-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 20px 24px 16px;
-    border-bottom: 1px solid var(--border-color);
-    position: sticky; top: 0; background: rgba(255,255,255,0.97); z-index: 1;
-    border-radius: 20px 20px 0 0;
-  }
-  .modal-title { font-size: 18px; font-weight: 800; color: var(--text-main); }
-  .modal-close {
-    width: 32px; height: 32px; border-radius: 8px; border: none;
-    background: rgba(174,0,112,0.07); color: var(--mm); font-size: 15px;
+  .modal-hd-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+  .modal-hd-id { font-family: monospace; font-size: 13px; color: #374151; }
+  .modal-x {
+    width: 30px; height: 30px; border-radius: 8px; border: none;
+    background: #f3f4f6; color: #6b7280; font-size: 14px;
     cursor: pointer; display: flex; align-items: center; justify-content: center;
-    font-weight: 700; transition: all 0.15s;
+    flex-shrink: 0; margin-left: 12px;
+    transition: all 0.15s;
   }
-  .modal-close:hover { background: rgba(174,0,112,0.15); }
+  .modal-x:hover { background: #fee2e2; color: var(--danger); }
 
-  .modal-body { padding: 8px 24px 8px; }
+  .modal-hero {
+    padding: 20px 22px; flex-shrink: 0;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .modal-amount { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+  .modal-orderinfo { font-size: 13px; color: #374151; font-weight: 500; }
 
-  .detail-row {
+  .modal-body { overflow-y: auto; flex: 1; padding: 4px 0; }
+  .msection { padding: 0 22px; margin-bottom: 4px; }
+  .msection-title {
+    font-size: 10px; font-weight: 700; color: var(--muted);
+    letter-spacing: 0.8px; text-transform: uppercase;
+    padding: 14px 0 8px; border-top: 1px solid #f3f4f6;
+  }
+  .msection:first-child .msection-title { border-top: none; }
+  .mrow {
     display: flex; align-items: flex-start; gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid rgba(174,0,112,0.05);
+    padding: 9px 0; border-bottom: 1px solid #f9fafb;
   }
-  .detail-row:last-child { border-bottom: none; }
-  .detail-label {
-    min-width: 140px; font-size: 12px; font-weight: 700;
-    color: var(--muted); letter-spacing: 0.3px; padding-top: 2px;
+  .mrow:last-child { border-bottom: none; }
+  .mrow-label { min-width: 130px; font-size: 12px; font-weight: 600; color: var(--muted); padding-top: 1px; flex-shrink: 0; }
+  .mrow-value { font-size: 13px; color: var(--text); flex: 1; word-break: break-all; display: flex; align-items: center; gap: 6px; }
+  .mrow-value.mono { font-family: monospace; font-size: 12px; }
+  .copy-btn {
+    flex-shrink: 0; background: none; border: none; color: #9ca3af;
+    cursor: pointer; padding: 2px; border-radius: 4px;
+    display: inline-flex; align-items: center;
+    transition: color 0.15s;
   }
-  .detail-value { font-size: 14px; color: #212529; flex: 1; word-break: break-all; }
+  .copy-btn:hover { color: var(--mm); }
 
-  .modal-footer {
-    padding: 16px 24px 20px;
-    border-top: 1px solid var(--border-color);
-    display: flex; justify-content: flex-end;
+  .extra-block {
+    background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 12px; font-family: monospace; font-size: 11.5px; color: #374151;
+    white-space: pre-wrap; word-break: break-all; margin-bottom: 4px;
   }
-  .delete-btn-modal {
-    background: transparent; border: 1px solid rgba(220,38,38,0.3);
-    color: var(--danger); padding: 9px 18px; border-radius: 10px;
-    font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+
+  .modal-ft {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 22px; border-top: 1px solid #f3f4f6; flex-shrink: 0;
   }
-  .delete-btn-modal:hover { background: rgba(255,235,235,0.9); border-color: var(--danger); }
+  .btn-del-modal {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 8px 14px; border-radius: 9px;
+    border: 1px solid #fecaca; background: #fff5f5;
+    color: var(--danger); font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: var(--font); transition: all 0.15s;
+  }
+  .btn-del-modal:hover { background: #fee2e2; border-color: var(--danger); }
+  .btn-close-modal {
+    padding: 8px 20px; border-radius: 9px;
+    border: 1px solid var(--border); background: #f9fafb;
+    font-size: 13px; font-weight: 600; color: #374151;
+    cursor: pointer; font-family: var(--font); transition: all 0.15s;
+  }
+  .btn-close-modal:hover { background: #fff; }
 
-  /* ĐĂNG NHẬP */
-  .login-wrap { min-height: 100vh; width: 100vw; display: flex; align-items: center; justify-content: center; padding: 20px; position: relative; z-index: 5; }
-  .login-card { background: var(--surface); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); padding: 45px 36px; border-radius: 24px; width: 100%; max-width: 420px; text-align: center; border: 1px solid rgba(255,255,255,0.7); box-shadow: 0 30px 60px rgba(174,0,112,0.05); }
-  .login-logo-container { width: 64px; height: 64px; border-radius: 16px; background: #fff; border: 1px solid rgba(174,0,112,0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
-  .login-logo-img { width: 48px; height: 48px; object-fit: contain; }
-  .login-card .title { font-size: 24px; font-weight: 800; color: var(--text-main); letter-spacing: -0.5px; }
-  .login-card .subtitle { font-size: 14px; color: var(--muted); margin-top: 6px; margin-bottom: 28px; }
-  .input-group input { width: 100%; padding: 14px 18px; border: 1px solid rgba(174,0,112,0.15); border-radius: 12px; font-size: 15px; font-family: inherit; margin-bottom: 16px; background: rgba(240,232,236,0.5); }
-  .input-group input:focus { border-color: var(--mm); background: #fff; box-shadow: 0 0 0 4px rgba(174,0,112,0.06); outline: none; }
-  .input-group.error input { border-color: var(--danger); background: #fff5f5; }
-  .error-text { font-size: 13px; color: var(--danger); font-weight: 600; margin-bottom: 16px; }
-  .login-btn { width: 100%; padding: 14px; background: var(--mm); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; box-shadow: 0 6px 20px rgba(174,0,112,0.15); }
-  .login-btn:hover { background: #91005d; transform: translateY(-1px); }
+  /* ── LOGIN ── */
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; position: relative; z-index: 10; }
+  .login-card {
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+    border-radius: 24px; padding: 40px 36px; width: 100%; max-width: 400px;
+    text-align: center;
+    box-shadow: 0 24px 60px rgba(174,0,112,0.1), 0 0 0 1px rgba(255,255,255,0.8);
+  }
+  .login-logo-box { width: 60px; height: 60px; border-radius: 16px; background: #fff; border: 1px solid rgba(174,0,112,0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; box-shadow: 0 4px 12px rgba(174,0,112,0.08); }
+  .login-logo { width: 44px; height: 44px; object-fit: contain; }
+  .login-title { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; }
+  .login-sub { font-size: 13px; color: var(--muted); margin-top: 5px; margin-bottom: 28px; }
+  .pw-group input {
+    width: 100%; padding: 13px 16px; border: 1.5px solid rgba(174,0,112,0.15);
+    border-radius: 12px; font-size: 15px; font-family: var(--font);
+    margin-bottom: 12px; background: rgba(245,237,242,0.5); color: var(--text);
+    transition: all 0.2s;
+  }
+  .pw-group input:focus { outline: none; border-color: var(--mm); background: #fff; box-shadow: 0 0 0 4px rgba(174,0,112,0.07); }
+  .pw-group.error input { border-color: var(--danger); background: #fff5f5; }
+  .pw-error { font-size: 13px; color: var(--danger); font-weight: 600; margin-bottom: 14px; }
+  .login-btn {
+    width: 100%; padding: 13px; background: var(--mm); color: #fff;
+    border: none; border-radius: 12px; font-size: 15px; font-weight: 700;
+    cursor: pointer; font-family: var(--font);
+    box-shadow: 0 6px 20px rgba(174,0,112,0.2);
+    transition: all 0.2s;
+  }
+  .login-btn:hover { background: #91005d; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(174,0,112,0.25); }
 
-  @media (max-width: 992px) {
-    .fixed-header { position: relative; }
+  /* ── RESPONSIVE ── */
+  @media(max-width:768px) {
+    .topbar-inner { flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 10px; }
+    .filter-tabs { order: 3; width: 100%; overflow-x: auto; justify-content: flex-start; padding-bottom: 2px; }
+    .topbar-right { margin-left: auto; }
+    .searchbox input { width: 160px; }
+    .searchbox input:focus { width: 180px; }
     .dashboard { padding-top: 0; }
-    .header-content { flex-direction: column; align-items: stretch; text-align: center; }
-    .logo, .filters, .header-right { justify-content: center; width: 100%; }
-    .search-box input { width: 100%; }
+    .main { padding: 16px; }
+    .stat-grid { grid-template-columns: repeat(2,1fr); gap: 12px; }
   }
 `
