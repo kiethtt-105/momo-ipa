@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import Head from 'next/head'
-
+// Trang quản trị viên để xem và quản lý các giao dịch MoMo
 export default function AdminPage() {
   const [authed, setAuthed] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -13,7 +13,7 @@ export default function AdminPage() {
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
   const [selectedOrders, setSelectedOrders] = useState(new Set())
-
+// Xử lý đăng nhập admin
   const handleLogin = () => {
     if (password === (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'momo@admin')) {
       sessionStorage.setItem('momo_admin_authed', '1')
@@ -24,22 +24,31 @@ export default function AdminPage() {
       setPassword('')
     }
   }
-
- const fetchOrders = async () => {
+// Lấy danh sách đơn hàng từ server
+const fetchOrders = async () => {
   if (loading) return
   setLoading(true)
   try {
     const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
     const res = await fetch(`/api/momo/orders?key=${adminKey}`)
     const data = await res.json()
-    setOrders(data.orders || [])
-    setSelectedOrders(new Set())
+    
+    const newOrders = data.orders || []
+    setOrders(newOrders)
+
+    // GIỮ LẠI NHỮNG ĐƠN ĐÃ CHỌN (nếu còn tồn tại)
+    const currentSelected = Array.from(selectedOrders)
+    const stillExist = currentSelected.filter(id => 
+      newOrders.some(order => order.orderId === id)
+    )
+    setSelectedOrders(new Set(stillExist))
+    
   } catch (err) {
     console.error("Fetch orders error:", err)
   }
   setLoading(false)
 }
-
+// Chuẩn hóa trạng thái đơn hàng để dễ dàng lọc và hiển thị
   const normalizeOrders = (ordersList) => {
     const now = new Date()
     return ordersList.map(order => {
@@ -55,7 +64,7 @@ export default function AdminPage() {
       return { ...order, status }
     })
   }
-
+// Tự động refresh danh sách đơn hàng mỗi 1 giây khi đã đăng nhập
   useEffect(() => {
     if (!authed) return
     fetchOrders()
@@ -73,7 +82,7 @@ export default function AdminPage() {
   const countPending = displayedOrders.filter(o => o.status === 'PENDING').length
   const countExpired = displayedOrders.filter(o => o.status === 'EXPIRED').length
   const totalOrders  = displayedOrders.length
-
+// Tính tổng tiền của các đơn đã thanh toán
   const totalPaid = displayedOrders
     .filter(o => o.status === 'PAID')
     .reduce((sum, o) => sum + parseInt(o.amount || 0), 0)
@@ -84,7 +93,7 @@ export default function AdminPage() {
     PENDING: { label: 'Chờ xử lý',  color: '#f59e0b', bg: '#fefce8' },
     EXPIRED: { label: 'Hết hạn',    color: '#ea580c', bg: '#fff7ed' },
   }
-
+// Các bộ lọc trạng thái đơn hàng
   const FILTERS = [
     { key: 'ALL',     label: 'Tất cả',       count: totalOrders },
     { key: 'PAID',    label: 'Thành công',   count: countPaid },
@@ -92,7 +101,7 @@ export default function AdminPage() {
     { key: 'FAILED',  label: 'Thất bại',     count: countFailed },
     { key: 'EXPIRED', label: 'Hết hạn',      count: countExpired },
   ]
-
+// Lọc và tìm kiếm đơn hàng dựa trên trạng thái và từ khóa
   const filteredOrders = displayedOrders
     .filter(o => filter === 'ALL' || o.status === filter)
     .filter(o => 
@@ -142,7 +151,7 @@ export default function AdminPage() {
     if (!confirm(`Xóa ${selectedOrders.size} đơn đã chọn?\nKhông thể hoàn tác!`)) return
     await performDelete(Array.from(selectedOrders))
   }
-
+// Nếu chưa đăng nhập, hiển thị form đăng nhập
   if (!authed) {
     return (
       <>
@@ -165,7 +174,7 @@ export default function AdminPage() {
       </>
     )
   }
-
+// Nếu đã đăng nhập, hiển thị dashboard quản lý đơn hàng
   return (
     <>
       <Head><title>Admin · Giao dịch MoMo</title></Head>
@@ -259,7 +268,7 @@ export default function AdminPage() {
     </>
   )
 }
-
+// CSS cho trang admin, bao gồm cả phần dashboard và form đăng nhập
 const CSS = `
   :root { 
     --mm: #a50064; 
