@@ -106,26 +106,32 @@ export default function AdminPage() {
     )
 
   const deleteOrder = async (orderId) => {
-    if (!confirm(`Xóa đơn ${orderId}?\nKhông thể hoàn tác!`)) return
+    if (!confirm(`Xóa đơn ${orderId}?\nHành động này KHÔNG thể hoàn tác!`)) return
+
+    // Optimistic update - xóa ngay trên UI
+    const previousOrders = [...orders];
+    setOrders(prev => prev.filter(o => o.orderId !== orderId));
 
     try {
-      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
+      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123';
+      
       const res = await fetch(`/api/momo/delete?key=${adminKey}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId })
-      })
+      });
 
-      if (res.ok) {
-        setOrders(prev => prev.filter(o => o.orderId !== orderId))
-        // alert('Đã xóa đơn thành công')
-      } else {
-        alert('Không thể xóa đơn')
+      if (!res.ok) {
+        // Rollback nếu xóa thất bại
+        setOrders(previousOrders);
+        alert('Xóa thất bại, đã khôi phục đơn');
       }
     } catch (err) {
-      alert('Lỗi kết nối')
+      console.error(err);
+      setOrders(previousOrders);
+      alert('Lỗi kết nối. Đã khôi phục đơn');
     }
-  }
+  };
 
   if (!authed) {
     return (
