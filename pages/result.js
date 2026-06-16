@@ -10,38 +10,55 @@ export default function ResultPage() {
 
 useEffect(() => {
     if (!router.isReady) return
-    const { orderId, resultCode, transId, amount, payType, message, orderInfo } = router.query
-    if (!orderId) { setStatus('error'); return }
+    
+    // 1. Đọc thông tin từ URL bắn về
+    let { orderId, resultCode, transId, amount, payType, message, orderInfo } = router.query
     const code = parseInt(resultCode)
 
-    // Hàm phụ để xóa sạch đống param dài ngoằng trên thanh URL sau 500ms
+    // 2. MẸO CHỐNG F5: Nếu URL trống, lục tìm đơn hàng trong bộ nhớ đệm trình duyệt
+    if (!orderId && typeof window !== 'undefined') {
+      orderId = sessionStorage.getItem('momo_current_order_id')
+    }
+
+    // Nếu cả URL và bộ nhớ đều trống thì mới báo lỗi thực sự
+    if (!orderId) { setStatus('error'); return }
+
+    // Hàm phụ để dọn dẹp thanh địa chỉ URL sau 500ms cho sạch đẹp
     const cleanUrlBar = () => {
       setTimeout(() => {
         router.replace('/result', undefined, { shallow: true })
       }, 500)
     }
 
-    if (code === 0) {
-      setStatus('success')
-      setInfo({ orderId, transId, amount: parseInt(amount), payType, message })
-      fetch('/api/momo/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, transId, amount, payType, orderInfo, resultCode: 0 }),
-      })
-      .then(() => cleanUrlBar()) // Lưu xong -> Xóa đuôi URL liền
-      .catch(() => cleanUrlBar())
-    } else if (resultCode !== undefined) {
-      setStatus('failed')
-      setInfo({ orderId, message, resultCode: code })
-      fetch('/api/momo/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, transId, amount, payType, orderInfo, resultCode: code }),
-      })
-      .then(() => cleanUrlBar()) // Lưu xong -> Xóa đuôi URL liền
-      .catch(() => cleanUrlBar())
+    // 3. Nếu có thông tin đơn mới từ URL, tiến hành lưu và ghi nhớ id
+    if (resultCode !== undefined) {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('momo_current_order_id', orderId) // Lưu lại để F5 không bị quên
+      }
+
+      if (code === 0) {
+        setStatus('success')
+        setInfo({ orderId, transId, amount: parseInt(amount), payType, message })
+        fetch('/api/momo/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, transId, amount, payType, orderInfo, resultCode: 0 }),
+        })
+        .then(() => cleanUrlBar())
+        .catch(() => cleanUrlBar())
+      } else {
+        setStatus('failed')
+        setInfo({ orderId, message, resultCode: code })
+        fetch('/api/momo/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, transId, amount, payType, orderInfo, resultCode: code }),
+        })
+        .then(() => cleanUrlBar())
+        .catch(() => cleanUrlBar())
+      }
     } else {
+      // 4. LUỒNG KHI NHẤN F5: Tự động gọi API hỏi server trạng thái đơn hàng đã lưu ngầm
       let attempts = 0
       const poll = setInterval(async () => {
         try {
@@ -51,13 +68,13 @@ useEffect(() => {
             setStatus('success')
             setInfo(data)
             clearInterval(poll)
-            cleanUrlBar() // Thống kê xong -> Xóa đuôi URL liền
+            cleanUrlBar()
           }
           else if (data.status === 'FAILED') { 
             setStatus('failed')
             setInfo(data)
             clearInterval(poll)
-            cleanUrlBar() // Thống kê xong -> Xóa đuôi URL liền
+            cleanUrlBar()
           }
           else if (++attempts >= 10) { 
             setStatus('pending')
@@ -68,7 +85,7 @@ useEffect(() => {
           clearInterval(poll) 
           cleanUrlBar()
         }
-      }, 2000)
+      }, 1500)
       return () => clearInterval(poll)
     }
   }, [router.isReady, router.query])
