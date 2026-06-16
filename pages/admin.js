@@ -276,9 +276,45 @@ const CSS = `
   .filter-btn { padding: 8px 18px; border: 1px solid #ddd; border-radius: 999px; background: white; font-weight: 600; cursor: pointer; }
   .filter-btn.active { background: var(--mm); color: white; border-color: var(--mm); }
 
-  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .search-box input { padding: 10px 18px; border: 2px solid #e0d4db; border-radius: 12px; width: 320px; font-size: 15px; }
-  .bulk-delete-btn { padding: 10px 20px; background: #ef4444; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; }
+  .header-right { 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+  flex-wrap: wrap; 
+}
+
+.search-box input { 
+  padding: 10px 18px; 
+  border: 2px solid #e0d4db; 
+  border-radius: 12px; 
+  width: 280px; 
+  font-size: 15px; 
+}
+
+.refresh-btn, .bulk-delete-btn, .logout-btn {
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.refresh-btn { 
+  background: white; 
+  border: 2px solid #ddd; 
+}
+
+.bulk-delete-btn { 
+  background: #ef4444; 
+  color: white; 
+  border: none; 
+}
+
+.logout-btn { 
+  background: #fee2e2; 
+  color: #ef4444; 
+  border: none; 
+}
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin: 24px; }
   .stat-card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }
   .stat-label { font-size: 13px; font-weight: 700; color: #666; }
