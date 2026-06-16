@@ -25,7 +25,8 @@ export default function AdminPage() {
   const fetchOrders = async () => {
     setLoading(true)
     try {
-      const adminKey = process.env.NEXT_PUBLIC_ADMIN_SECRET_KEY || 'admin-secret'
+      //const adminKey = process.env.NEXT_PUBLIC_ADMIN_SECRET_KEY || 'admin-secret'
+      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
       const res = await fetch(`/api/momo/orders?key=${adminKey}`)
       const data = await res.json()
       setOrders(data.orders || [])
