@@ -40,254 +40,314 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Thanh toán MoMo</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" type="image/png" href="/Main.png" /> {/* Thêm dòng này */}
+        <title>Thanh toán MoMo · Green Coffee</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <link rel="icon" type="image/png" href="/Main.png" />
         <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
       </Head>
+      
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; }
-        body {
+        
+        :root {
+          --mm: #ae0070;
+          --text: #1e0f18;
+          --muted: #6e5261;
+          --surface: #ffffff;
+          --bg-input: #f8f9fa;
+          --border-input: #e9ecef;
+        }
+
+        html, body {
+          height: 100%;
+          width: 100%;
           font-family: 'Be Vietnam Pro', sans-serif;
+          background: #f1f3f5;
+          overflow-x: hidden;
+        }
+
+        /* AUTOFIX TRUNG TÂM: Luôn cố định tuyệt đối ở giữa màn hình bất kể zoom */
+        .wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
           min-height: 100vh;
-          background: linear-gradient(135deg, #c2006e 0%, #8b0050 40%, #5c003a 100%);
-          display: flex; align-items: center; justify-content: center;
-          padding: 24px 16px;
+          width: 100vw;
+          padding: 20px;
+          background: radial-gradient(circle at 50% 50%, #ffffff 0%, #e9ecef 100%);
         }
 
-        /* Ambient blobs */
-        body::before {
-          content: '';
-          position: fixed; top: -120px; left: -120px;
-          width: 500px; height: 500px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(255,100,180,.18) 0%, transparent 70%);
-          pointer-events: none;
-        }
-        body::after {
-          content: '';
-          position: fixed; bottom: -100px; right: -100px;
-          width: 420px; height: 420px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(80,0,120,.3) 0%, transparent 70%);
-          pointer-events: none;
-        }
-
+        /* CARD TRẮNG SÁNG SANG TRỌNG */
         .card {
-          position: relative; z-index: 1;
-          width: 100%; max-width: 380px;
-          background: rgba(255,255,255,.08);
-          backdrop-filter: blur(24px);
-          -webkit-backdrop-filter: blur(24px);
-          border-radius: 28px;
-          border: 1px solid rgba(255,255,255,.18);
-          padding: 32px 28px 28px;
-          box-shadow:
-            0 32px 80px rgba(0,0,0,.35),
-            inset 0 1px 0 rgba(255,255,255,.2);
-          overflow: hidden;
+          position: relative;
+          z-index: 1;
+          width: 100%;
+          max-width: 440px;
+          background: var(--surface);
+          border-radius: 24px;
+          border: 1px solid rgba(0, 0, 0, 0.05);
+          padding: 36px 32px;
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.01);
+          transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
-        /* shimmer top edge */
-        .card::before {
-          content: '';
-          position: absolute; top: 0; left: 10%; right: 10%;
-          height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent);
-        }
-
-        /* Logo */
+        /* Header / Logo */
         .logo {
-          display: flex; align-items: center; gap: 12px;
-          margin-bottom: 28px;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          margin-bottom: 32px;
         }
         .logo-mark {
-          width: 44px; height: 44px; border-radius: 14px;
-          background: linear-gradient(135deg, rgba(255,255,255,.25), rgba(255,255,255,.08));
-          border: 1px solid rgba(255,255,255,.25);
-          display: flex; align-items: center; justify-content: center;
+          width: 48px;
+          height: 48px;
+          border-radius: 12px;
+          background: #fff;
+          border: 1px solid #e9ecef;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           flex-shrink: 0;
-          box-shadow: 0 4px 16px rgba(0,0,0,.2);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.03);
         }
-        .logo-name { font-size: 17px; font-weight: 900; color: #fff; }
-        .logo-sub  { font-size: 11px; color: rgba(255,255,255,.55); margin-top: 1px; }
+        .logo-name { 
+          font-size: 19px; 
+          font-weight: 800; 
+          color: var(--text);
+          letter-spacing: -0.3px;
+        }
+        .logo-sub { 
+          font-size: 12px; 
+          color: var(--muted); 
+          margin-top: 2px; 
+        }
 
-        /* Amount area */
+        /* Vùng khung nhập tiền lớn, tinh tế */
         .amt-wrap {
-          background: rgba(0,0,0,.18);
-          border-radius: 20px;
-          padding: 24px 22px 20px;
-          margin-bottom: 16px;
-          border: 1px solid rgba(255,255,255,.08);
-          position: relative;
-          overflow: hidden;
+          background: var(--bg-input);
+          border-radius: 16px;
+          padding: 20px 24px;
+          margin-bottom: 20px;
+          border: 1px solid var(--border-input);
+          transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .amt-wrap::after {
-          content: '';
-          position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent);
+        .amt-wrap:focus-within {
+          border-color: #f0bcd4;
+          box-shadow: 0 0 0 4px rgba(174, 0, 112, 0.06);
+          background: #fff;
         }
+        
         .amt-label {
-          font-size: 10px; font-weight: 700;
-          color: rgba(255,255,255,.45);
-          text-transform: uppercase; letter-spacing: 1.8px;
-          margin-bottom: 10px;
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: 1.2px;
+          margin-bottom: 8px;
         }
+        
         .amt-row {
-          display: flex; align-items: baseline; gap: 8px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
         }
+        
+        /* Chữ số input TO RÕ */
         .amt-input {
-          flex: 1; background: transparent; border: none; outline: none;
+          flex: 1;
+          background: transparent;
+          border: none;
+          outline: none;
           font-family: 'Be Vietnam Pro', sans-serif;
-          font-size: 48px; font-weight: 900;
-          color: #fff; min-width: 0;
-          caret-color: rgba(255,255,255,.8);
+          font-size: 42px;
+          font-weight: 900;
+          color: var(--text);
+          min-width: 0;
+          caret-color: var(--mm);
         }
-        .amt-input::placeholder { color: rgba(255,255,255,.2); }
+        .amt-input::placeholder { 
+          color: #adb5bd; 
+        }
+        
         .amt-unit {
-          font-size: 20px; font-weight: 700;
-          color: rgba(255,255,255,.45); padding-bottom: 8px;
+          font-size: 24px;
+          font-weight: 800;
+          color: #495057;
         }
+        
+        /* Gợi ý chữ số viết bằng chữ bên dưới */
         .amt-hint {
-          font-size: 12px; color: rgba(255,255,255,.4);
-          margin-top: 6px; min-height: 16px;
+          font-size: 13px;
+          color: var(--mm);
+          font-weight: 600;
+          margin-top: 8px;
+          min-height: 18px;
         }
 
-        /* Quick grid */
+        /* Lưới các nút chọn tiền nhanh TO và dễ bấm */
         .quick-grid {
-          display: grid; grid-template-columns: repeat(3, 1fr);
-          gap: 8px; margin-bottom: 20px;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+          margin-bottom: 24px;
         }
         .qa {
-          padding: 10px 4px;
+          padding: 12px 4px;
           border-radius: 12px;
-          border: 1px solid rgba(255,255,255,.14);
-          background: rgba(255,255,255,.07);
+          border: 1px solid #dee2e6;
+          background: #ffffff;
           font-family: 'Be Vietnam Pro', sans-serif;
-          font-size: 13px; font-weight: 700;
-          color: rgba(255,255,255,.7);
-          cursor: pointer; text-align: center;
-          transition: all .15s;
-          backdrop-filter: blur(4px);
+          font-size: 14px;
+          font-weight: 700;
+          color: #495057;
+          cursor: pointer;
+          text-align: center;
+          transition: all 0.15s ease;
         }
         .qa:hover {
-          background: rgba(255,255,255,.15);
-          border-color: rgba(255,255,255,.3);
-          color: #fff;
+          border-color: var(--mm);
+          color: var(--mm);
+          background: #fff0f7;
           transform: translateY(-1px);
         }
-        .qa:active { transform: scale(.96); }
+        .qa:active { 
+          transform: scale(0.97); 
+        }
         .qa.sel {
-          background: rgba(255,255,255,.22);
-          border-color: rgba(255,255,255,.5);
-          color: #fff;
-          box-shadow: 0 0 0 1px rgba(255,255,255,.25), 0 4px 14px rgba(0,0,0,.2);
+          background: var(--mm);
+          border-color: var(--mm);
+          color: #ffffff;
+          box-shadow: 0 4px 12px rgba(174, 0, 112, 0.2);
         }
 
-        /* Error */
+        /* Lỗi cảnh báo chữ TO nổi bật */
         .err {
-          font-size: 12px; font-weight: 700;
-          color: #ffb3d0;
-          margin-bottom: 14px;
-          display: flex; align-items: center; gap: 6px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #dc2626;
+          margin-bottom: 18px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: #ffebee;
+          padding: 10px 14px;
+          border-radius: 10px;
         }
 
-        /* Pay button */
+        /* Nút thanh toán lớn, đậm đà thương hiệu */
         .btn {
-          width: 100%; padding: 17px;
-          border-radius: 16px; border: none;
-          background: linear-gradient(135deg, #fff 0%, #f0d0e8 100%);
-          color: #9a005a;
+          width: 100%;
+          padding: 16px;
+          border-radius: 14px;
+          border: none;
+          background: var(--mm);
+          color: #ffffff;
           font-family: 'Be Vietnam Pro', sans-serif;
-          font-size: 16px; font-weight: 900;
+          font-size: 16px;
+          font-weight: 700;
           cursor: pointer;
-          display: flex; align-items: center; justify-content: center; gap: 10px;
-          box-shadow: 0 8px 28px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.8);
-          transition: all .15s;
-          letter-spacing: -.1px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          box-shadow: 0 8px 24px rgba(174, 0, 112, 0.2);
+          transition: all 0.2s ease;
         }
         .btn:hover:not(:disabled) {
+          background: #91005d;
           transform: translateY(-2px);
-          box-shadow: 0 14px 36px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.8);
+          box-shadow: 0 12px 28px rgba(174, 0, 112, 0.3);
         }
-        .btn:active:not(:disabled) { transform: scale(.99); }
+        .btn:active:not(:disabled) { 
+          transform: scale(0.99); 
+        }
         .btn:disabled {
-          background: rgba(255,255,255,.15);
-          color: rgba(255,255,255,.35);
-          box-shadow: none; cursor: not-allowed;
+          background: #e9ecef;
+          color: #adb5bd;
+          box-shadow: none;
+          cursor: not-allowed;
         }
 
         .spin {
-          width: 17px; height: 17px;
-          border: 2.5px solid rgba(154,0,90,.25);
-          border-top-color: #9a005a;
+          width: 18px;
+          height: 18px;
+          border: 2.5px solid rgba(255, 255, 255, 0.3);
+          border-top-color: #ffffff;
           border-radius: 50%;
-          animation: rot .6s linear infinite;
+          animation: rot 0.6s linear infinite;
           flex-shrink: 0;
         }
         @keyframes rot { to { transform: rotate(360deg) } }
 
-        @media (max-width: 420px) {
-          .card { border-radius: 24px; padding: 28px 20px 24px; }
-          .amt-input { font-size: 40px; }
+        /* Mobile Responsive gọn gàng */
+        @media (max-width: 480px) {
+          .wrapper { padding: 16px; }
+          .card { border-radius: 20px; padding: 28px 20px; }
+          .amt-input { font-size: 34px; }
+          .logo { margin-bottom: 24px; }
         }
       `}</style>
 
-      <div className="card">
-        <div className="logo">
-          <div className="logo-mark">
-            <img 
-              src="/Main.png" 
-              alt="Logo" 
-              style={{ width: '36px', height: '36px', borderRadius: '10px', objectFit: 'contain' }}
-            />
+      <div className="wrapper">
+        <div className="card">
+          
+          {/* LOGO & BRAND */}
+          <div className="logo">
+            <div className="logo-mark">
+              <img src="/Main.png" alt="Logo" style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'contain' }} />
+            </div>
+            <div>
+              <div className="logo-name">Green Coffee</div>
+              <div className="logo-sub">Cổng cổng thanh toán an toàn</div>
+            </div>
           </div>
-          <div>
-            <div className="logo-name">Green Coffee</div>   {/* hoặc tên bạn muốn */}
-            <div className="logo-sub">Cổng thanh toán</div>
+
+          {/* Ô NHẬP TIỀN */}
+          <div className="amt-wrap">
+            <div className="amt-label">Số tiền cần thanh toán</div>
+            <div className="amt-row">
+              <input
+                className="amt-input"
+                type="text"
+                inputMode="numeric"
+                value={display}
+                onChange={handleAmountChange}
+                placeholder="0"
+                autoFocus
+              />
+              <span className="amt-unit">₫</span>
+            </div>
+            <div className="amt-hint">
+              {numVal >= 1000 ? `${numVal.toLocaleString('vi-VN')} đồng` : '\u00a0'}
+            </div>
           </div>
+
+          {/* LƯỚI CHỌN NHANH GIÁ TIỀN */}
+          <div className="quick-grid">
+            {QUICK.map(v => (
+              <button
+                key={v}
+                className={`qa ${numVal === v ? 'sel' : ''}`}
+                onClick={() => { setError(''); setAmount(String(v)) }}
+              >
+                {v >= 1000000 ? `${v/1000000}M` : `${v/1000}K`}
+              </button>
+            ))}
+          </div>
+
+          {/* THÔNG BÁO LỖI (NẾU CÓ) */}
+          {error && <div className="err">⚠ {error}</div>}
+
+          {/* NÚT SUBMIT TO RÕ */}
+          <button className="btn" onClick={handlePay} disabled={loading || !amount}>
+            {loading ? (
+              <><div className="spin" />Đang tạo đơn hàng…</>
+            ) : (
+              `Thanh toán${display ? ' ' + display + ' ₫' : ''}`
+            )}
+          </button>
+          
         </div>
-        
-
-        <div className="amt-wrap">
-          <div className="amt-label">Số tiền thanh toán</div>
-          <div className="amt-row">
-            <input
-              className="amt-input"
-              type="text"
-              inputMode="numeric"
-              value={display}
-              onChange={handleAmountChange}
-              placeholder="0"
-              autoFocus
-            />
-            <span className="amt-unit">₫</span>
-          </div>
-          <div className="amt-hint">
-            {numVal >= 1000 ? `${numVal.toLocaleString('vi-VN')} đồng` : '\u00a0'}
-          </div>
-        </div>
-
-        <div className="quick-grid">
-          {QUICK.map(v => (
-            <button
-              key={v}
-              className={`qa ${numVal === v ? 'sel' : ''}`}
-              onClick={() => { setError(''); setAmount(String(v)) }}
-            >
-              {v >= 1000000 ? `${v/1000000}M` : `${v/1000}K`}
-            </button>
-          ))}
-        </div>
-
-        {error && <div className="err">⚠ {error}</div>}
-
-        <button className="btn" onClick={handlePay} disabled={loading || !amount}>
-          {loading ? (
-            <><div className="spin" />Đang xử lý…</>
-          ) : (
-            `Thanh toán${display ? ' ' + display + ' ₫' : ''}`
-          )}
-        </button>
       </div>
     </>
   )
