@@ -418,6 +418,7 @@ export default function Home() {
             </div>
             <div>
               <div className="logo-name">IPA</div>
+              <div className="logo-sub">Thanh toán MoMo</div>
             </div>
           </div>
 
