@@ -26,10 +26,12 @@ export default function AdminPage() {
   }
 
   const fetchOrders = async () => {
+    if (loading) return
     setLoading(true)
     try {
       const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
       const res = await fetch(`/api/momo/orders?key=${adminKey}`)
+      if (!res.ok) throw new Error('Fetch failed')
       const data = await res.json()
       setOrders(data.orders || [])
       setSelectedOrders(new Set())
@@ -58,7 +60,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!authed) return
     fetchOrders()
-    const iv = setInterval(fetchOrders, 30000)
+    const iv = setInterval(fetchOrders, 8000) // ← Giảm xuống 8 giây
     return () => clearInterval(iv)
   }, [authed])
 
@@ -113,6 +115,24 @@ export default function AdminPage() {
       : setSelectedOrders(new Set(filteredOrders.map(o => o.orderId)))
   }
 
+  const performDelete = async (idsToDelete) => {
+    try {
+      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
+      for (const orderId of idsToDelete) {
+        await fetch(`/api/momo/delete?key=${adminKey}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId })
+        })
+      }
+      await fetchOrders()
+      alert(`Đã xóa ${idsToDelete.length} đơn hàng`)
+    } catch (err) {
+      console.error(err)
+      alert('Lỗi khi xóa')
+    }
+  }
+
   const deleteOrder = async (orderId) => {
     if (!confirm(`Xóa đơn ${orderId}?\nKhông thể hoàn tác!`)) return
     await performDelete([orderId])
@@ -122,26 +142,6 @@ export default function AdminPage() {
     if (selectedOrders.size === 0) return
     if (!confirm(`Xóa ${selectedOrders.size} đơn đã chọn?\nKhông thể hoàn tác!`)) return
     await performDelete(Array.from(selectedOrders))
-  }
-
-  const performDelete = async (idsToDelete) => {
-    try {
-      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
-      
-      for (const orderId of idsToDelete) {
-        await fetch(`/api/momo/delete?key=${adminKey}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId })
-        })
-      }
-
-      await fetchOrders()  // Refresh lại từ server
-      alert(`Đã xóa ${idsToDelete.length} đơn hàng`)
-    } catch (err) {
-      console.error(err)
-      alert('Lỗi khi xóa')
-    }
   }
 
   if (!authed) {
@@ -179,11 +179,7 @@ export default function AdminPage() {
 
             <div className="filters">
               {FILTERS.map(f => (
-                <button
-                  key={f.key}
-                  className={`filter-btn ${filter === f.key ? 'active' : ''}`}
-                  onClick={() => setFilter(f.key)}
-                >
+                <button key={f.key} className={`filter-btn ${filter === f.key ? 'active' : ''}`} onClick={() => setFilter(f.key)}>
                   {f.label} <span className="count">({f.count})</span>
                 </button>
               ))}
@@ -191,12 +187,7 @@ export default function AdminPage() {
 
             <div className="header-right">
               <div className="search-box">
-                <input
-                  type="text"
-                  placeholder="Tìm mã đơn, nội dung..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+                <input type="text" placeholder="Tìm mã đơn, nội dung..." value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
 
               {selectedOrders.size > 0 && (
@@ -206,15 +197,13 @@ export default function AdminPage() {
               )}
 
               <button className="refresh-btn" onClick={fetchOrders} disabled={loading}>
-                ↻ Làm mới
+                ↻ Làm mới {loading && '(đang tải...)'}
               </button>
               
               <button className="logout-btn" onClick={() => {
                 sessionStorage.removeItem('momo_admin_authed')
                 setAuthed(false)
-              }}>
-                Đăng xuất
-              </button>
+              }}>Đăng xuất</button>
             </div>
           </div>
         </header>
@@ -234,13 +223,7 @@ export default function AdminPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0}
-                        onChange={toggleSelectAll}
-                      />
-                    </th>
+                    <th><input type="checkbox" checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0} onChange={toggleSelectAll} /></th>
                     <th>Trạng thái</th>
                     <th>Số tiền</th>
                     <th>Nội dung</th>
@@ -258,13 +241,7 @@ export default function AdminPage() {
                     const isSelected = selectedOrders.has(o.orderId)
                     return (
                       <tr key={o.orderId} className={isSelected ? 'selected-row' : ''}>
-                        <td>
-                          <input 
-                            type="checkbox" 
-                            checked={isSelected}
-                            onChange={() => toggleSelect(o.orderId)}
-                          />
-                        </td>
+                        <td><input type="checkbox" checked={isSelected} onChange={() => toggleSelect(o.orderId)} /></td>
                         <td><span className="status-badge" style={{background: sm.bg, color: sm.color}}>{sm.label}</span></td>
                         <td className="amount">{fmt(o.amount)} ₫</td>
                         <td className="info" title={o.orderInfo}>{o.orderInfo || '—'}</td>
