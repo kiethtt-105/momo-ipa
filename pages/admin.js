@@ -32,7 +32,7 @@ export default function AdminPage() {
       const res = await fetch(`/api/momo/orders?key=${adminKey}`)
       const data = await res.json()
       setOrders(data.orders || [])
-      setSelectedOrders(new Set()) // Reset selection khi refresh
+      setSelectedOrders(new Set()) // Reset khi refresh
     } catch (err) {
       console.error("Fetch orders error:", err)
     }
@@ -133,8 +133,7 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId })
       })
-
-      if (!res.ok) throw new Error('Delete failed')
+      if (!res.ok) throw new Error()
     } catch (err) {
       console.error(err)
       setOrders(previousOrders)
@@ -147,33 +146,6 @@ export default function AdminPage() {
     if (!confirm(`Xóa ${selectedOrders.size} đơn hàng đã chọn?\nHành động này KHÔNG thể hoàn tác!`)) return
 
     const idsToDelete = Array.from(selectedOrders)
-    const previousOrders = [...orders]
-
-    setOrders(prev => prev.filter(o => !idsToDelete.includes(o.orderId)))
-    setSelectedOrders(new Set())
-
-    try {
-      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
-      for (const orderId of idsToDelete) {
-        await fetch(`/api/momo/delete?key=${adminKey}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId })
-        })
-      }
-      alert(`Đã xóa ${idsToDelete.length} đơn hàng`)
-    } catch (err) {
-      console.error(err)
-      setOrders(previousOrders)
-      alert('Có lỗi khi xóa, đã khôi phục')
-    }
-  }
-
-  const deleteAllByFilter = async () => {
-    if (filteredOrders.length === 0) return
-    if (!confirm(`XÓA TẤT CẢ ${filteredOrders.length} đơn theo filter hiện tại?\n\nHành động này KHÔNG thể hoàn tác!`)) return
-
-    const idsToDelete = filteredOrders.map(o => o.orderId)
     const previousOrders = [...orders]
 
     setOrders(prev => prev.filter(o => !idsToDelete.includes(o.orderId)))
@@ -257,12 +229,6 @@ export default function AdminPage() {
                 </button>
               )}
 
-              {filteredOrders.length > 0 && (
-                <button className="delete-all-filter-btn" onClick={deleteAllByFilter}>
-                  🗑️ Xóa tất cả theo filter ({filteredOrders.length})
-                </button>
-              )}
-
               <button className="refresh-btn" onClick={fetchOrders} disabled={loading}>
                 ↻ Làm mới
               </button>
@@ -279,22 +245,10 @@ export default function AdminPage() {
 
         <main className="main-content">
           <div className="stats-grid">
-            <div className="stat-card total">
-              <div className="stat-label">TỔNG THU</div>
-              <div className="stat-value">{fmt(totalPaid)} ₫</div>
-            </div>
-            <div className="stat-card success">
-              <div className="stat-label">THÀNH CÔNG</div>
-              <div className="stat-value">{countPaid} GD</div>
-            </div>
-            <div className="stat-card failed">
-              <div className="stat-label">THẤT BẠI</div>
-              <div className="stat-value">{countFailed} GD</div>
-            </div>
-            <div className="stat-card total-orders">
-              <div className="stat-label">TỔNG ĐƠN</div>
-              <div className="stat-value">{totalOrders} GD</div>
-            </div>
+            <div className="stat-card total"><div className="stat-label">TỔNG THU</div><div className="stat-value">{fmt(totalPaid)} ₫</div></div>
+            <div className="stat-card success"><div className="stat-label">THÀNH CÔNG</div><div className="stat-value">{countPaid} GD</div></div>
+            <div className="stat-card failed"><div className="stat-label">THẤT BẠI</div><div className="stat-value">{countFailed} GD</div></div>
+            <div className="stat-card total-orders"><div className="stat-label">TỔNG ĐƠN</div><div className="stat-value">{totalOrders} GD</div></div>
           </div>
 
           <div className="table-container">
@@ -377,7 +331,7 @@ const CSS = `
   .search-box input { padding: 10px 18px; border: 2px solid #e0d4db; border-radius: 12px; width: 320px; font-size: 15px; }
   .search-box input:focus { border-color: var(--mm); }
 
-  .bulk-delete-btn, .delete-all-filter-btn {
+  .bulk-delete-btn {
     padding: 10px 20px;
     background: #ef4444;
     color: white;
@@ -386,7 +340,6 @@ const CSS = `
     font-weight: 700;
     cursor: pointer;
   }
-  .delete-all-filter-btn { background: #b91c1c; }
 
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin: 24px; }
   .stat-card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }
