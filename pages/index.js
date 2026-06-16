@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Head from 'next/head'
 
-const QUICK = [10000, 20000, 50000, 100000, 200000, 500000]
+const MULTIPLIERS = [1000, 10000, 100000] 
 
 export default function Home() {
   const [amount, setAmount] = useState('')
@@ -42,7 +42,11 @@ export default function Home() {
 
   const display = amount ? parseInt(amount).toLocaleString('vi-VN') : ''
   const numVal = parseInt(amount) || 0
-
+  // Nếu người dùng chưa nhập gì, hiển thị gợi ý mặc định (10K, 20K, 50K)
+  // Nếu đã nhập số (ví dụ: 28), hệ thống tự nhân thành (28.000, 280.000, 2.800.000)
+  const dynamicSuggestions = numVal === 0 
+    ? [10000, 20000, 50000] 
+    : MULTIPLIERS.map(m => numVal * m).filter(v => v <= 99999999999999)
   return (
     <>
       <Head>
@@ -240,9 +244,10 @@ export default function Home() {
 
         .quick-grid {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
+          grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); /* Tự động co dãn chia đều cột */
           gap: 10px;
           margin-bottom: 24px;
+          width: 100%;
         }
         .qa {
           padding: 12px 4px;
@@ -387,18 +392,19 @@ export default function Home() {
           font-weight: 500;
         }
 
-        @media (max-width: 600px) {
-          .wrapper { padding: 16px; }
-          .card { border-radius: 20px; padding: 28px 20px; }
-          .amt-input { font-size: 34px; }
-          .badges-container { 
-            display: grid;
-            grid-template-columns: 1fr 1fr; 
-            gap: 14px 16px;
-            padding: 0 12px;
-          }
-          .sec-badge { justify-content: flex-start; }
+      @media (max-width: 600px) {
+        .wrapper { padding: 16px; }
+        .card { border-radius: 20px; padding: 28px 20px; }
+        .amt-input { font-size: 34px; }
+        .badges-container { 
+          display: grid;
+          grid-template-columns: 1fr 1fr; 
+          gap: 14px 16px;
+          padding: 0 12px;
+          justify-items: center; /* Thêm dòng này để ép các icon bảo mật vào giữa tâm lưới mobile */
         }
+        .sec-badge { justify-content: center; width: 100%; } /* Đổi từ flex-start thành center */
+      }
       `}</style>
 
       <div className="wrapper">
@@ -436,17 +442,16 @@ export default function Home() {
           </div>
 
           <div className="quick-grid">
-            {QUICK.map(v => (
+            {dynamicSuggestions.map(v => (
               <button
                 key={v}
                 className={`qa ${numVal === v ? 'sel' : ''}`}
                 onClick={() => { setError(''); setAmount(String(v)) }}
               >
-                {v >= 1000000 ? `${v/1000000}M` : `${v/1000}K`}
+                {v.toLocaleString('vi-VN')}
               </button>
             ))}
           </div>
-
           {error && <div className="err">⚠ {error}</div>}
 
           <button className="btn" onClick={handlePay} disabled={loading || !amount}>
