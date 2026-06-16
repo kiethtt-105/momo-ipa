@@ -34,6 +34,13 @@ export default function Home() {
     }
   }
 
+  // Thao tác nhấn nút Enter để kích hoạt thanh toán nhanh
+  const handleKeyDown = e => {
+    if (e.key === 'Enter' && amount && !loading) {
+      handlePay()
+    }
+  }
+
   const display = amount ? parseInt(amount).toLocaleString('vi-VN') : ''
   const numVal = parseInt(amount) || 0
 
@@ -53,16 +60,17 @@ export default function Home() {
           --mm: #ae0070;
           --text: #1e0f18;
           --muted: #6e5261;
-          --surface: #ffffff;
-          --bg-input: #f8f9fa;
-          --border-input: #e9ecef;
+          /* ĐỔI THÀNH MÀU TRẮNG NGÀ / KEM SỮA DỊU MẮT CHỐNG CHÓI */
+          --surface: #fbf9fa; 
+          --bg-input: #f3eff1;
+          --border-input: #e4dadf;
         }
 
         html, body {
           height: 100%;
           width: 100%;
           font-family: 'Be Vietnam Pro', sans-serif;
-          background: #f1f3f5;
+          background: #eae6e8;
           overflow-x: hidden;
         }
 
@@ -75,10 +83,10 @@ export default function Home() {
           min-height: 100vh;
           width: 100vw;
           padding: 20px;
-          background: radial-gradient(circle at 50% 50%, #ffffff 0%, #e9ecef 100%);
+          background: radial-gradient(circle at 50% 50%, #fbf9fa 0%, #ded7db 100%);
         }
 
-        /* CARD TRẮNG SÁNG SANG TRỌNG */
+        /* CARD KEM SỮA NHẸ NHÀNG SANG TRỌNG */
         .card {
           position: relative;
           z-index: 1;
@@ -86,9 +94,9 @@ export default function Home() {
           max-width: 440px;
           background: var(--surface);
           border-radius: 24px;
-          border: 1px solid rgba(0, 0, 0, 0.05);
+          border: 1px solid rgba(174, 0, 112, 0.08);
           padding: 36px 32px;
-          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.01);
+          box-shadow: 0 20px 50px rgba(145, 0, 93, 0.06), 0 1px 4px rgba(0, 0, 0, 0.01);
         }
 
         /* Header / Logo */
@@ -97,18 +105,20 @@ export default function Home() {
           align-items: center;
           gap: 14px;
           margin-bottom: 32px;
+          border-bottom: 1px dashed var(--border-input);
+          padding-bottom: 16px;
         }
         .logo-mark {
           width: 48px;
           height: 48px;
           border-radius: 12px;
-          background: #fff;
-          border: 1px solid #e9ecef;
+          background: #fbf9fa;
+          border: 1px solid var(--border-input);
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.02);
         }
         .logo-name { 
           font-size: 19px; 
@@ -129,12 +139,12 @@ export default function Home() {
           padding: 24px;
           margin-bottom: 20px;
           border: 1px solid var(--border-input);
-          transition: border-color 0.2s, box-shadow 0.2s;
+          transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
         }
         .amt-wrap:focus-within {
           border-color: #f0bcd4;
           box-shadow: 0 0 0 4px rgba(174, 0, 112, 0.06);
-          background: #fff;
+          background: #fbf9fa;
         }
         
         .amt-label {
@@ -166,7 +176,7 @@ export default function Home() {
           caret-color: var(--mm);
         }
         .amt-input::placeholder { 
-          color: #adb5bd; 
+          color: #b0a2a9; 
         }
         
         .amt-unit {
@@ -185,8 +195,8 @@ export default function Home() {
         .qa {
           padding: 12px 4px;
           border-radius: 12px;
-          border: 1px solid #dee2e6;
-          background: #ffffff;
+          border: 1px solid var(--border-input);
+          background: #fbf9fa;
           font-family: 'Be Vietnam Pro', sans-serif;
           font-size: 14px;
           font-weight: 700;
@@ -253,8 +263,8 @@ export default function Home() {
           transform: scale(0.99); 
         }
         .btn:disabled {
-          background: #e9ecef;
-          color: #adb5bd;
+          background: #e2d7dc;
+          color: #a6989f;
           box-shadow: none;
           cursor: not-allowed;
         }
@@ -281,7 +291,7 @@ export default function Home() {
           display: flex;
           align-items: center;
           text-align: center;
-          color: #adb5bd;
+          color: #92838c;
           font-size: 11px;
           font-weight: 600;
           text-transform: uppercase;
@@ -291,7 +301,7 @@ export default function Home() {
         .security-divider::before, .security-divider::after {
           content: '';
           flex: 1;
-          border-bottom: 1px dashed #ced4da;
+          border-bottom: 1px dashed #c0b2b9;
         }
         .security-divider:not(:empty)::before { margin-right: .75em; }
         .security-divider:not(:empty)::after { margin-left: .75em; }
@@ -302,8 +312,8 @@ export default function Home() {
           gap: 12px;
         }
         .sec-badge {
-          background: #ffffff;
-          border: 1px solid #e9ecef;
+          background: var(--surface);
+          border: 1px solid var(--border-input);
           border-radius: 12px;
           padding: 10px 12px;
           display: flex;
@@ -314,7 +324,7 @@ export default function Home() {
         }
         .sec-icon {
           font-size: 18px;
-          background: #fff0f7;
+          background: #f5e9f0;
           color: var(--mm);
           width: 32px;
           height: 32px;
@@ -359,7 +369,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Ô NHẬP TIỀN (ĐÃ BỎ DÒNG CHỮ CHỮ BÊN DƯỚI) */}
+          {/* Ô NHẬP TIỀN (BỔ SUNG SỰ KIỆN ENTER) */}
           <div className="amt-wrap">
             <div className="amt-label">Số tiền cần thanh toán</div>
             <div className="amt-row">
@@ -369,6 +379,7 @@ export default function Home() {
                 inputMode="numeric"
                 value={display}
                 onChange={handleAmountChange}
+                onKeyDown={handleKeyDown}
                 placeholder="0"
                 autoFocus
               />
@@ -403,7 +414,7 @@ export default function Home() {
           
         </div>
 
-        {/* KHỐI CHỨNG NHẬN BẢO MẬT CHUẨN ĐÚNG KIỂU MOMO ĐỂ TĂNG ĐỘ UY TÍN */}
+        {/* KHỐI CHỨNG NHẬN BẢO MẬT ĐÃ ĐƯỢC HẠ TÔNG SÁNG DỊU MẮT */}
         <div className="security-footer">
           <div className="security-divider">Bảo mật cổng thanh toán</div>
           
