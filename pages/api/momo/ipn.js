@@ -17,13 +17,21 @@ export default async function handler(req, res) {
     return res.status(400).json({ message: 'Invalid signature' })
   }
 
-  const { orderId, transId, resultCode, amount, payType, orderInfo } = body
+  const {
+    orderId, transId, resultCode, amount, payType, orderInfo,
+    // === CÁC FIELD MỚI TỪ IPN ===
+    requestId, message, responseTime, orderType, extraData,
+  } = body
+
   const isPaid = parseInt(resultCode) === 0
   const now = new Date().toISOString()
 
+  // Lấy record cũ để giữ createdAt gốc (khi tạo đơn)
   const existing = await redis.hget('momo:orders', orderId)
+  let prev = null
   if (existing) {
-    const prev = typeof existing === 'string' ? JSON.parse(existing) : existing
+    prev = typeof existing === 'string' ? JSON.parse(existing) : existing
+    // Nếu đã PAID rồi thì bỏ qua IPN duplicate
     if (prev.status === 'PAID') {
       return res.status(204).end()
     }
@@ -31,20 +39,24 @@ export default async function handler(req, res) {
 
   const record = {
     orderId,
-    transId:    transId || '',
-    amount:     parseInt(amount || 0),
-    payType:    payType || '',
-    orderInfo:  orderInfo || '',
-    resultCode: parseInt(resultCode),
-    paidAt:     isPaid ? now : null,
-    createdAt:  now,
-    status:     isPaid ? 'PAID' : 'FAILED',
-    source:     'ipn',
+    transId:      transId || '',
+    amount:       parseInt(amount || 0),
+    payType:      payType || '',
+    orderInfo:    orderInfo || '',
+    resultCode:   parseInt(resultCode),
+    message:      message || '',           // ← MỚI: message lỗi/thành công từ MoMo
+    responseTime: responseTime || null,    // ← MỚI: timestamp MoMo xử lý xong (ms)
+    orderType:    orderType || '',         // ← MỚI: loại giao dịch (momo_wallet, etc.)
+    extraData:    extraData || '',         // ← MỚI: data tùy chỉnh lúc tạo đơn (base64)
+    requestId:    requestId || '',         // ← MỚI: request ID gốc
+    paidAt:       isPaid ? now : null,
+    createdAt:    prev?.createdAt || now,  // ← Giữ createdAt gốc từ lúc tạo đơn
+    status:       isPaid ? 'PAID' : 'FAILED',
+    source:       'ipn',
   }
 
   await redis.hset('momo:orders', { [orderId]: JSON.stringify(record) })
-  console.log(`[IPN] ${orderId} → ${isPaid ? '✅ PAID' : '❌ FAILED'}`)
+  console.log(`[IPN] ${orderId} → ${isPaid ? '✅ PAID' : '❌ FAILED'} | resultCode: ${resultCode} | ${message}`)
 
-  
   return res.status(204).end()
 }
