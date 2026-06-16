@@ -69,49 +69,75 @@ export default function ResultPage() {
 
         :root {
           --mm: #ae0070;
-          --mm-border: #f0d5e3;
-          --text: #1e0f18;
-          --muted: #6e5261;
-          --surface: #ffffff;
-          --bg: #f8f9fa;
+          --text: #1a0413;
+          --muted: #614655;
+          --surface: rgba(255, 255, 255, 0.82);
+          --border-input: rgba(174, 0, 112, 0.1);
         }
 
         html, body {
           height: 100%;
           width: 100%;
-          background: var(--bg);
           font-family: 'Be Vietnam Pro', sans-serif;
+          background: #f7f3f5;
           overflow-x: hidden;
         }
 
-        /* AUTOFIX TRUNG TÂM: Cố định tuyệt đối ở giữa màn hình bất kể zoom hay độ phân giải */
         .wrapper {
+          position: relative;
           display: flex;
           align-items: center;
           justify-content: center;
           min-height: 100vh;
           width: 100vw;
           padding: 20px;
-          background: radial-gradient(circle at 50% 50%, #ffffff 0%, #f1f3f5 100%);
+          background-color: #f6eff2;
+          overflow: hidden;
         }
 
-        /* CARD GIAO DIỆN SÁNG CAO CẤP */
+        /* ĐỒNG BỘ NỀN MESH GRADIENT HẠT MỊN */
+        .orb {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(80px);
+          opacity: 0.55;
+          z-index: 0;
+          mix-blend-mode: multiply;
+        }
+        .orb-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: #ffb7d2; animation: orbMove1 20s infinite alternate ease-in-out; }
+        .orb-2 { bottom: -10%; right: -5%; width: 60vw; height: 60vw; background: #cbd5e1; animation: orbMove2 25s infinite alternate ease-in-out; }
+        .orb-3 { top: 30%; right: -10%; width: 45vw; height: 45vw; background: #e1bee7; animation: orbMove3 18s infinite alternate ease-in-out; }
+        .orb-4 { bottom: -5%; left: 10%; width: 40vw; height: 40vw; background: #b2dfdb; animation: orbMove1 22s infinite alternate ease-in-out; }
+
+        @keyframes orbMove1 { 0% { transform: translate(0, 0) scale(1); } 50% { transform: translate(8vw, 5vh) scale(1.1); } 100% { transform: translate(-4vw, 10vh) scale(0.9); } }
+        @keyframes orbMove2 { 0% { transform: translate(0, 0) scale(1.1); } 50% { transform: translate(-10vw, -8vh) scale(0.95); } 100% { transform: translate(5vw, 4vh) scale(1.05); } }
+        @keyframes orbMove3 { 0% { transform: translate(0, 0) scale(0.9); } 50% { transform: translate(-5vw, 10vh) scale(1.15); } 100% { transform: translate(8vw, -5vh) scale(1); } }
+
+        .wrapper::before {
+          content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3e%3cfilter id='noiseFilter'%3e%3ccolorMatrix type='matrix' values='0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.07 0'/%3e%3cturbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3e%3c/filter%3e%3crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3e%3c/svg%3e");
+          opacity: 0.8; z-index: 1; pointer-events: none;
+        }
+
+        /* CONTAINER CARD KÍNH MỜ */
         .container-card {
+          position: relative;
+          z-index: 2;
           background: var(--surface);
+          backdrop-filter: blur(30px);
+          -webkit-backdrop-filter: blur(30px);
           width: 100%;
-          max-width: 900px;
+          max-width: 860px;
           border-radius: 24px;
-          box-shadow: 0 15px 40px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.02);
-          border: 1px solid rgba(0, 0, 0, 0.04);
+          box-shadow: 0 30px 60px rgba(174, 0, 112, 0.04), 0 1px 2px rgba(0, 0, 0, 0.01);
+          border: 1px solid rgba(255, 255, 255, 0.7);
           display: grid;
           grid-template-columns: 1.1fr 0.9fr;
           overflow: hidden;
-          transition: all 0.3s ease;
         }
 
-        /* PHẦN TRÁI: TRẠNG THÁI (Màu sáng sạch sẽ) */
         .status-section {
-          background: #ffffff;
+          background: rgba(255, 255, 255, 0.3);
           padding: 50px 40px;
           display: flex;
           flex-direction: column;
@@ -119,10 +145,9 @@ export default function ResultPage() {
           justify-content: center;
           text-align: center;
           position: relative;
-          border-right: 1px dashed #e9ecef;
+          border-right: 1px dashed rgba(174, 0, 112, 0.15);
         }
 
-        /* Logo góc trên hoặc tiêu đề thương hiệu */
         .brand-header {
           position: absolute;
           top: 24px;
@@ -131,87 +156,55 @@ export default function ResultPage() {
           align-items: center;
           gap: 10px;
         }
-        .brand-logo {
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
-          object-fit: contain;
-        }
-        .brand-title {
-          font-size: 14px;
-          font-weight: 800;
-          color: var(--text);
-          letter-spacing: -0.2px;
-        }
+        .brand-logo { width: 32px; height: 32px; border-radius: 8px; object-fit: contain; }
+        .brand-title { font-size: 14px; font-weight: 800; color: var(--text); letter-spacing: -0.2px; }
 
-        /* Vòng tròn Icon TO, RÕ */
         .icon-wrapper {
-          width: 110px;
-          height: 110px;
+          width: 100px;
+          height: 100px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 46px;
+          font-size: 42px;
           font-weight: 900;
           margin-bottom: 24px;
           margin-top: 20px;
-          box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+          box-shadow: 0 8px 20px rgba(0,0,0,0.02);
           animation: scaleUp 0.4s cubic-bezier(.34,1.56,.64,1) both;
         }
         @keyframes scaleUp { from { transform: scale(0.7); opacity: 0 } to { transform: scale(1); opacity: 1 } }
 
         .loading-spinner {
-          width: 80px;
-          height: 80px;
+          width: 70px;
+          height: 70px;
           border-radius: 50%;
-          border: 5px solid #e9ecef;
+          border: 5px solid rgba(174, 0, 112, 0.1);
           border-top-color: var(--mm);
           animation: spin 0.8s linear infinite;
           margin-bottom: 24px;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Chữ TO RÕ */
-        .status-title {
-          font-size: 28px;
-          font-weight: 800;
-          line-height: 1.3;
-          margin-bottom: 12px;
-          word-break: break-word;
-        }
-        .status-subtitle {
-          font-size: 15px;
-          color: var(--muted);
-          line-height: 1.5;
-          max-width: 320px;
-        }
+        .status-title { font-size: 26px; font-weight: 800; line-height: 1.3; margin-bottom: 12px; color: var(--text); }
+        .status-subtitle { font-size: 14px; color: var(--muted); line-height: 1.5; max-width: 300px; }
 
-        /* PHẦN PHẢI: CHI TIẾT ĐƠN HÀNG */
         .details-section {
-          background: #fafbfa;
+          background: transparent;
           padding: 50px 40px;
           display: flex;
           flex-direction: column;
           justify-content: center;
         }
 
-        .details-heading {
-          font-size: 18px;
-          font-weight: 800;
-          color: var(--text);
-          margin-bottom: 24px;
-          letter-spacing: -0.3px;
-        }
+        .details-heading { font-size: 17px; font-weight: 800; color: var(--text); margin-bottom: 20px; letter-spacing: -0.3px; }
 
-        /* Khối hiển thị thông tin bảng đơn hàng */
         .info-card {
-          background: #ffffff;
-          border: 1px solid #eedbe5;
+          background: rgba(255, 255, 255, 0.5);
+          border: 1px solid rgba(174, 0, 112, 0.08);
           border-radius: 16px;
           overflow: hidden;
-          margin-bottom: 28px;
-          box-shadow: 0 4px 12px rgba(174, 0, 112, 0.02);
+          margin-bottom: 24px;
         }
 
         .info-item {
@@ -220,29 +213,13 @@ export default function ResultPage() {
           align-items: center;
           padding: 16px 20px;
           font-size: 14px;
-          border-bottom: 1px solid #f8f2f5;
+          border-bottom: 1px solid rgba(174, 0, 112, 0.04);
         }
         .info-item:last-child { border-bottom: none; }
-        
-        .info-label {
-          color: var(--muted);
-          font-weight: 500;
-        }
-        .info-value {
-          font-weight: 700;
-          color: var(--text);
-          text-align: right;
-          max-width: 60%;
-          word-break: break-all;
-        }
-        /* Số tiền nổi bật hơn hẳn */
-        .info-value.amount-highlight {
-          font-size: 24px;
-          font-weight: 900;
-          color: var(--mm);
-        }
+        .info-label { color: var(--muted); font-weight: 500; }
+        .info-value { font-weight: 700; color: var(--text); text-align: right; max-width: 60%; word-break: break-all; }
+        .info-value.amount-highlight { font-size: 24px; font-weight: 900; color: var(--mm); }
 
-        /* Nút quay lại lớn và dễ bấm */
         .action-button {
           display: flex;
           align-items: center;
@@ -261,58 +238,28 @@ export default function ResultPage() {
           border: none;
           cursor: pointer;
         }
-        .action-button:hover {
-          background: #91005d;
-          transform: translateY(-2px);
-          box-shadow: 0 12px 28px rgba(174, 0, 112, 0.3);
-        }
-        .action-button:active { transform: translateY(0); }
+        .action-button:hover { background: #91005d; transform: translateY(-2px); box-shadow: 0 12px 28px rgba(174, 0, 112, 0.3); }
 
-        .state-empty-text {
-          font-size: 14px;
-          color: var(--muted);
-          text-align: center;
-          padding: 20px 0;
-        }
+        .state-empty-text { font-size: 14px; color: var(--muted); text-align: center; padding: 20px 0; }
 
-        /* RESPONSIVE: CHUYỂN THÀNH 1 CỘT TRÊN ĐIỆN THOẠI */
         @media (max-width: 768px) {
-          .wrapper {
-            padding: 12px;
-          }
-          .container-card {
-            grid-template-columns: 1fr;
-            max-width: 480px;
-            border-radius: 20px;
-          }
-          .status-section {
-            border-right: none;
-            border-bottom: 1px dashed #e9ecef;
-            padding: 45px 24px 35px 24px;
-          }
-          .brand-header {
-            top: 16px;
-            left: 20px;
-          }
-          .icon-wrapper {
-            width: 90px;
-            height: 90px;
-            font-size: 38px;
-            margin-bottom: 16px;
-          }
-          .status-title {
-            font-size: 24px;
-          }
-          .details-section {
-            padding: 35px 24px;
-          }
+          .wrapper { padding: 16px; }
+          .container-card { grid-template-columns: 1fr; max-width: 460px; border-radius: 20px; }
+          .status-section { border-right: none; border-bottom: 1px dashed rgba(174, 0, 112, 0.15); padding: 45px 24px 35px 24px; }
+          .brand-header { top: 16px; left: 20px; }
+          .icon-wrapper { width: 85px; height: 85px; font-size: 36px; margin-bottom: 16px; }
+          .status-title { font-size: 22px; }
+          .details-section { padding: 35px 24px; }
         }
       `}</style>
 
       <div className="wrapper">
+        <div className="orb orb-1"></div>
+        <div className="orb orb-2"></div>
+        <div className="orb orb-3"></div>
+        <div className="orb orb-4"></div>
+
         <div className="container-card">
-          
-          {/* CỘT TRÁI: TRẠNG THÁI TRỰC QUAN */}
           <div className="status-section">
             <div className="brand-header">
               <img src="/Main.png" alt="Logo" className="brand-logo" />
@@ -335,7 +282,6 @@ export default function ResultPage() {
             </p>
           </div>
 
-          {/* CỘT PHẢI: CHI TIẾT GIAO DỊCH */}
           <div className="details-section">
             {(status === 'success' || status === 'failed') && (
               <h2 className="details-heading">Thông tin đơn hàng</h2>
@@ -399,7 +345,6 @@ export default function ResultPage() {
               </Link>
             )}
           </div>
-
         </div>
       </div>
     </>
