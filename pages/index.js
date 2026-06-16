@@ -66,9 +66,10 @@ export default function Home() {
           overflow-x: hidden;
         }
 
-        /* AUTOFIX TRUNG TÂM: Luôn cố định tuyệt đối ở giữa màn hình bất kể zoom */
+        /* Luôn cố định tuyệt đối ở giữa màn hình bất kể zoom */
         .wrapper {
           display: flex;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
           min-height: 100vh;
@@ -88,7 +89,6 @@ export default function Home() {
           border: 1px solid rgba(0, 0, 0, 0.05);
           padding: 36px 32px;
           box-shadow: 0 20px 50px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.01);
-          transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
         /* Header / Logo */
@@ -122,11 +122,11 @@ export default function Home() {
           margin-top: 2px; 
         }
 
-        /* Vùng khung nhập tiền lớn, tinh tế */
+        /* Vùng khung nhập tiền lớn */
         .amt-wrap {
           background: var(--bg-input);
           border-radius: 16px;
-          padding: 20px 24px;
+          padding: 24px;
           margin-bottom: 20px;
           border: 1px solid var(--border-input);
           transition: border-color 0.2s, box-shadow 0.2s;
@@ -143,7 +143,7 @@ export default function Home() {
           color: var(--muted);
           text-transform: uppercase;
           letter-spacing: 1.2px;
-          margin-bottom: 8px;
+          margin-bottom: 12px;
         }
         
         .amt-row {
@@ -174,17 +174,8 @@ export default function Home() {
           font-weight: 800;
           color: #495057;
         }
-        
-        /* Gợi ý chữ số viết bằng chữ bên dưới */
-        .amt-hint {
-          font-size: 13px;
-          color: var(--mm);
-          font-weight: 600;
-          margin-top: 8px;
-          min-height: 18px;
-        }
 
-        /* Lưới các nút chọn tiền nhanh TO và dễ bấm */
+        /* Lưới các nút chọn tiền nhanh */
         .quick-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
@@ -234,7 +225,7 @@ export default function Home() {
           border-radius: 10px;
         }
 
-        /* Nút thanh toán lớn, đậm đà thương hiệu */
+        /* Nút thanh toán */
         .btn {
           width: 100%;
           padding: 16px;
@@ -279,12 +270,78 @@ export default function Home() {
         }
         @keyframes rot { to { transform: rotate(360deg) } }
 
+        /* FOOTER CHỨNG NHẬN BẢO MẬT CHUẨN MOMO */
+        .security-footer {
+          margin-top: 24px;
+          width: 100%;
+          max-width: 440px;
+          text-align: center;
+        }
+        .security-divider {
+          display: flex;
+          align-items: center;
+          text-align: center;
+          color: #adb5bd;
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          margin-bottom: 16px;
+        }
+        .security-divider::before, .security-divider::after {
+          content: '';
+          flex: 1;
+          border-bottom: 1px dashed #ced4da;
+        }
+        .security-divider:not(:empty)::before { margin-right: .75em; }
+        .security-divider:not(:empty)::after { margin-left: .75em; }
+
+        .badges-container {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        .sec-badge {
+          background: #ffffff;
+          border: 1px solid #e9ecef;
+          border-radius: 12px;
+          padding: 10px 12px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          text-align: left;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.01);
+        }
+        .sec-icon {
+          font-size: 18px;
+          background: #fff0f7;
+          color: var(--mm);
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .sec-text-main {
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--text);
+        }
+        .sec-text-sub {
+          font-size: 10px;
+          color: var(--muted);
+          margin-top: 1px;
+        }
+
         /* Mobile Responsive gọn gàng */
         @media (max-width: 480px) {
           .wrapper { padding: 16px; }
           .card { border-radius: 20px; padding: 28px 20px; }
           .amt-input { font-size: 34px; }
           .logo { margin-bottom: 24px; }
+          .badges-container { grid-template-columns: 1fr; gap: 8px; }
         }
       `}</style>
 
@@ -298,11 +355,11 @@ export default function Home() {
             </div>
             <div>
               <div className="logo-name">Green Coffee</div>
-              <div className="logo-sub">Cổng cổng thanh toán an toàn</div>
+              <div className="logo-sub">Cổng thanh toán an toàn</div>
             </div>
           </div>
 
-          {/* Ô NHẬP TIỀN */}
+          {/* Ô NHẬP TIỀN (ĐÃ BỎ DÒNG CHỮ CHỮ BÊN DƯỚI) */}
           <div className="amt-wrap">
             <div className="amt-label">Số tiền cần thanh toán</div>
             <div className="amt-row">
@@ -316,9 +373,6 @@ export default function Home() {
                 autoFocus
               />
               <span className="amt-unit">₫</span>
-            </div>
-            <div className="amt-hint">
-              {numVal >= 1000 ? `${numVal.toLocaleString('vi-VN')} đồng` : '\u00a0'}
             </div>
           </div>
 
@@ -348,6 +402,46 @@ export default function Home() {
           </button>
           
         </div>
+
+        {/* KHỐI CHỨNG NHẬN BẢO MẬT CHUẨN ĐÚNG KIỂU MOMO ĐỂ TĂNG ĐỘ UY TÍN */}
+        <div className="security-footer">
+          <div className="security-divider">Bảo mật cổng thanh toán</div>
+          
+          <div className="badges-container">
+            <div className="sec-badge">
+              <div className="sec-icon">🛡️</div>
+              <div>
+                <div className="sec-text-main">Chứng chỉ PCI DSS</div>
+                <div className="sec-text-sub">Tiêu chuẩn quốc tế</div>
+              </div>
+            </div>
+            
+            <div className="sec-badge">
+              <div className="sec-icon">🔑</div>
+              <div>
+                <div className="sec-text-main">Mã hóa P2P</div>
+                <div className="sec-text-sub">Bảo vệ luồng tiền</div>
+              </div>
+            </div>
+            
+            <div className="sec-badge">
+              <div className="sec-icon">🔒</div>
+              <div>
+                <div className="sec-text-main">SHA-256 mã hóa</div>
+                <div className="sec-text-sub">Bảo mật dữ liệu 2 tầng</div>
+              </div>
+            </div>
+            
+            <div className="sec-badge">
+              <div className="sec-icon">✅</div>
+              <div>
+                <div className="sec-text-main">MoMo Verified</div>
+                <div className="sec-text-sub">Đối tác liên kết gốc</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </>
   )
