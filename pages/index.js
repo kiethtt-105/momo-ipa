@@ -245,6 +245,8 @@ export default function Home() {
             <div className="logo-sub">Cổng thanh toán</div>
           </div>
         </div>
+        
+
         <div className="amt-wrap">
           <div className="amt-label">Số tiền thanh toán</div>
           <div className="amt-row">
