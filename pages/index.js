@@ -60,21 +60,19 @@ export default function Home() {
           --mm: #ae0070;
           --text: #1e0f18;
           --muted: #6e5261;
-          /* ĐỔI THÀNH MÀU TRẮNG NGÀ / KEM SỮA DỊU MẮT CHỐNG CHÓI */
-          --surface: #fbf9fa; 
-          --bg-input: #f3eff1;
-          --border-input: #e4dadf;
+          --surface: rgba(255, 255, 255, 0.85); /* Nền card kính mờ tinh tế */
+          --bg-input: rgba(243, 239, 241, 0.7);
+          --border-input: rgba(174, 0, 112, 0.12);
         }
 
         html, body {
           height: 100%;
           width: 100%;
           font-family: 'Be Vietnam Pro', sans-serif;
-          background: #eae6e8;
-          overflow-x: hidden;
+          overflow: hidden;
         }
 
-        /* Luôn cố định tuyệt đối ở giữa màn hình bất kể zoom */
+        /* HIỆU ỨNG NỀN GRADIENT DỊU NHẸ CHUYỂN ĐỘNG LIÊN TỤC */
         .wrapper {
           display: flex;
           flex-direction: column;
@@ -83,20 +81,33 @@ export default function Home() {
           min-height: 100vh;
           width: 100vw;
           padding: 20px;
-          background: radial-gradient(circle at 50% 50%, #fbf9fa 0%, #ded7db 100%);
+          
+          /* Phối màu Gradient Pastel siêu sang xịn chống chói */
+          background: linear-gradient(-45deg, #fce4ec, #f3e5f5, #efebe9, #fbe9e7);
+          background-size: 400% 400%;
+          animation: gradientFlow 15s ease infinite;
         }
 
-        /* CARD KEM SỮA NHẸ NHÀNG SANG TRỌNG */
+        /* Keyframes giúp màu chạy loang nhẹ nhàng như nước chảy */
+        @keyframes gradientFlow {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+
+        /* CARD TRẮNG SỮA TRONG SUỐT (GLASSMORPHISM NHẸ) */
         .card {
           position: relative;
           z-index: 1;
           width: 100%;
           max-width: 440px;
           background: var(--surface);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
           border-radius: 24px;
-          border: 1px solid rgba(174, 0, 112, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.6);
           padding: 36px 32px;
-          box-shadow: 0 20px 50px rgba(145, 0, 93, 0.06), 0 1px 4px rgba(0, 0, 0, 0.01);
+          box-shadow: 0 20px 40px rgba(174, 0, 112, 0.04), 0 1px 3px rgba(0, 0, 0, 0.01);
         }
 
         /* Header / Logo */
@@ -112,7 +123,7 @@ export default function Home() {
           width: 48px;
           height: 48px;
           border-radius: 12px;
-          background: #fbf9fa;
+          background: #ffffff;
           border: 1px solid var(--border-input);
           display: flex;
           align-items: center;
@@ -144,7 +155,7 @@ export default function Home() {
         .amt-wrap:focus-within {
           border-color: #f0bcd4;
           box-shadow: 0 0 0 4px rgba(174, 0, 112, 0.06);
-          background: #fbf9fa;
+          background: #ffffff;
         }
         
         .amt-label {
@@ -196,7 +207,7 @@ export default function Home() {
           padding: 12px 4px;
           border-radius: 12px;
           border: 1px solid var(--border-input);
-          background: #fbf9fa;
+          background: rgba(255, 255, 255, 0.7);
           font-family: 'Be Vietnam Pro', sans-serif;
           font-size: 14px;
           font-weight: 700;
@@ -291,9 +302,9 @@ export default function Home() {
           display: flex;
           align-items: center;
           text-align: center;
-          color: #92838c;
+          color: #7d6e77;
           font-size: 11px;
-          font-weight: 600;
+          font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 1px;
           margin-bottom: 16px;
@@ -301,7 +312,7 @@ export default function Home() {
         .security-divider::before, .security-divider::after {
           content: '';
           flex: 1;
-          border-bottom: 1px dashed #c0b2b9;
+          border-bottom: 1px dashed rgba(174, 0, 112, 0.2);
         }
         .security-divider:not(:empty)::before { margin-right: .75em; }
         .security-divider:not(:empty)::after { margin-left: .75em; }
@@ -313,7 +324,7 @@ export default function Home() {
         }
         .sec-badge {
           background: var(--surface);
-          border: 1px solid var(--border-input);
+          border: 1px solid rgba(255, 255, 255, 0.5);
           border-radius: 12px;
           padding: 10px 12px;
           display: flex;
@@ -369,7 +380,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Ô NHẬP TIỀN (BỔ SUNG SỰ KIỆN ENTER) */}
+          {/* Ô NHẬP TIỀN */}
           <div className="amt-wrap">
             <div className="amt-label">Số tiền cần thanh toán</div>
             <div className="amt-row">
@@ -414,7 +425,7 @@ export default function Home() {
           
         </div>
 
-        {/* KHỐI CHỨNG NHẬN BẢO MẬT ĐÃ ĐƯỢC HẠ TÔNG SÁNG DỊU MẮT */}
+        {/* KHỐI CHỨNG NHẬN BẢO MẬT */}
         <div className="security-footer">
           <div className="security-divider">Bảo mật cổng thanh toán</div>
           
