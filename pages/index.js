@@ -72,17 +72,17 @@ export default function Home() {
           overflow: hidden;
         }
 
-        .wrapper {
+       .wrapper {
           position: relative;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 100vh;
+          display: grid;
+          place-items: center;
+          align-content: center;
+          min-height: 100dvh; /* Đổi từ 100vh sang 100dvh để chuẩn màn hình điện thoại */
           width: 100vw;
-          padding: 20px;
+          padding: 24px 16px;
           background-color: #f6eff2;
-          overflow: hidden;
+          overflow-y: auto; /* Cho phép cuộn khi thu phóng */
+          overflow-x: hidden;
         }
 
         /* NỀN MESH GRADIENT ĐẬM RÕ - CHẠY NHANH - KHÔNG ĐƠ */
@@ -352,23 +352,18 @@ export default function Home() {
           margin: 0 12px;
         }
 
-        .badges-container {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 24px;
-          flex-wrap: wrap;
+        .badges-container { 
+          display: grid;
+          grid-template-columns: 1fr 1fr; /* Chia lưới 2 cột đối xứng trên điện thoại */
+          gap: 14px 16px;
+          justify-items: center; /* Ép các badge bảo mật ra chính giữa tâm */
+          padding: 0 12px;
+        }
+        .sec-badge { 
+          justify-content: center; 
+          width: 100%; 
         }
         
-        .sec-badge {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          background: transparent; 
-          border: none;
-          padding: 0;
-          box-shadow: none;
-        }
         
         .sec-icon-svg {
           width: 16px;
