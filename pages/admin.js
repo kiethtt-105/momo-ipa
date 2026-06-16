@@ -32,7 +32,7 @@ export default function AdminPage() {
       const res = await fetch(`/api/momo/orders?key=${adminKey}`)
       const data = await res.json()
       setOrders(data.orders || [])
-      setSelectedOrders(new Set()) // Reset khi refresh
+      setSelectedOrders(new Set())
     } catch (err) {
       console.error("Fetch orders error:", err)
     }
@@ -43,17 +43,14 @@ export default function AdminPage() {
     const now = new Date()
     return ordersList.map(order => {
       let status = order.status || 'PENDING'
-
       if (status === 'Chờ xử lý') status = 'PENDING'
       if (status === 'Thành công') status = 'PAID'
       if (status === 'Thất bại') status = 'FAILED'
 
       if (status === 'PENDING') {
         const created = new Date(order.createdAt)
-        const minutesDiff = (now - created) / (1000 * 60)
-        if (minutesDiff > 10) status = 'EXPIRED'
+        if ((now - created) / (1000 * 60) > 10) status = 'EXPIRED'
       }
-
       return { ...order, status }
     })
   }
@@ -104,55 +101,33 @@ export default function AdminPage() {
       (o.transId && o.transId.includes(search))
     )
 
-  // Multi-select
   const toggleSelect = (orderId) => {
     const newSet = new Set(selectedOrders)
-    if (newSet.has(orderId)) newSet.delete(orderId)
-    else newSet.add(orderId)
+    newSet.has(orderId) ? newSet.delete(orderId) : newSet.add(orderId)
     setSelectedOrders(newSet)
   }
 
   const toggleSelectAll = () => {
-    if (selectedOrders.size === filteredOrders.length) {
-      setSelectedOrders(new Set())
-    } else {
-      setSelectedOrders(new Set(filteredOrders.map(o => o.orderId)))
-    }
+    selectedOrders.size === filteredOrders.length
+      ? setSelectedOrders(new Set())
+      : setSelectedOrders(new Set(filteredOrders.map(o => o.orderId)))
   }
 
   const deleteOrder = async (orderId) => {
-    if (!confirm(`Xóa đơn ${orderId}?\nHành động này KHÔNG thể hoàn tác!`)) return
-
-    const previousOrders = [...orders]
-    setOrders(prev => prev.filter(o => o.orderId !== orderId))
-
-    try {
-      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
-      const res = await fetch(`/api/momo/delete?key=${adminKey}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId })
-      })
-      if (!res.ok) throw new Error()
-    } catch (err) {
-      console.error(err)
-      setOrders(previousOrders)
-      alert('Xóa thất bại, đã khôi phục')
-    }
+    if (!confirm(`Xóa đơn ${orderId}?\nKhông thể hoàn tác!`)) return
+    await performDelete([orderId])
   }
 
   const deleteSelected = async () => {
     if (selectedOrders.size === 0) return
-    if (!confirm(`Xóa ${selectedOrders.size} đơn hàng đã chọn?\nHành động này KHÔNG thể hoàn tác!`)) return
+    if (!confirm(`Xóa ${selectedOrders.size} đơn đã chọn?\nKhông thể hoàn tác!`)) return
+    await performDelete(Array.from(selectedOrders))
+  }
 
-    const idsToDelete = Array.from(selectedOrders)
-    const previousOrders = [...orders]
-
-    setOrders(prev => prev.filter(o => !idsToDelete.includes(o.orderId)))
-    setSelectedOrders(new Set())
-
+  const performDelete = async (idsToDelete) => {
     try {
       const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
+      
       for (const orderId of idsToDelete) {
         await fetch(`/api/momo/delete?key=${adminKey}`, {
           method: 'DELETE',
@@ -160,11 +135,12 @@ export default function AdminPage() {
           body: JSON.stringify({ orderId })
         })
       }
+
+      await fetchOrders()  // Refresh lại từ server
       alert(`Đã xóa ${idsToDelete.length} đơn hàng`)
     } catch (err) {
       console.error(err)
-      setOrders(previousOrders)
-      alert('Có lỗi khi xóa, đã khôi phục')
+      alert('Lỗi khi xóa')
     }
   }
 
@@ -280,7 +256,6 @@ export default function AdminPage() {
                   {filteredOrders.map(o => {
                     const sm = statusMeta[o.status] || statusMeta.PENDING
                     const isSelected = selectedOrders.has(o.orderId)
-                    
                     return (
                       <tr key={o.orderId} className={isSelected ? 'selected-row' : ''}>
                         <td>
@@ -298,9 +273,7 @@ export default function AdminPage() {
                         <td>{o.payType || '—'}</td>
                         <td className="date">{fmtDate(o.createdAt)}</td>
                         <td className="date">{o.paidAt ? fmtDate(o.paidAt) : '—'}</td>
-                        <td>
-                          <button className="delete-btn" onClick={() => deleteOrder(o.orderId)}>🗑️</button>
-                        </td>
+                        <td><button className="delete-btn" onClick={() => deleteOrder(o.orderId)}>🗑️</button></td>
                       </tr>
                     )
                   })}
@@ -364,6 +337,7 @@ const CSS = `
   .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #f8e7f0, #f0d9e8); }
   .login-card { background: white; padding: 48px; border-radius: 20px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 20px 40px rgba(165,0,100,0.15); }
   .login-card .logo { font-size: 60px; margin-bottom: 16px; }
+  .title { font-size: 28px; font-weight: 900; }
   .input-group input { width: 100%; padding: 16px; border: 2px solid #ddd; border-radius: 12px; font-size: 16px; margin: 20px 0; }
   .login-btn { width: 100%; padding: 16px; background: var(--mm); color: white; border: none; border-radius: 12px; font-size: 17px; font-weight: 700; }
 `
