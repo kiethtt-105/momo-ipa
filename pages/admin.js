@@ -10,9 +10,9 @@ export default function AdminPage() {
   const [pwError, setPwError] = useState(false)
   const [orders, setOrders] = useState([])  
   const [loading, setLoading] = useState(false)
-  const [lastFetch, setLastFetch] = useState(null)
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
+  const [selectedOrders, setSelectedOrders] = useState(new Set())
 
   const handleLogin = () => {
     if (password === (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'momo@admin')) {
@@ -32,31 +32,26 @@ export default function AdminPage() {
       const res = await fetch(`/api/momo/orders?key=${adminKey}`)
       const data = await res.json()
       setOrders(data.orders || [])
-      setLastFetch(new Date())
+      setSelectedOrders(new Set()) // Reset selection khi refresh
     } catch (err) {
       console.error("Fetch orders error:", err)
     }
     setLoading(false)
   }
 
-  // Chuẩn hóa status + tự động hết hạn sau 10 phút
   const normalizeOrders = (ordersList) => {
     const now = new Date()
     return ordersList.map(order => {
       let status = order.status || 'PENDING'
 
-      // Chuẩn hóa status tiếng Việt → tiếng Anh
       if (status === 'Chờ xử lý') status = 'PENDING'
       if (status === 'Thành công') status = 'PAID'
       if (status === 'Thất bại') status = 'FAILED'
 
-      // Tự động hết hạn sau 10 phút
       if (status === 'PENDING') {
         const created = new Date(order.createdAt)
         const minutesDiff = (now - created) / (1000 * 60)
-        if (minutesDiff > 10) {
-          status = 'EXPIRED'
-        }
+        if (minutesDiff > 10) status = 'EXPIRED'
       }
 
       return { ...order, status }
@@ -75,11 +70,15 @@ export default function AdminPage() {
   const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
   const fmtDate = s => s ? new Date(s).toLocaleString('vi-VN') : '—'
 
-  const totalPaid    = displayedOrders.filter(o => o.status === 'PAID').reduce((s, o) => s + parseInt(o.amount || 0), 0)
   const countPaid    = displayedOrders.filter(o => o.status === 'PAID').length
   const countFailed  = displayedOrders.filter(o => o.status === 'FAILED').length
   const countPending = displayedOrders.filter(o => o.status === 'PENDING').length
   const countExpired = displayedOrders.filter(o => o.status === 'EXPIRED').length
+  const totalOrders  = displayedOrders.length
+
+  const totalPaid = displayedOrders
+    .filter(o => o.status === 'PAID')
+    .reduce((sum, o) => sum + parseInt(o.amount || 0), 0)
 
   const statusMeta = {
     PAID:    { label: 'Thành công', color: '#10b981', bg: '#ecfdf5' },
@@ -89,7 +88,7 @@ export default function AdminPage() {
   }
 
   const FILTERS = [
-    { key: 'ALL',     label: 'Tất cả',       count: displayedOrders.length },
+    { key: 'ALL',     label: 'Tất cả',       count: totalOrders },
     { key: 'PAID',    label: 'Thành công',   count: countPaid },
     { key: 'PENDING', label: 'Chờ xử lý',    count: countPending },
     { key: 'FAILED',  label: 'Thất bại',     count: countFailed },
@@ -102,36 +101,100 @@ export default function AdminPage() {
       !search.trim() ||
       o.orderId?.toLowerCase().includes(search.toLowerCase()) ||
       o.orderInfo?.toLowerCase().includes(search.toLowerCase()) ||
-      o.transId?.includes(search)
+      (o.transId && o.transId.includes(search))
     )
+
+  // Multi-select
+  const toggleSelect = (orderId) => {
+    const newSet = new Set(selectedOrders)
+    if (newSet.has(orderId)) newSet.delete(orderId)
+    else newSet.add(orderId)
+    setSelectedOrders(newSet)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedOrders.size === filteredOrders.length) {
+      setSelectedOrders(new Set())
+    } else {
+      setSelectedOrders(new Set(filteredOrders.map(o => o.orderId)))
+    }
+  }
 
   const deleteOrder = async (orderId) => {
     if (!confirm(`Xóa đơn ${orderId}?\nHành động này KHÔNG thể hoàn tác!`)) return
 
-    // Optimistic update - xóa ngay trên UI
-    const previousOrders = [...orders];
-    setOrders(prev => prev.filter(o => o.orderId !== orderId));
+    const previousOrders = [...orders]
+    setOrders(prev => prev.filter(o => o.orderId !== orderId))
 
     try {
-      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123';
-      
+      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
       const res = await fetch(`/api/momo/delete?key=${adminKey}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId })
-      });
+      })
 
-      if (!res.ok) {
-        // Rollback nếu xóa thất bại
-        setOrders(previousOrders);
-        alert('Xóa thất bại, đã khôi phục đơn');
-      }
+      if (!res.ok) throw new Error('Delete failed')
     } catch (err) {
-      console.error(err);
-      setOrders(previousOrders);
-      alert('Lỗi kết nối. Đã khôi phục đơn');
+      console.error(err)
+      setOrders(previousOrders)
+      alert('Xóa thất bại, đã khôi phục')
     }
-  };
+  }
+
+  const deleteSelected = async () => {
+    if (selectedOrders.size === 0) return
+    if (!confirm(`Xóa ${selectedOrders.size} đơn hàng đã chọn?\nHành động này KHÔNG thể hoàn tác!`)) return
+
+    const idsToDelete = Array.from(selectedOrders)
+    const previousOrders = [...orders]
+
+    setOrders(prev => prev.filter(o => !idsToDelete.includes(o.orderId)))
+    setSelectedOrders(new Set())
+
+    try {
+      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
+      for (const orderId of idsToDelete) {
+        await fetch(`/api/momo/delete?key=${adminKey}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId })
+        })
+      }
+      alert(`Đã xóa ${idsToDelete.length} đơn hàng`)
+    } catch (err) {
+      console.error(err)
+      setOrders(previousOrders)
+      alert('Có lỗi khi xóa, đã khôi phục')
+    }
+  }
+
+  const deleteAllByFilter = async () => {
+    if (filteredOrders.length === 0) return
+    if (!confirm(`XÓA TẤT CẢ ${filteredOrders.length} đơn theo filter hiện tại?\n\nHành động này KHÔNG thể hoàn tác!`)) return
+
+    const idsToDelete = filteredOrders.map(o => o.orderId)
+    const previousOrders = [...orders]
+
+    setOrders(prev => prev.filter(o => !idsToDelete.includes(o.orderId)))
+    setSelectedOrders(new Set())
+
+    try {
+      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
+      for (const orderId of idsToDelete) {
+        await fetch(`/api/momo/delete?key=${adminKey}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId })
+        })
+      }
+      alert(`Đã xóa ${idsToDelete.length} đơn hàng`)
+    } catch (err) {
+      console.error(err)
+      setOrders(previousOrders)
+      alert('Có lỗi khi xóa, đã khôi phục')
+    }
+  }
 
   if (!authed) {
     return (
@@ -187,7 +250,19 @@ export default function AdminPage() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              
+
+              {selectedOrders.size > 0 && (
+                <button className="bulk-delete-btn" onClick={deleteSelected}>
+                  🗑️ Xóa đã chọn ({selectedOrders.size})
+                </button>
+              )}
+
+              {filteredOrders.length > 0 && (
+                <button className="delete-all-filter-btn" onClick={deleteAllByFilter}>
+                  🗑️ Xóa tất cả theo filter ({filteredOrders.length})
+                </button>
+              )}
+
               <button className="refresh-btn" onClick={fetchOrders} disabled={loading}>
                 ↻ Làm mới
               </button>
@@ -201,13 +276,25 @@ export default function AdminPage() {
             </div>
           </div>
         </header>
-// ============================================
+
         <main className="main-content">
           <div className="stats-grid">
-            <div className="stat-card total"><div className="stat-label">TỔNG THU</div><div className="stat-value">{fmt(totalPaid)} ₫</div></div>
-            <div className="stat-card success"><div className="stat-label">THÀNH CÔNG</div><div className="stat-value">{countPaid} GD</div></div>
-            <div className="stat-card failed"><div className="stat-label">THẤT BẠI</div><div className="stat-value">{countFailed} GD</div></div>
-            <div className="stat-card total-orders"><div className="stat-label">TỔNG ĐƠN</div><div className="stat-value">{displayedOrders.length} GD</div></div>
+            <div className="stat-card total">
+              <div className="stat-label">TỔNG THU</div>
+              <div className="stat-value">{fmt(totalPaid)} ₫</div>
+            </div>
+            <div className="stat-card success">
+              <div className="stat-label">THÀNH CÔNG</div>
+              <div className="stat-value">{countPaid} GD</div>
+            </div>
+            <div className="stat-card failed">
+              <div className="stat-label">THẤT BẠI</div>
+              <div className="stat-value">{countFailed} GD</div>
+            </div>
+            <div className="stat-card total-orders">
+              <div className="stat-label">TỔNG ĐƠN</div>
+              <div className="stat-value">{totalOrders} GD</div>
+            </div>
           </div>
 
           <div className="table-container">
@@ -217,6 +304,13 @@ export default function AdminPage() {
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0}
+                        onChange={toggleSelectAll}
+                      />
+                    </th>
                     <th>Trạng thái</th>
                     <th>Số tiền</th>
                     <th>Nội dung</th>
@@ -231,8 +325,17 @@ export default function AdminPage() {
                 <tbody>
                   {filteredOrders.map(o => {
                     const sm = statusMeta[o.status] || statusMeta.PENDING
+                    const isSelected = selectedOrders.has(o.orderId)
+                    
                     return (
-                      <tr key={o.orderId}>
+                      <tr key={o.orderId} className={isSelected ? 'selected-row' : ''}>
+                        <td>
+                          <input 
+                            type="checkbox" 
+                            checked={isSelected}
+                            onChange={() => toggleSelect(o.orderId)}
+                          />
+                        </td>
                         <td><span className="status-badge" style={{background: sm.bg, color: sm.color}}>{sm.label}</span></td>
                         <td className="amount">{fmt(o.amount)} ₫</td>
                         <td className="info" title={o.orderInfo}>{o.orderInfo || '—'}</td>
@@ -241,7 +344,9 @@ export default function AdminPage() {
                         <td>{o.payType || '—'}</td>
                         <td className="date">{fmtDate(o.createdAt)}</td>
                         <td className="date">{o.paidAt ? fmtDate(o.paidAt) : '—'}</td>
-                        <td><button className="delete-btn" onClick={() => deleteOrder(o.orderId)}>🗑️</button></td>
+                        <td>
+                          <button className="delete-btn" onClick={() => deleteOrder(o.orderId)}>🗑️</button>
+                        </td>
                       </tr>
                     )
                   })}
@@ -262,11 +367,26 @@ const CSS = `
 
   .dashboard { padding-top: 90px; }
   .fixed-header { position: fixed; top: 0; left: 0; right: 0; background: white; z-index: 100; border-bottom: 1px solid #e8c4d8; box-shadow: 0 2px 10px rgba(165,0,100,0.1); }
-  .header-content { max-width: 1480px; margin: 0 auto; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .header-content { max-width: 1480px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
   .logo { font-size: 26px; font-weight: 900; color: var(--mm); }
   .filters { display: flex; gap: 8px; flex-wrap: wrap; }
   .filter-btn { padding: 8px 18px; border: 1px solid #ddd; border-radius: 999px; background: white; font-weight: 600; cursor: pointer; }
   .filter-btn.active { background: var(--mm); color: white; border-color: var(--mm); }
+
+  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .search-box input { padding: 10px 18px; border: 2px solid #e0d4db; border-radius: 12px; width: 320px; font-size: 15px; }
+  .search-box input:focus { border-color: var(--mm); }
+
+  .bulk-delete-btn, .delete-all-filter-btn {
+    padding: 10px 20px;
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .delete-all-filter-btn { background: #b91c1c; }
 
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin: 24px; }
   .stat-card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }
@@ -281,6 +401,7 @@ const CSS = `
   .data-table th { background: #fdf4f8; padding: 16px 12px; text-align: left; font-weight: 700; color: #555; }
   .data-table td { padding: 16px 12px; border-bottom: 1px solid #f5e9f0; }
   .data-table tr:hover { background: #fff9fb; }
+  .data-table tr.selected-row { background: #fff0f5 !important; }
   .status-badge { padding: 6px 14px; border-radius: 999px; font-weight: 700; font-size: 13px; }
   .amount { font-weight: 800; color: var(--mm); }
   .info { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -289,96 +410,7 @@ const CSS = `
 
   .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #f8e7f0, #f0d9e8); }
   .login-card { background: white; padding: 48px; border-radius: 20px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 20px 40px rgba(165,0,100,0.15); }
-  .logo { font-size: 60px; margin-bottom: 16px; }
-  .title { font-size: 28px; font-weight: 900; }
+  .login-card .logo { font-size: 60px; margin-bottom: 16px; }
   .input-group input { width: 100%; padding: 16px; border: 2px solid #ddd; border-radius: 12px; font-size: 16px; margin: 20px 0; }
   .login-btn { width: 100%; padding: 16px; background: var(--mm); color: white; border: none; border-radius: 12px; font-size: 17px; font-weight: 700; }
-  .fixed-header {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  background: white;
-  border-bottom: 1px solid #e8c4d8;
-  z-index: 100;
-  box-shadow: 0 2px 12px rgba(165,0,100,0.08);
-}
-
-.header-content {
-  max-width: 1480px;
-  margin: 0 auto;
-  padding: 14px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.logo {
-  font-size: 26px;
-  font-weight: 900;
-  color: #a50064;
-  white-space: nowrap;
-}
-
-.filters {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.filter-btn {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
-  border-radius: 999px;
-  background: white;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.filter-btn.active {
-  background: #a50064;
-  color: white;
-  border-color: #a50064;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.search-box input {
-  padding: 10px 18px;
-  border: 2px solid #e0d4db;
-  border-radius: 12px;
-  width: 320px;
-  font-size: 15px;
-  outline: none;
-}
-
-.search-box input:focus {
-  border-color: #a50064;
-}
-
-.refresh-btn {
-  padding: 10px 20px;
-  background: white;
-  border: 2px solid #ddd;
-  border-radius: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.logout-btn {
-  padding: 10px 20px;
-  background: #fee2e2;
-  color: #ef4444;
-  border: none;
-  border-radius: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
 `
