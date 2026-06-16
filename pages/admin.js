@@ -155,8 +155,11 @@ export default function AdminPage() {
 
             <div className="filters">
               {FILTERS.map(f => (
-                <button key={f.key} className={`filter-btn ${filter === f.key ? 'active' : ''}`} 
-                  onClick={() => setFilter(f.key)}>
+                <button
+                  key={f.key}
+                  className={`filter-btn ${filter === f.key ? 'active' : ''}`}
+                  onClick={() => setFilter(f.key)}
+                >
                   {f.label} <span className="count">({f.count})</span>
                 </button>
               ))}
@@ -164,20 +167,28 @@ export default function AdminPage() {
 
             <div className="header-right">
               <div className="search-box">
-                <input placeholder="Tìm mã đơn, nội dung..." value={search} 
-                  onChange={e => setSearch(e.target.value)} />
+                <input
+                  type="text"
+                  placeholder="Tìm mã đơn, nội dung..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
               </div>
+              
               <button className="refresh-btn" onClick={fetchOrders} disabled={loading}>
                 ↻ Làm mới
               </button>
+              
               <button className="logout-btn" onClick={() => {
                 sessionStorage.removeItem('momo_admin_authed')
                 setAuthed(false)
-              }}>Đăng xuất</button>
+              }}>
+                Đăng xuất
+              </button>
             </div>
           </div>
         </header>
-
+// ============================================
         <main className="main-content">
           <div className="stats-grid">
             <div className="stat-card total"><div className="stat-label">TỔNG THU</div><div className="stat-value">{fmt(totalPaid)} ₫</div></div>
