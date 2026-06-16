@@ -13,7 +13,6 @@ export default function AdminPage() {
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
   const [selectedOrders, setSelectedOrders] = useState(new Set())
-  const [deleting, setDeleting] = useState(false);
 // Xử lý đăng nhập admin
   const handleLogin = () => {
     if (password === (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'momo@admin')) {
@@ -133,31 +132,23 @@ export default function AdminPage() {
       : setSelectedOrders(new Set(filteredOrders.map(o => o.orderId)))
   }
 
-const performDelete = async (idsToDelete) => {
-  if (idsToDelete.length === 0) return;
-
-  try {
-    const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123';
-    
-    // Chạy xóa song song để nhanh hơn
-    await Promise.all(
-      idsToDelete.map(orderId => 
-        fetch(`/api/momo/delete?key=${adminKey}`, {
+  const performDelete = async (idsToDelete) => {
+    try {
+      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
+      for (const orderId of idsToDelete) {
+        await fetch(`/api/momo/delete?key=${adminKey}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderId })
         })
-      )
-    );
-
-    await fetchOrders(true);        // Force refresh sau khi xóa
-    alert(`Đã xóa ${idsToDelete.length} đơn hàng`);
-    
-  } catch (err) {
-    console.error(err);
-    alert('Lỗi khi xóa đơn hàng');
+      }
+      await fetchOrders(true)
+      alert(`Đã xóa ${idsToDelete.length} đơn hàng`)
+    } catch (err) {
+      console.error(err)
+      alert('Lỗi khi xóa')
+    }
   }
-};
 
   const deleteOrder = async (orderId) => {
     if (!confirm(`Xóa đơn ${orderId}?\n`)) return
@@ -165,13 +156,10 @@ const performDelete = async (idsToDelete) => {
   }
 
   const deleteSelected = async () => {
-  if (selectedOrders.size === 0) return;
-  if (!confirm(`Xóa ${selectedOrders.size} đơn đã chọn?\nKhông thể hoàn tác!`)) return;
-  
-  setDeleting(true);
-  await performDelete(Array.from(selectedOrders));
-  setDeleting(false);
-};
+    if (selectedOrders.size === 0) return
+    if (!confirm(`Xóa ${selectedOrders.size} đơn đã chọn?\nKhông thể hoàn tác!`)) return
+    await performDelete(Array.from(selectedOrders))
+  }
 // Nếu chưa đăng nhập, hiển thị form đăng nhập
   if (!authed) {
     return (
@@ -219,16 +207,13 @@ const performDelete = async (idsToDelete) => {
                 <input type="text" placeholder="Tìm mã đơn, nội dung..." value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
 
-             {selectedOrders.size > 0 && (
-              <button 
-                className="bulk-delete-btn" 
-                onClick={deleteSelected}
-                disabled={deleting}
-              >
-                {deleting ? 'Đang xóa...' : `🗑️ Xóa đã chọn (${selectedOrders.size})`}
-              </button>
-            )}
-                          
+              {selectedOrders.size > 0 && (
+                <button className="bulk-delete-btn" onClick={deleteSelected}>
+                  🗑️ Xóa đã chọn ({selectedOrders.size})
+                </button>
+              )}
+
+              
               <button className="logout-btn" onClick={() => {
                 sessionStorage.removeItem('momo_admin_authed')
                 setAuthed(false)
