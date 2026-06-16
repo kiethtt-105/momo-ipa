@@ -234,19 +234,17 @@ export default function Home() {
       <div className="card">
         <div className="logo">
           <div className="logo-mark">
-            <svg viewBox="0 0 30 30" fill="none" width="28" height="28">
-              <circle cx="9.5" cy="15" r="6" fill="white"/>
-              <circle cx="20.5" cy="15" r="6" fill="white"/>
-              <circle cx="9.5" cy="15" r="3" fill="#ae0070"/>
-              <circle cx="20.5" cy="15" r="3" fill="#ae0070"/>
-            </svg>
+            <img 
+              src="/Main.png" 
+              alt="Logo" 
+              style={{ width: '36px', height: '36px', borderRadius: '10px', objectFit: 'contain' }}
+            />
           </div>
           <div>
-            <div className="logo-name">MoMo</div>
+            <div className="logo-name">Green Coffee</div>   {/* hoặc tên bạn muốn */}
             <div className="logo-sub">Cổng thanh toán</div>
           </div>
         </div>
-
         <div className="amt-wrap">
           <div className="amt-label">Số tiền thanh toán</div>
           <div className="amt-row">
