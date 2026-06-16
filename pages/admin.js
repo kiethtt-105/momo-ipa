@@ -164,7 +164,10 @@ export default function AdminPage() {
   if (!authed) {
     return (
       <>
-        <Head><title>Admin · Đăng nhập</title></Head>
+        <Head>
+          <title>Admin · Đăng nhập</title>
+          <link rel="icon" type="image/png" href="/Main.png" /> 
+        </Head>
         <style>{CSS}</style>
         <div className="login-wrap">
           <div className="login-card">
@@ -186,7 +189,10 @@ export default function AdminPage() {
 // Nếu đã đăng nhập, hiển thị dashboard quản lý đơn hàng
   return (
     <>
-      <Head><title>Admin · Giao dịch MoMo</title></Head>
+      <Head>
+        <title>Admin · Giao dịch MoMo</title>
+        <link rel="icon" type="image/png" href="/Main.png" /> 
+      </Head>
       <style>{CSS}</style>
 
       <div className="dashboard">
