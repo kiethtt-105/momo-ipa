@@ -131,16 +131,16 @@ useEffect(() => {
 
         .wrapper {
           position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 100vh;
+          display: grid;
+          place-items: center;       /* Thêm thuộc tính này */
+          align-content: center;     /* Thêm thuộc tính này */
+          min-height: 100dvh;
           width: 100vw;
-          padding: 20px;
+          padding: 24px 16px;        /* Tăng nhẹ padding cho thoáng */
           background-color: #f6eff2;
-          overflow: hidden;
+          overflow-y: auto;
+          overflow-x: hidden;
         }
-
         /* NỀN MESH GRADIENT ĐẬM RÕ - CHẢY NHANH ĐỒNG BỘ */
         .orb {
           position: absolute;
@@ -292,13 +292,18 @@ useEffect(() => {
 
         @media (max-width: 768px) {
           .wrapper { padding: 16px; }
-          .container-card { grid-template-columns: 1fr; max-width: 460px; border-radius: 20px; }
+          .container-card { 
+            display: grid;           /* Đảm bảo kích hoạt grid */
+            grid-template-columns: 1fr; 
+            max-width: 400px;        /* Bóp gọn chiều rộng khít đều với tỉ lệ trang chủ cho cân đối */
+            border-radius: 20px; 
+          }
           .status-section { border-right: none; border-bottom: 1px dashed rgba(174, 0, 112, 0.15); padding: 45px 24px 35px 24px; }
           .brand-header { top: 16px; left: 20px; }
           .icon-wrapper { width: 85px; height: 85px; font-size: 36px; margin-bottom: 16px; }
           .status-title { font-size: 22px; }
           .details-section { padding: 35px 24px; }
-        }
+        }   
       `}</style>
 
       <div className="wrapper">

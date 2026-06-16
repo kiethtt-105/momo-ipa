@@ -72,16 +72,16 @@ export default function Home() {
           overflow: hidden;
         }
 
-       .wrapper {
+        .wrapper {
           position: relative;
-          display: grid;
-          place-items: center;
-          align-content: center;
-          min-height: 100dvh; /* Đổi từ 100vh sang 100dvh để chuẩn màn hình điện thoại */
+          display: grid;             /* Đổi từ flex sang grid */
+          place-content: center;     /* Khóa chặt card vào chính giữa tâm màn hình */
+          justify-items: center;     /* Căn giữa tất cả các thành phần con theo trục ngang */
+          min-height: 100dvh;        /* Đổi từ 100vh sang 100dvh để chuẩn màn hình điện thoại */
           width: 100vw;
-          padding: 24px 16px;
+          padding: 20px 16px;
           background-color: #f6eff2;
-          overflow-y: auto; /* Cho phép cuộn khi thu phóng */
+          overflow-y: auto;          /* Cho phép cuộn mượt khi thu phóng lớn */
           overflow-x: hidden;
         }
 
@@ -145,7 +145,7 @@ export default function Home() {
           position: relative;
           z-index: 2;
           width: 100%;
-          max-width: 440px;
+          max-width: 400px;        /* SỬA TỪ 440px THÀNH 400px */
           background: var(--surface);
           backdrop-filter: blur(25px);
           -webkit-backdrop-filter: blur(25px);
@@ -153,7 +153,7 @@ export default function Home() {
           border: 1px solid rgba(255, 255, 255, 0.7);
           padding: 36px 32px;
           box-shadow: 0 25px 50px rgba(174, 0, 112, 0.04), 0 1px 2px rgba(0, 0, 0, 0.01);
-          will-change: transform; /* Ép phần cứng tăng tốc độ phản hồi các thao tác bấm */
+          will-change: transform;
         }
 
         .logo {
@@ -329,7 +329,7 @@ export default function Home() {
           z-index: 2;
           margin-top: 32px;
           width: 100%;
-          max-width: 680px; 
+          max-width: 400px; 
           text-align: center;
           will-change: transform;
         }
@@ -354,13 +354,14 @@ export default function Home() {
 
         .badges-container { 
           display: grid;
-          grid-template-columns: 1fr 1fr; /* Chia lưới 2 cột đối xứng trên điện thoại */
-          gap: 14px 16px;
-          justify-items: center; /* Ép các badge bảo mật ra chính giữa tâm */
-          padding: 0 12px;
+          grid-template-columns: 1fr 1fr; /* Chia lưới đều thành 2 cột đối xứng */
+          gap: 12px 16px;
+          justify-items: center;          /* Đẩy nội dung từng ô ra chính giữa */
+          width: 100%;
         }
+
         .sec-badge { 
-          justify-content: center; 
+          justify-content: center;        /* Căn icon và chữ ra tâm */
           width: 100%; 
         }
         
