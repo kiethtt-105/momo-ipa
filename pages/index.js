@@ -34,7 +34,6 @@ export default function Home() {
     }
   }
 
-  // Thao tác nhấn nút Enter để kích hoạt thanh toán nhanh
   const handleKeyDown = e => {
     if (e.key === 'Enter' && amount && !loading) {
       handlePay()
@@ -58,21 +57,20 @@ export default function Home() {
         
         :root {
           --mm: #ae0070;
-          --text: #1e0f18;
-          --muted: #6e5261;
-          --surface: rgba(255, 255, 255, 0.85); /* Nền card kính mờ tinh tế */
-          --bg-input: rgba(243, 239, 241, 0.7);
-          --border-input: rgba(174, 0, 112, 0.12);
+          --text: #180511;
+          --muted: #6e4f60;
+          --surface: rgba(255, 255, 255, 0.88); /* Tăng độ đục card để nổi bật trên nền mới */
+          --bg-input: rgba(245, 240, 243, 0.85);
+          --border-input: rgba(174, 0, 112, 0.15);
         }
 
         html, body {
           height: 100%;
           width: 100%;
           font-family: 'Be Vietnam Pro', sans-serif;
-          overflow: hidden;
         }
 
-        /* HIỆU ỨNG NỀN GRADIENT DỊU NHẸ CHUYỂN ĐỘNG LIÊN TỤC */
+        /* NỀN GRADIENT ĐẬM ĐÀ HƠN - CHẢY LIÊN TỤC KHÔNG CHÓI */
         .wrapper {
           display: flex;
           flex-direction: column;
@@ -82,32 +80,33 @@ export default function Home() {
           width: 100vw;
           padding: 20px;
           
-          /* Phối màu Gradient Pastel siêu sang xịn chống chói */
-          background: linear-gradient(-45deg, #fce4ec, #f3e5f5, #efebe9, #fbe9e7);
-          background-size: 400% 400%;
-          animation: gradientFlow 15s ease infinite;
+          /* Nâng cấp dải màu gradient rõ nét hơn hẳn, phối hồng cánh sen, tím pastel và xanh bạc hà dịu nhẹ */
+          background: linear-gradient(-45deg, #ffb7d2, #e1bee7, #b2dfdb, #ffe0b2);
+          background-size: 300% 300%;
+          background-attachment: fixed;
+          animation: gradientFlow 10s ease-in-out infinite;
         }
 
-        /* Keyframes giúp màu chạy loang nhẹ nhàng như nước chảy */
+        /* Tốc độ chạy mượt mà ổn định hơn */
         @keyframes gradientFlow {
           0% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
           100% { background-position: 0% 50%; }
         }
 
-        /* CARD TRẮNG SỮA TRONG SUỐT (GLASSMORPHISM NHẸ) */
+        /* CARD ĐỔ BÓNG NỔI BẬT */
         .card {
           position: relative;
           z-index: 1;
           width: 100%;
           max-width: 440px;
           background: var(--surface);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
           border-radius: 24px;
-          border: 1px solid rgba(255, 255, 255, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.7);
           padding: 36px 32px;
-          box-shadow: 0 20px 40px rgba(174, 0, 112, 0.04), 0 1px 3px rgba(0, 0, 0, 0.01);
+          box-shadow: 0 25px 50px rgba(174, 0, 112, 0.08), 0 4px 12px rgba(0, 0, 0, 0.02);
         }
 
         /* Header / Logo */
@@ -129,7 +128,6 @@ export default function Home() {
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.02);
         }
         .logo-name { 
           font-size: 19px; 
@@ -143,18 +141,18 @@ export default function Home() {
           margin-top: 2px; 
         }
 
-        /* Vùng khung nhập tiền lớn */
+        /* Khung số tiền */
         .amt-wrap {
           background: var(--bg-input);
           border-radius: 16px;
           padding: 24px;
           margin-bottom: 20px;
           border: 1px solid var(--border-input);
-          transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+          transition: all 0.2s;
         }
         .amt-wrap:focus-within {
           border-color: #f0bcd4;
-          box-shadow: 0 0 0 4px rgba(174, 0, 112, 0.06);
+          box-shadow: 0 0 0 4px rgba(174, 0, 112, 0.08);
           background: #ffffff;
         }
         
@@ -173,7 +171,6 @@ export default function Home() {
           gap: 8px;
         }
         
-        /* Chữ số input TO RÕ */
         .amt-input {
           flex: 1;
           background: transparent;
@@ -196,7 +193,7 @@ export default function Home() {
           color: #495057;
         }
 
-        /* Lưới các nút chọn tiền nhanh */
+        /* Nút chọn tiền nhanh */
         .quick-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
@@ -207,7 +204,7 @@ export default function Home() {
           padding: 12px 4px;
           border-radius: 12px;
           border: 1px solid var(--border-input);
-          background: rgba(255, 255, 255, 0.7);
+          background: rgba(255, 255, 255, 0.8);
           font-family: 'Be Vietnam Pro', sans-serif;
           font-size: 14px;
           font-weight: 700;
@@ -222,9 +219,6 @@ export default function Home() {
           background: #fff0f7;
           transform: translateY(-1px);
         }
-        .qa:active { 
-          transform: scale(0.97); 
-        }
         .qa.sel {
           background: var(--mm);
           border-color: var(--mm);
@@ -232,7 +226,6 @@ export default function Home() {
           box-shadow: 0 4px 12px rgba(174, 0, 112, 0.2);
         }
 
-        /* Lỗi cảnh báo chữ TO nổi bật */
         .err {
           font-size: 13px;
           font-weight: 700;
@@ -246,7 +239,6 @@ export default function Home() {
           border-radius: 10px;
         }
 
-        /* Nút thanh toán */
         .btn {
           width: 100%;
           padding: 16px;
@@ -270,9 +262,6 @@ export default function Home() {
           transform: translateY(-2px);
           box-shadow: 0 12px 28px rgba(174, 0, 112, 0.3);
         }
-        .btn:active:not(:disabled) { 
-          transform: scale(0.99); 
-        }
         .btn:disabled {
           background: #e2d7dc;
           color: #a6989f;
@@ -287,11 +276,10 @@ export default function Home() {
           border-top-color: #ffffff;
           border-radius: 50%;
           animation: rot 0.6s linear infinite;
-          flex-shrink: 0;
         }
         @keyframes rot { to { transform: rotate(360deg) } }
 
-        /* FOOTER CHỨNG NHẬN BẢO MẬT CHUẨN MOMO */
+        /* Bảo mật cổng thanh toán */
         .security-footer {
           margin-top: 24px;
           width: 100%;
@@ -302,9 +290,9 @@ export default function Home() {
           display: flex;
           align-items: center;
           text-align: center;
-          color: #7d6e77;
+          color: #5c4c56;
           font-size: 11px;
-          font-weight: 700;
+          font-weight: 800;
           text-transform: uppercase;
           letter-spacing: 1px;
           margin-bottom: 16px;
@@ -312,7 +300,7 @@ export default function Home() {
         .security-divider::before, .security-divider::after {
           content: '';
           flex: 1;
-          border-bottom: 1px dashed rgba(174, 0, 112, 0.2);
+          border-bottom: 1px dashed rgba(174, 0, 112, 0.25);
         }
         .security-divider:not(:empty)::before { margin-right: .75em; }
         .security-divider:not(:empty)::after { margin-left: .75em; }
@@ -324,14 +312,13 @@ export default function Home() {
         }
         .sec-badge {
           background: var(--surface);
-          border: 1px solid rgba(255, 255, 255, 0.5);
+          border: 1px solid rgba(255, 255, 255, 0.6);
           border-radius: 12px;
           padding: 10px 12px;
           display: flex;
           align-items: center;
           gap: 10px;
           text-align: left;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.01);
         }
         .sec-icon {
           font-size: 18px;
@@ -356,12 +343,10 @@ export default function Home() {
           margin-top: 1px;
         }
 
-        /* Mobile Responsive gọn gàng */
         @media (max-width: 480px) {
           .wrapper { padding: 16px; }
           .card { border-radius: 20px; padding: 28px 20px; }
           .amt-input { font-size: 34px; }
-          .logo { margin-bottom: 24px; }
           .badges-container { grid-template-columns: 1fr; gap: 8px; }
         }
       `}</style>
@@ -369,7 +354,6 @@ export default function Home() {
       <div className="wrapper">
         <div className="card">
           
-          {/* LOGO & BRAND */}
           <div className="logo">
             <div className="logo-mark">
               <img src="/Main.png" alt="Logo" style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'contain' }} />
@@ -380,7 +364,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Ô NHẬP TIỀN */}
           <div className="amt-wrap">
             <div className="amt-label">Số tiền cần thanh toán</div>
             <div className="amt-row">
@@ -398,7 +381,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* LƯỚI CHỌN NHANH GIÁ TIỀN */}
           <div className="quick-grid">
             {QUICK.map(v => (
               <button
@@ -411,10 +393,8 @@ export default function Home() {
             ))}
           </div>
 
-          {/* THÔNG BÁO LỖI (NẾU CÓ) */}
           {error && <div className="err">⚠ {error}</div>}
 
-          {/* NÚT SUBMIT TO RÕ */}
           <button className="btn" onClick={handlePay} disabled={loading || !amount}>
             {loading ? (
               <><div className="spin" />Đang tạo đơn hàng…</>
@@ -425,7 +405,6 @@ export default function Home() {
           
         </div>
 
-        {/* KHỐI CHỨNG NHẬN BẢO MẬT */}
         <div className="security-footer">
           <div className="security-divider">Bảo mật cổng thanh toán</div>
           
