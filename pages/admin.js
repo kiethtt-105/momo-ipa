@@ -184,7 +184,7 @@ export default function AdminPage() {
                 <img src="/Main.png" alt="Logo" className="login-logo-img" />
               </div>
               <h1 className="title">Quản trị viên</h1>
-              <p className="subtitle">Đăng nhập vào hệ thống Green Coffee</p>
+              <p className="subtitle">Đăng nhập vào hệ thống IPA</p>
               <div className={`input-group ${pwError ? 'error' : ''}`}>
                 <input type="password" placeholder="Nhập mật khẩu quản trị" value={password}
                   onChange={e => {setPassword(e.target.value); setPwError(false)}}
