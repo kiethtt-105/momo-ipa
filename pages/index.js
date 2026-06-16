@@ -417,13 +417,13 @@ export default function Home() {
               <img src="/Main.png" alt="Logo" style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'contain' }} />
             </div>
             <div>
-              <div className="logo-name">IPA</div>
-              <div className="logo-sub">Thanh toán MoMo</div>
+              <div className="logo-name">MOMO</div>
+              <div className="logo-sub">Thanh toán IPA</div>
             </div>
           </div>
 
           <div className="amt-wrap">
-            <div className="amt-label">Số tiền cần thanh toán</div>
+            <div className="amt-label">Số tiền thanh toán</div>
             <div className="amt-row">
               <input
                 className="amt-input"
@@ -471,7 +471,6 @@ export default function Home() {
                 <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.4 0 2.5 1.1 2.5 2.5 0 .8-.4 1.5-1 1.9v2.6c0 .3-.2.5-.5.5h-2c-.3 0-.5-.2-.5-.5v-2.6c-.6-.4-1-1.1-1-1.9 0-1.4 1.1-2.5 2.5-2.5z"/>
               </svg>
               <span className="sec-text-main">PCI DSS</span>
-              <span className="sec-text-sub">chuẩn quốc tế</span>
             </div>
 
             <div className="sec-badge">
@@ -479,7 +478,6 @@ export default function Home() {
                 <path d="M12.65 10C11.83 7.59 9.57 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.57 0 4.83-1.59 5.65-4H17v3h3v-3h3v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
               </svg>
               <span className="sec-text-main">Mã hóa P2P</span>
-              <span className="sec-text-sub">luồng tiền bảo vệ</span>
             </div>
 
             <div className="sec-badge">
@@ -487,7 +485,6 @@ export default function Home() {
                 <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1 .9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
               </svg>
               <span className="sec-text-main">SHA-256</span>
-              <span className="sec-text-sub">bảo mật 2 tầng</span>
             </div>
 
             <div className="sec-badge">
@@ -495,7 +492,6 @@ export default function Home() {
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
               </svg>
               <span className="sec-text-main">MoMo Verified</span>
-              <span className="sec-text-sub">đối tác gốc</span>
             </div>
 
           </div>
