@@ -297,9 +297,21 @@ const CSS = `
 }
 
 .logout-btn { 
-  background: #fee2e2; 
-  color: #ef4444; 
-  border: none; 
+  background: #f3e8ff; 
+  color: #7c3aed; 
+  border: 2px solid #c4b5fd; 
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  background: #e0d4ff;
+  border-color: #7c3aed;
+  transform: translateY(-1px);
 }
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin: 24px; }
   .stat-card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }
