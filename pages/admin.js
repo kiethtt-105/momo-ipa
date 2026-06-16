@@ -25,20 +25,20 @@ export default function AdminPage() {
     }
   }
 
-  const fetchOrders = async () => {
-    if (loading) return
-    setLoading(true)
-    try {
-      const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
-      const res = await fetch(`/api/momo/orders?key=${adminKey}`)
-      const data = await res.json()
-      setOrders(data.orders || [])
-      setSelectedOrders(new Set())
-    } catch (err) {
-      console.error("Fetch orders error:", err)
-    }
-    setLoading(false)
+ const fetchOrders = async () => {
+  if (loading) return
+  setLoading(true)
+  try {
+    const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
+    const res = await fetch(`/api/momo/orders?key=${adminKey}`)
+    const data = await res.json()
+    setOrders(data.orders || [])
+    setSelectedOrders(new Set())
+  } catch (err) {
+    console.error("Fetch orders error:", err)
   }
+  setLoading(false)
+}
 
   const normalizeOrders = (ordersList) => {
     const now = new Date()
@@ -196,7 +196,7 @@ export default function AdminPage() {
               )}
 
               <button className="refresh-btn" onClick={fetchOrders} disabled={loading}>
-                ↻ Làm mới {loading && '(...)'} 
+                ↻ {loading ? 'Đang tải...' : 'Làm mới'}
               </button>
               
               <button className="logout-btn" onClick={() => {
