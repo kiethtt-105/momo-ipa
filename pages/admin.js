@@ -133,7 +133,7 @@ export default function AdminPage() {
   }
 
   const deleteOrder = async (orderId) => {
-    if (!confirm(`Xóa đơn ${orderId}?\n!`)) return
+    if (!confirm(`Xóa đơn ${orderId}?\n`)) return
     await performDelete([orderId])
   }
 
