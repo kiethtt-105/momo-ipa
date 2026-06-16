@@ -79,13 +79,7 @@ export default function AdminPage() {
       return { ...order, status }
     })
   }
-// Tự động refresh danh sách đơn hàng mỗi 1 giây khi đã đăng nhập
-  useEffect(() => {
-    if (!authed) return
-    fetchOrders()
-    const iv = setInterval(fetchOrders, 1000) // ← Tự động refresh mỗi 1 giây
-    return () => clearInterval(iv)
-  }, [authed])
+
 
   const displayedOrders = normalizeOrders(orders)
 
@@ -148,7 +142,7 @@ export default function AdminPage() {
           body: JSON.stringify({ orderId })
         })
       }
-      await fetchOrders()
+      await fetchOrders(true)
       alert(`Đã xóa ${idsToDelete.length} đơn hàng`)
     } catch (err) {
       console.error(err)
