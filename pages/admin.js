@@ -195,9 +195,6 @@ export default function AdminPage() {
                 </button>
               )}
 
-              <button className="refresh-btn" onClick={fetchOrders} disabled={loading}>
-                ↻ {loading ? 'Đang tải...' : 'Làm mới'}
-              </button>
               
               <button className="logout-btn" onClick={() => {
                 sessionStorage.removeItem('momo_admin_authed')
