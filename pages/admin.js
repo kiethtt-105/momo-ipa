@@ -291,18 +291,7 @@ const CSS = `
   font-size: 15px; 
 }
 
-.refresh-btn, .bulk-delete-btn, .logout-btn {
-  padding: 10px 18px;
-  border-radius: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-}
 
-.refresh-btn { 
-  background: white; 
-  border: 2px solid #ddd; 
-}
 
 .bulk-delete-btn { 
   background: #ef4444; 
