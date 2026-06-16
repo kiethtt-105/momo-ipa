@@ -31,7 +31,6 @@ export default function AdminPage() {
     try {
       const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
       const res = await fetch(`/api/momo/orders?key=${adminKey}`)
-      if (!res.ok) throw new Error('Fetch failed')
       const data = await res.json()
       setOrders(data.orders || [])
       setSelectedOrders(new Set())
@@ -60,7 +59,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!authed) return
     fetchOrders()
-    const iv = setInterval(fetchOrders, 8000) // ← Giảm xuống 8 giây
+    const iv = setInterval(fetchOrders, 1000) // ← Tự động refresh mỗi 1 giây
     return () => clearInterval(iv)
   }, [authed])
 
@@ -197,7 +196,7 @@ export default function AdminPage() {
               )}
 
               <button className="refresh-btn" onClick={fetchOrders} disabled={loading}>
-                ↻ Làm mới {loading && '(đang tải...)'}
+                ↻ Làm mới {loading && '(...)'} 
               </button>
               
               <button className="logout-btn" onClick={() => {
@@ -279,18 +278,7 @@ const CSS = `
 
   .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .search-box input { padding: 10px 18px; border: 2px solid #e0d4db; border-radius: 12px; width: 320px; font-size: 15px; }
-  .search-box input:focus { border-color: var(--mm); }
-
-  .bulk-delete-btn {
-    padding: 10px 20px;
-    background: #ef4444;
-    color: white;
-    border: none;
-    border-radius: 12px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-
+  .bulk-delete-btn { padding: 10px 20px; background: #ef4444; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; }
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin: 24px; }
   .stat-card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }
   .stat-label { font-size: 13px; font-weight: 700; color: #666; }
@@ -314,7 +302,6 @@ const CSS = `
   .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #f8e7f0, #f0d9e8); }
   .login-card { background: white; padding: 48px; border-radius: 20px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 20px 40px rgba(165,0,100,0.15); }
   .login-card .logo { font-size: 60px; margin-bottom: 16px; }
-  .title { font-size: 28px; font-weight: 900; }
   .input-group input { width: 100%; padding: 16px; border: 2px solid #ddd; border-radius: 12px; font-size: 16px; margin: 20px 0; }
   .login-btn { width: 100%; padding: 16px; background: var(--mm); color: white; border: none; border-radius: 12px; font-size: 17px; font-weight: 700; }
 `
