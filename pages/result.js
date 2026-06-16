@@ -8,11 +8,19 @@ export default function ResultPage() {
   const [status, setStatus] = useState('loading')
   const [info, setInfo] = useState(null)
 
-  useEffect(() => {
+useEffect(() => {
     if (!router.isReady) return
     const { orderId, resultCode, transId, amount, payType, message, orderInfo } = router.query
     if (!orderId) { setStatus('error'); return }
     const code = parseInt(resultCode)
+
+    // Hàm phụ để xóa sạch đống param dài ngoằng trên thanh URL sau 500ms
+    const cleanUrlBar = () => {
+      setTimeout(() => {
+        router.replace('/result', undefined, { shallow: true })
+      }, 500)
+    }
+
     if (code === 0) {
       setStatus('success')
       setInfo({ orderId, transId, amount: parseInt(amount), payType, message })
@@ -20,7 +28,9 @@ export default function ResultPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, transId, amount, payType, orderInfo, resultCode: 0 }),
-      }).catch(() => {})
+      })
+      .then(() => cleanUrlBar()) // Lưu xong -> Xóa đuôi URL liền
+      .catch(() => cleanUrlBar())
     } else if (resultCode !== undefined) {
       setStatus('failed')
       setInfo({ orderId, message, resultCode: code })
@@ -28,17 +38,36 @@ export default function ResultPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, transId, amount, payType, orderInfo, resultCode: code }),
-      }).catch(() => {})
+      })
+      .then(() => cleanUrlBar()) // Lưu xong -> Xóa đuôi URL liền
+      .catch(() => cleanUrlBar())
     } else {
       let attempts = 0
       const poll = setInterval(async () => {
         try {
           const res = await fetch(`/api/momo/status?orderId=${orderId}`)
           const data = await res.json()
-          if (data.status === 'PAID')    { setStatus('success'); setInfo(data); clearInterval(poll) }
-          else if (data.status === 'FAILED') { setStatus('failed'); setInfo(data); clearInterval(poll) }
-          else if (++attempts >= 10)     { setStatus('pending'); clearInterval(poll) }
-        } catch { clearInterval(poll) }
+          if (data.status === 'PAID') { 
+            setStatus('success')
+            setInfo(data)
+            clearInterval(poll)
+            cleanUrlBar() // Thống kê xong -> Xóa đuôi URL liền
+          }
+          else if (data.status === 'FAILED') { 
+            setStatus('failed')
+            setInfo(data)
+            clearInterval(poll)
+            cleanUrlBar() // Thống kê xong -> Xóa đuôi URL liền
+          }
+          else if (++attempts >= 10) { 
+            setStatus('pending')
+            clearInterval(poll)
+            cleanUrlBar()
+          }
+        } catch { 
+          clearInterval(poll) 
+          cleanUrlBar()
+        }
       }, 2000)
       return () => clearInterval(poll)
     }
