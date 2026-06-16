@@ -25,8 +25,10 @@ export default function AdminPage() {
     }
   }
 // Lấy danh sách đơn hàng từ server
-const fetchOrders = async () => {
+ const fetchOrders = async (force = false) => {
   if (loading) return
+  if (!force && selectedOrders.size > 0) return; // ← Tạm dừng refresh khi đang chọn đơn
+
   setLoading(true)
   try {
     const adminKey = process.env.ADMIN_SECRET_KEY || 'admin-secret123'
@@ -36,18 +38,31 @@ const fetchOrders = async () => {
     const newOrders = data.orders || []
     setOrders(newOrders)
 
-    // GIỮ LẠI NHỮNG ĐƠN ĐÃ CHỌN (nếu còn tồn tại)
-    const currentSelected = Array.from(selectedOrders)
-    const stillExist = currentSelected.filter(id => 
-      newOrders.some(order => order.orderId === id)
-    )
-    setSelectedOrders(new Set(stillExist))
-    
+    // Giữ lại các đơn đã chọn nếu chúng vẫn tồn tại
+    if (selectedOrders.size > 0) {
+      const stillExist = Array.from(selectedOrders).filter(id => 
+        newOrders.some(order => order.orderId === id)
+      )
+      setSelectedOrders(new Set(stillExist))
+    }
   } catch (err) {
     console.error("Fetch orders error:", err)
   }
   setLoading(false)
 }
+
+  useEffect(() => {
+    if (!authed) return
+    
+    fetchOrders(true) // Lần đầu luôn fetch
+    
+    const iv = setInterval(() => {
+      fetchOrders()   // Các lần sau sẽ check có đang chọn đơn không
+    }, 1000)
+    
+    return () => clearInterval(iv)
+  }, [authed, selectedOrders.size])   // ← Thêm dependency này
+
 // Chuẩn hóa trạng thái đơn hàng để dễ dàng lọc và hiển thị
   const normalizeOrders = (ordersList) => {
     const now = new Date()
