@@ -57,21 +57,23 @@ export default function Home() {
         
         :root {
           --mm: #ae0070;
-          --text: #180511;
-          --muted: #6e4f60;
-          --surface: rgba(255, 255, 255, 0.88); /* Tăng độ đục card để nổi bật trên nền mới */
-          --bg-input: rgba(245, 240, 243, 0.85);
-          --border-input: rgba(174, 0, 112, 0.15);
+          --text: #1a0413;
+          --muted: #614655;
+          --surface: rgba(255, 255, 255, 0.85); 
+          --bg-input: rgba(240, 232, 236, 0.6);
+          --border-input: rgba(174, 0, 112, 0.1);
         }
 
         html, body {
           height: 100%;
           width: 100%;
           font-family: 'Be Vietnam Pro', sans-serif;
+          background: #f7f3f5;
+          overflow: hidden;
         }
 
-        /* NỀN GRADIENT ĐẬM ĐÀ HƠN - CHẢY LIÊN TỤC KHÔNG CHÓI */
         .wrapper {
+          position: relative;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -79,37 +81,77 @@ export default function Home() {
           min-height: 100vh;
           width: 100vw;
           padding: 20px;
-          
-          /* Nâng cấp dải màu gradient rõ nét hơn hẳn, phối hồng cánh sen, tím pastel và xanh bạc hà dịu nhẹ */
-          background: linear-gradient(-45deg, #ffb7d2, #e1bee7, #b2dfdb, #ffe0b2);
-          background-size: 300% 300%;
-          background-attachment: fixed;
-          animation: gradientFlow 10s ease-in-out infinite;
+          background-color: #f6eff2;
+          overflow: hidden;
         }
 
-        /* Tốc độ chạy mượt mà ổn định hơn */
-        @keyframes gradientFlow {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
+        /* NỀN MESH GRADIENT NGHỆ THUẬT CAO CẤP */
+        .orb {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(80px);
+          opacity: 0.55;
+          z-index: 0;
+          mix-blend-mode: multiply;
+        }
+        .orb-1 {
+          top: -10%; left: -10%; width: 50vw; height: 50vw;
+          background: #ffb7d2;
+          animation: orbMove1 20s infinite alternate ease-in-out;
+        }
+        .orb-2 {
+          bottom: -10%; right: -5%; width: 60vw; height: 60vw;
+          background: #cbd5e1;
+          animation: orbMove2 25s infinite alternate ease-in-out;
+        }
+        .orb-3 {
+          top: 30%; right: -10%; width: 45vw; height: 45vw;
+          background: #e1bee7;
+          animation: orbMove3 18s infinite alternate ease-in-out;
+        }
+        .orb-4 {
+          bottom: -5%; left: 10%; width: 40vw; height: 40vw;
+          background: #b2dfdb;
+          animation: orbMove1 22s infinite alternate ease-in-out;
         }
 
-        /* CARD ĐỔ BÓNG NỔI BẬT */
+        @keyframes orbMove1 {
+          0% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(8vw, 5vh) scale(1.1); }
+          100% { transform: translate(-4vw, 10vh) scale(0.9); }
+        }
+        @keyframes orbMove2 {
+          0% { transform: translate(0, 0) scale(1.1); }
+          50% { transform: translate(-10vw, -8vh) scale(0.95); }
+          100% { transform: translate(5vw, 4vh) scale(1.05); }
+        }
+        @keyframes orbMove3 {
+          0% { transform: translate(0, 0) scale(0.9); }
+          50% { transform: translate(-5vw, 10vh) scale(1.15); }
+          100% { transform: translate(8vw, -5vh) scale(1); }
+        }
+
+        .wrapper::before {
+          content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3e%3cfilter id='noiseFilter'%3e%3ccolorMatrix type='matrix' values='0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.07 0'/%3e%3cturbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3e%3c/filter%3e%3crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3e%3c/svg%3e");
+          opacity: 0.8; z-index: 1; pointer-events: none;
+        }
+
+        /* CARD */
         .card {
           position: relative;
-          z-index: 1;
+          z-index: 2;
           width: 100%;
           max-width: 440px;
           background: var(--surface);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
+          backdrop-filter: blur(30px);
+          -webkit-backdrop-filter: blur(30px);
           border-radius: 24px;
           border: 1px solid rgba(255, 255, 255, 0.7);
           padding: 36px 32px;
-          box-shadow: 0 25px 50px rgba(174, 0, 112, 0.08), 0 4px 12px rgba(0, 0, 0, 0.02);
+          box-shadow: 0 30px 60px rgba(174, 0, 112, 0.04), 0 1px 2px rgba(0, 0, 0, 0.01);
         }
 
-        /* Header / Logo */
         .logo {
           display: flex;
           align-items: center;
@@ -141,18 +183,17 @@ export default function Home() {
           margin-top: 2px; 
         }
 
-        /* Khung số tiền */
         .amt-wrap {
           background: var(--bg-input);
           border-radius: 16px;
           padding: 24px;
           margin-bottom: 20px;
           border: 1px solid var(--border-input);
-          transition: all 0.2s;
+          transition: all 0.2s ease;
         }
         .amt-wrap:focus-within {
           border-color: #f0bcd4;
-          box-shadow: 0 0 0 4px rgba(174, 0, 112, 0.08);
+          box-shadow: 0 0 0 4px rgba(174, 0, 112, 0.06);
           background: #ffffff;
         }
         
@@ -184,7 +225,7 @@ export default function Home() {
           caret-color: var(--mm);
         }
         .amt-input::placeholder { 
-          color: #b0a2a9; 
+          color: #b3a5ad; 
         }
         
         .amt-unit {
@@ -193,7 +234,6 @@ export default function Home() {
           color: #495057;
         }
 
-        /* Nút chọn tiền nhanh */
         .quick-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
@@ -204,7 +244,7 @@ export default function Home() {
           padding: 12px 4px;
           border-radius: 12px;
           border: 1px solid var(--border-input);
-          background: rgba(255, 255, 255, 0.8);
+          background: rgba(255, 255, 255, 0.7);
           font-family: 'Be Vietnam Pro', sans-serif;
           font-size: 14px;
           font-weight: 700;
@@ -279,81 +319,96 @@ export default function Home() {
         }
         @keyframes rot { to { transform: rotate(360deg) } }
 
-        /* Bảo mật cổng thanh toán */
+        /* TÁI CẤU TRÚC FOOTER BẢO MẬT: TINH TẾ - KHÔNG Ô - DÀN HÀNG NGANG */
         .security-footer {
-          margin-top: 24px;
+          position: relative;
+          z-index: 2;
+          margin-top: 32px;
           width: 100%;
-          max-width: 440px;
+          max-width: 680px; /* Tăng chiều rộng để dàn hàng ngang đẹp hơn */
           text-align: center;
         }
+        
         .security-divider {
           display: flex;
           align-items: center;
-          text-align: center;
-          color: #5c4c56;
+          justify-content: center;
+          color: #8c7381;
           font-size: 11px;
           font-weight: 800;
           text-transform: uppercase;
-          letter-spacing: 1px;
-          margin-bottom: 16px;
+          letter-spacing: 1.5px;
+          margin-bottom: 20px;
         }
         .security-divider::before, .security-divider::after {
           content: '';
-          flex: 1;
+          width: 40px;
           border-bottom: 1px dashed rgba(174, 0, 112, 0.25);
+          margin: 0 12px;
         }
-        .security-divider:not(:empty)::before { margin-right: .75em; }
-        .security-divider:not(:empty)::after { margin-left: .75em; }
 
         .badges-container {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-        }
-        .sec-badge {
-          background: var(--surface);
-          border: 1px solid rgba(255, 255, 255, 0.6);
-          border-radius: 12px;
-          padding: 10px 12px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          text-align: left;
-        }
-        .sec-icon {
-          font-size: 18px;
-          background: #f5e9f0;
-          color: var(--mm);
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
+          gap: 24px;
+          flex-wrap: wrap;
+        }
+        
+        .sec-badge {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: transparent; /* Xóa bỏ khung ô trắng vô duyên */
+          border: none;
+          padding: 0;
+          box-shadow: none;
+        }
+        
+        .sec-icon-svg {
+          width: 16px;
+          height: 16px;
+          fill: var(--mm); /* Màu biểu tượng đồng bộ tone MoMo gốc */
+          opacity: 0.85;
           flex-shrink: 0;
         }
+        
         .sec-text-main {
-          font-size: 11px;
+          font-size: 12px;
           font-weight: 700;
-          color: var(--text);
+          color: #4a3240;
+          letter-spacing: -0.1px;
         }
+        
         .sec-text-sub {
-          font-size: 10px;
-          color: var(--muted);
-          margin-top: 1px;
+          font-size: 11px;
+          color: #8c7381;
+          font-weight: 500;
         }
 
-        @media (max-width: 480px) {
+        @media (max-width: 600px) {
           .wrapper { padding: 16px; }
           .card { border-radius: 20px; padding: 28px 20px; }
           .amt-input { font-size: 34px; }
-          .badges-container { grid-template-columns: 1fr; gap: 8px; }
+          .badges-container { 
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Về di động tự động chia thành lưới 2x2 gọn gàng */
+            gap: 14px 16px;
+            padding: 0 12px;
+          }
+          .sec-badge {
+            justify-content: flex-start;
+          }
         }
       `}</style>
 
       <div className="wrapper">
+        <div className="orb orb-1"></div>
+        <div className="orb orb-2"></div>
+        <div className="orb orb-3"></div>
+        <div className="orb orb-4"></div>
+
         <div className="card">
-          
           <div className="logo">
             <div className="logo-mark">
               <img src="/Main.png" alt="Logo" style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'contain' }} />
@@ -402,47 +457,47 @@ export default function Home() {
               `Thanh toán${display ? ' ' + display + ' ₫' : ''}`
             )}
           </button>
-          
         </div>
 
+        {/* HỆ THỐNG HIỂN THỊ MỚI: THEO HÀNG NGANG, DÙNG ICON SVG CAO CẤP */}
         <div className="security-footer">
           <div className="security-divider">Bảo mật cổng thanh toán</div>
-          
           <div className="badges-container">
-            <div className="sec-badge">
-              <div className="sec-icon">🛡️</div>
-              <div>
-                <div className="sec-text-main">Chứng chỉ PCI DSS</div>
-                <div className="sec-text-sub">Tiêu chuẩn quốc tế</div>
-              </div>
-            </div>
             
             <div className="sec-badge">
-              <div className="sec-icon">🔑</div>
-              <div>
-                <div className="sec-text-main">Mã hóa P2P</div>
-                <div className="sec-text-sub">Bảo vệ luồng tiền</div>
-              </div>
+              <svg className="sec-icon-svg" viewBox="0 0 24 24">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.4 0 2.5 1.1 2.5 2.5 0 .8-.4 1.5-1 1.9v2.6c0 .3-.2.5-.5.5h-2c-.3 0-.5-.2-.5-.5v-2.6c-.6-.4-1-1.1-1-1.9 0-1.4 1.1-2.5 2.5-2.5z"/>
+              </svg>
+              <span className="sec-text-main">PCI DSS</span>
+              <span className="sec-text-sub">chuẩn quốc tế</span>
             </div>
-            
+
             <div className="sec-badge">
-              <div className="sec-icon">🔒</div>
-              <div>
-                <div className="sec-text-main">SHA-256 mã hóa</div>
-                <div className="sec-text-sub">Bảo mật dữ liệu 2 tầng</div>
-              </div>
+              <svg className="sec-icon-svg" viewBox="0 0 24 24">
+                <path d="M12.65 10C11.83 7.59 9.57 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.57 0 4.83-1.59 5.65-4H17v3h3v-3h3v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+              </svg>
+              <span className="sec-text-main">Mã hóa P2P</span>
+              <span className="sec-text-sub">luồng tiền bảo vệ</span>
             </div>
-            
+
             <div className="sec-badge">
-              <div className="sec-icon">✅</div>
-              <div>
-                <div className="sec-text-main">MoMo Verified</div>
-                <div className="sec-text-sub">Đối tác liên kết gốc</div>
-              </div>
+              <svg className="sec-icon-svg" viewBox="0 0 24 24">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1 .9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+              </svg>
+              <span className="sec-text-main">SHA-256</span>
+              <span className="sec-text-sub">bảo mật 2 tầng</span>
             </div>
+
+            <div className="sec-badge">
+              <svg className="sec-icon-svg" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+              </svg>
+              <span className="sec-text-main">MoMo Verified</span>
+              <span className="sec-text-sub">đối tác gốc</span>
+            </div>
+
           </div>
         </div>
-
       </div>
     </>
   )
