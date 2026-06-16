@@ -48,10 +48,10 @@ export default function ResultPage() {
 
   const META = {
     loading: { spin: true,  title: 'Đang xác nhận…',          sub: 'Vui lòng không đóng trang',              accent: '#ae0070', bg: '#fdf5f9' },
-    success: { icon: '✓',   title: 'Thanh toán thành công!',   sub: 'Giao dịch đã được MoMo xác nhận',        accent: '#16a34a', bg: '#e8f5e9' },
-    failed:  { icon: '✕',   title: 'Giao dịch thất bại',       sub: null,                                      accent: '#dc2626', bg: '#ffebee' },
-    pending: { icon: '⏳',  title: 'Đang chờ xác nhận',        sub: 'MoMo chưa phản hồi, kiểm tra lại sau',   accent: '#d97706', bg: '#fff3e0' },
-    error:   { icon: '!',   title: 'Không tìm thấy đơn hàng',  sub: 'Link không hợp lệ hoặc đã hết hạn',      accent: '#dc2626', bg: '#ffebee' },
+    success: { icon: '✓',   title: 'Thanh toán thành công!',   sub: 'Giao dịch đã được MoMo xác nhận',        accent: '#16a34a', bg: 'rgba(232, 245, 233, 0.85)' },
+    failed:  { icon: '✕',   title: 'Giao dịch thất bại',       sub: null,                                      accent: '#dc2626', bg: 'rgba(255, 235, 235, 0.85)' },
+    pending: { icon: '⏳',  title: 'Đang chờ xác nhận',        sub: 'MoMo chưa phản hồi, kiểm tra lại sau',   accent: '#d97706', bg: 'rgba(255, 243, 224, 0.85)' },
+    error:   { icon: '!',   title: 'Không tìm thấy đơn hàng',  sub: 'Link không hợp lệ hoặc đã hết hạn',      accent: '#dc2626', bg: 'rgba(255, 235, 235, 0.85)' },
   }
   const m = META[status] || META.loading
 
@@ -71,7 +71,7 @@ export default function ResultPage() {
           --mm: #ae0070;
           --text: #1a0413;
           --muted: #614655;
-          --surface: rgba(255, 255, 255, 0.82);
+          --surface: rgba(255, 255, 255, 0.85);
           --border-input: rgba(174, 0, 112, 0.1);
         }
 
@@ -79,7 +79,7 @@ export default function ResultPage() {
           height: 100%;
           width: 100%;
           font-family: 'Be Vietnam Pro', sans-serif;
-          background: #f7f3f5;
+          background: #f3e9ed;
           overflow-x: hidden;
         }
 
@@ -95,49 +95,51 @@ export default function ResultPage() {
           overflow: hidden;
         }
 
-        /* ĐỒNG BỘ NỀN MESH GRADIENT HẠT MỊN */
+        /* NỀN MESH GRADIENT ĐẬM RÕ - CHẢY NHANH ĐỒNG BỘ */
         .orb {
           position: absolute;
           border-radius: 50%;
-          filter: blur(80px);
-          opacity: 0.55;
+          filter: blur(55px);
+          opacity: 0.65;
           z-index: 0;
-          mix-blend-mode: multiply;
+          pointer-events: none;
+          transform: translate3d(0,0,0); /* Kích hoạt tăng tốc phần cứng card đồ họa */
         }
-        .orb-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: #ffb7d2; animation: orbMove1 20s infinite alternate ease-in-out; }
-        .orb-2 { bottom: -10%; right: -5%; width: 60vw; height: 60vw; background: #cbd5e1; animation: orbMove2 25s infinite alternate ease-in-out; }
-        .orb-3 { top: 30%; right: -10%; width: 45vw; height: 45vw; background: #e1bee7; animation: orbMove3 18s infinite alternate ease-in-out; }
-        .orb-4 { bottom: -5%; left: 10%; width: 40vw; height: 40vw; background: #b2dfdb; animation: orbMove1 22s infinite alternate ease-in-out; }
+        .orb-1 { top: -5%; left: -5%; width: 50vw; height: 50vw; background: #ff9cb7; animation: orbMove1 5s infinite alternate ease-in-out; }
+        .orb-2 { bottom: -5%; right: -5%; width: 60vw; height: 60vw; background: #b0bec5; animation: orbMove2 7s infinite alternate ease-in-out; }
+        .orb-3 { top: 25%; right: -5%; width: 45vw; height: 45vw; background: #dfb2ea; animation: orbMove3 6s infinite alternate ease-in-out; }
+        .orb-4 { bottom: -5%; left: 5%; width: 40vw; height: 40vw; background: #80cbc4; animation: orbMove1 6.5s infinite alternate ease-in-out; }
 
-        @keyframes orbMove1 { 0% { transform: translate(0, 0) scale(1); } 50% { transform: translate(8vw, 5vh) scale(1.1); } 100% { transform: translate(-4vw, 10vh) scale(0.9); } }
-        @keyframes orbMove2 { 0% { transform: translate(0, 0) scale(1.1); } 50% { transform: translate(-10vw, -8vh) scale(0.95); } 100% { transform: translate(5vw, 4vh) scale(1.05); } }
-        @keyframes orbMove3 { 0% { transform: translate(0, 0) scale(0.9); } 50% { transform: translate(-5vw, 10vh) scale(1.15); } 100% { transform: translate(8vw, -5vh) scale(1); } }
+        @keyframes orbMove1 { 0% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(8vw, 4vh, 0) scale(1.15); } 100% { transform: translate3d(-4vw, 7vh, 0) scale(0.9); } }
+        @keyframes orbMove2 { 0% { transform: translate3d(0, 0, 0) scale(1.1); } 50% { transform: translate3d(-10vw, -6vh, 0) scale(0.9); } 100% { transform: translate3d(6vw, 4vh, 0) scale(1.1); } }
+        @keyframes orbMove3 { 0% { transform: translate3d(0, 0, 0) scale(0.9); } 50% { transform: translate3d(-5vw, 7vh, 0) scale(1.2); } 100% { transform: translate3d(7vw, -4vh, 0) scale(1); } }
 
         .wrapper::before {
           content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3e%3cfilter id='noiseFilter'%3e%3ccolorMatrix type='matrix' values='0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.07 0'/%3e%3cturbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3e%3c/filter%3e%3crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3e%3c/svg%3e");
-          opacity: 0.8; z-index: 1; pointer-events: none;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3e%3cfilter id='noiseFilter'%3e%3ccolorMatrix type='matrix' values='0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.05 0'/%3e%3cturbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3e%3c/filter%3e%3crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3e%3c/svg%3e");
+          opacity: 0.5; z-index: 1; pointer-events: none;
         }
 
-        /* CONTAINER CARD KÍNH MỜ */
+        /* CONTAINER CARD KÍNH MỜ SIÊU MƯỢT */
         .container-card {
           position: relative;
           z-index: 2;
           background: var(--surface);
-          backdrop-filter: blur(30px);
-          -webkit-backdrop-filter: blur(30px);
+          backdrop-filter: blur(25px);
+          -webkit-backdrop-filter: blur(25px);
           width: 100%;
           max-width: 860px;
           border-radius: 24px;
-          box-shadow: 0 30px 60px rgba(174, 0, 112, 0.04), 0 1px 2px rgba(0, 0, 0, 0.01);
+          box-shadow: 0 25px 50px rgba(174, 0, 112, 0.04), 0 1px 2px rgba(0, 0, 0, 0.01);
           border: 1px solid rgba(255, 255, 255, 0.7);
           display: grid;
           grid-template-columns: 1.1fr 0.9fr;
           overflow: hidden;
+          will-change: transform;
         }
 
         .status-section {
-          background: rgba(255, 255, 255, 0.3);
+          background: rgba(255, 255, 255, 0.2);
           padding: 50px 40px;
           display: flex;
           flex-direction: column;
@@ -145,7 +147,7 @@ export default function ResultPage() {
           justify-content: center;
           text-align: center;
           position: relative;
-          border-right: 1px dashed rgba(174, 0, 112, 0.15);
+          border-right: 1px dashed rgba(174, 0, 112, 0.12);
         }
 
         .brand-header {
@@ -200,7 +202,7 @@ export default function ResultPage() {
         .details-heading { font-size: 17px; font-weight: 800; color: var(--text); margin-bottom: 20px; letter-spacing: -0.3px; }
 
         .info-card {
-          background: rgba(255, 255, 255, 0.5);
+          background: rgba(255, 255, 255, 0.6);
           border: 1px solid rgba(174, 0, 112, 0.08);
           border-radius: 16px;
           overflow: hidden;
