@@ -68,7 +68,7 @@ export default function Home() {
           height: 100%;
           width: 100%;
           font-family: 'Be Vietnam Pro', sans-serif;
-          background: #f7f3f5;
+          background: #f3e9ed;
           overflow: hidden;
         }
 
@@ -85,71 +85,75 @@ export default function Home() {
           overflow: hidden;
         }
 
-        /* NỀN MESH GRADIENT NGHỆ THUẬT CAO CẤP */
+        /* NỀN MESH GRADIENT ĐẬM RÕ - CHẠY NHANH - KHÔNG ĐƠ */
         .orb {
           position: absolute;
           border-radius: 50%;
-          filter: blur(80px);
-          opacity: 0.55;
+          filter: blur(55px); /* Giảm blur để màu sắc khối cầu tụ lại sắc nét và đậm hơn */
+          opacity: 0.65; /* Tăng độ đậm */
           z-index: 0;
-          mix-blend-mode: multiply;
+          pointer-events: none;
+          transform: translate3d(0,0,0); /* Kích hoạt tăng tốc phần cứng bằng GPU */
         }
+        
+        /* Đẩy tốc độ thời gian chạy nhanh mạnh mẽ (5s - 7s) */
         .orb-1 {
-          top: -10%; left: -10%; width: 50vw; height: 50vw;
-          background: #ffb7d2;
-          animation: orbMove1 20s infinite alternate ease-in-out;
+          top: -5%; left: -5%; width: 50vw; height: 50vw;
+          background: #ff9cb7;
+          animation: orbMove1 5s infinite alternate ease-in-out;
         }
         .orb-2 {
-          bottom: -10%; right: -5%; width: 60vw; height: 60vw;
-          background: #cbd5e1;
-          animation: orbMove2 25s infinite alternate ease-in-out;
+          bottom: -5%; right: -5%; width: 60vw; height: 60vw;
+          background: #b0bec5;
+          animation: orbMove2 7s infinite alternate ease-in-out;
         }
         .orb-3 {
-          top: 30%; right: -10%; width: 45vw; height: 45vw;
-          background: #e1bee7;
-          animation: orbMove3 18s infinite alternate ease-in-out;
+          top: 25%; right: -5%; width: 45vw; height: 45vw;
+          background: #dfb2ea;
+          animation: orbMove3 6s infinite alternate ease-in-out;
         }
         .orb-4 {
-          bottom: -5%; left: 10%; width: 40vw; height: 40vw;
-          background: #b2dfdb;
-          animation: orbMove1 22s infinite alternate ease-in-out;
+          bottom: -5%; left: 5%; width: 40vw; height: 40vw;
+          background: #80cbc4;
+          animation: orbMove1 6.5s infinite alternate ease-in-out;
         }
 
         @keyframes orbMove1 {
-          0% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(8vw, 5vh) scale(1.1); }
-          100% { transform: translate(-4vw, 10vh) scale(0.9); }
+          0% { transform: translate3d(0, 0, 0) scale(1); }
+          50% { transform: translate3d(8vw, 4vh, 0) scale(1.15); }
+          100% { transform: translate3d(-4vw, 7vh, 0) scale(0.9); }
         }
         @keyframes orbMove2 {
-          0% { transform: translate(0, 0) scale(1.1); }
-          50% { transform: translate(-10vw, -8vh) scale(0.95); }
-          100% { transform: translate(5vw, 4vh) scale(1.05); }
+          0% { transform: translate3d(0, 0, 0) scale(1.1); }
+          50% { transform: translate3d(-10vw, -6vh, 0) scale(0.9); }
+          100% { transform: translate3d(6vw, 4vh, 0) scale(1.1); }
         }
         @keyframes orbMove3 {
-          0% { transform: translate(0, 0) scale(0.9); }
-          50% { transform: translate(-5vw, 10vh) scale(1.15); }
-          100% { transform: translate(8vw, -5vh) scale(1); }
+          0% { transform: translate3d(0, 0, 0) scale(0.9); }
+          50% { transform: translate3d(-5vw, 7vh, 0) scale(1.2); }
+          100% { transform: translate3d(7vw, -4vh, 0) scale(1); }
         }
 
         .wrapper::before {
           content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3e%3cfilter id='noiseFilter'%3e%3ccolorMatrix type='matrix' values='0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.07 0'/%3e%3cturbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3e%3c/filter%3e%3crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3e%3c/svg%3e");
-          opacity: 0.8; z-index: 1; pointer-events: none;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3e%3cfilter id='noiseFilter'%3e%3ccolorMatrix type='matrix' values='0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.05 0'/%3e%3cturbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3e%3c/filter%3e%3crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3e%3c/svg%3e");
+          opacity: 0.5; z-index: 1; pointer-events: none;
         }
 
-        /* CARD */
+        /* CARD TÁCH BIỆT LAYER GIÚP RENDER SIÊU MƯỢT */
         .card {
           position: relative;
           z-index: 2;
           width: 100%;
           max-width: 440px;
           background: var(--surface);
-          backdrop-filter: blur(30px);
-          -webkit-backdrop-filter: blur(30px);
+          backdrop-filter: blur(25px);
+          -webkit-backdrop-filter: blur(25px);
           border-radius: 24px;
           border: 1px solid rgba(255, 255, 255, 0.7);
           padding: 36px 32px;
-          box-shadow: 0 30px 60px rgba(174, 0, 112, 0.04), 0 1px 2px rgba(0, 0, 0, 0.01);
+          box-shadow: 0 25px 50px rgba(174, 0, 112, 0.04), 0 1px 2px rgba(0, 0, 0, 0.01);
+          will-change: transform; /* Ép phần cứng tăng tốc độ phản hồi các thao tác bấm */
         }
 
         .logo {
@@ -319,14 +323,15 @@ export default function Home() {
         }
         @keyframes rot { to { transform: rotate(360deg) } }
 
-        /* TÁI CẤU TRÚC FOOTER BẢO MẬT: TINH TẾ - KHÔNG Ô - DÀN HÀNG NGANG */
+        /* FOOTER BẢO MẬT */
         .security-footer {
           position: relative;
           z-index: 2;
           margin-top: 32px;
           width: 100%;
-          max-width: 680px; /* Tăng chiều rộng để dàn hàng ngang đẹp hơn */
+          max-width: 680px; 
           text-align: center;
+          will-change: transform;
         }
         
         .security-divider {
@@ -359,7 +364,7 @@ export default function Home() {
           display: flex;
           align-items: center;
           gap: 6px;
-          background: transparent; /* Xóa bỏ khung ô trắng vô duyên */
+          background: transparent; 
           border: none;
           padding: 0;
           box-shadow: none;
@@ -368,7 +373,7 @@ export default function Home() {
         .sec-icon-svg {
           width: 16px;
           height: 16px;
-          fill: var(--mm); /* Màu biểu tượng đồng bộ tone MoMo gốc */
+          fill: var(--mm); 
           opacity: 0.85;
           flex-shrink: 0;
         }
@@ -392,13 +397,11 @@ export default function Home() {
           .amt-input { font-size: 34px; }
           .badges-container { 
             display: grid;
-            grid-template-columns: 1fr 1fr; /* Về di động tự động chia thành lưới 2x2 gọn gàng */
+            grid-template-columns: 1fr 1fr; 
             gap: 14px 16px;
             padding: 0 12px;
           }
-          .sec-badge {
-            justify-content: flex-start;
-          }
+          .sec-badge { justify-content: flex-start; }
         }
       `}</style>
 
@@ -459,7 +462,6 @@ export default function Home() {
           </button>
         </div>
 
-        {/* HỆ THỐNG HIỂN THỊ MỚI: THEO HÀNG NGANG, DÙNG ICON SVG CAO CẤP */}
         <div className="security-footer">
           <div className="security-divider">Bảo mật cổng thanh toán</div>
           <div className="badges-container">
