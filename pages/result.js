@@ -47,11 +47,11 @@ export default function ResultPage() {
   const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
 
   const META = {
-    loading: { spin: true,  title: 'Đang xác nhận…',          sub: 'Vui lòng không đóng trang',              accent: '#ae0070', bg: '#ae0070' },
-    success: { icon: '✓',   title: 'Thanh toán thành công!',   sub: 'Giao dịch đã được MoMo xác nhận',        accent: '#16a34a', bg: '#16a34a' },
-    failed:  { icon: '✕',   title: 'Giao dịch thất bại',       sub: null,                                      accent: '#dc2626', bg: '#dc2626' },
-    pending: { icon: '⏳',  title: 'Đang chờ xác nhận',        sub: 'MoMo chưa phản hồi, kiểm tra lại sau',   accent: '#d97706', bg: '#d97706' },
-    error:   { icon: '!',   title: 'Không tìm thấy đơn hàng',  sub: 'Link không hợp lệ hoặc đã hết hạn',      accent: '#dc2626', bg: '#dc2626' },
+    loading: { spin: true,  title: 'Đang xác nhận…',          sub: 'Vui lòng không đóng trang',              accent: '#ae0070', bg: '#fdf5f9' },
+    success: { icon: '✓',   title: 'Thanh toán thành công!',   sub: 'Giao dịch đã được MoMo xác nhận',        accent: '#16a34a', bg: '#e8f5e9' },
+    failed:  { icon: '✕',   title: 'Giao dịch thất bại',       sub: null,                                      accent: '#dc2626', bg: '#ffebee' },
+    pending: { icon: '⏳',  title: 'Đang chờ xác nhận',        sub: 'MoMo chưa phản hồi, kiểm tra lại sau',   accent: '#d97706', bg: '#fff3e0' },
+    error:   { icon: '!',   title: 'Không tìm thấy đơn hàng',  sub: 'Link không hợp lệ hoặc đã hết hạn',      accent: '#dc2626', bg: '#ffebee' },
   }
   const m = META[status] || META.loading
 
@@ -59,7 +59,7 @@ export default function ResultPage() {
     <>
       <Head>
         <title>Kết quả giao dịch · MoMo</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <link rel="icon" type="image/png" href="/Main.png" /> 
         <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
       </Head>
@@ -69,267 +69,337 @@ export default function ResultPage() {
 
         :root {
           --mm: #ae0070;
-          --mm-border: #e8c4d8;
-          --text: #180a12;
-          --muted: #7a4060;
+          --mm-border: #f0d5e3;
+          --text: #1e0f18;
+          --muted: #6e5261;
           --surface: #ffffff;
-          --surface2: #fdf5f9;
-          --bg: #f7f0f4;
+          --bg: #f8f9fa;
         }
 
-        html, body { height: 100%; }
-
-        body {
-          font-family: 'Be Vietnam Pro', sans-serif;
+        html, body {
+          height: 100%;
+          width: 100%;
           background: var(--bg);
-          min-height: 100vh;
+          font-family: 'Be Vietnam Pro', sans-serif;
+          overflow-x: hidden;
         }
 
-        /* Full-screen two-column: left = status panel, right = detail */
-        .layout {
-          display: grid;
-          grid-template-columns: 1fr 420px;
-          min-height: 100vh;
-        }
-
-        /* LEFT status panel */
-        .status-panel {
+        /* AUTOFIX TRUNG TÂM: Cố định tuyệt đối ở giữa màn hình bất kể zoom hay độ phân giải */
+        .wrapper {
           display: flex;
-          flex-direction: column;
-          justify-content: center;
           align-items: center;
-          padding: 48px 56px;
-          position: relative;
-          overflow: hidden;
-          transition: background .4s;
+          justify-content: center;
+          min-height: 100vh;
+          width: 100vw;
+          padding: 20px;
+          background: radial-gradient(circle at 50% 50%, #ffffff 0%, #f1f3f5 100%);
         }
 
-        .status-panel .sp-bg {
-          position: absolute; inset: 0;
-          transition: background .4s;
-        }
-
-        .status-inner {
-          position: relative; z-index: 1;
-          text-align: center; max-width: 360px;
-        }
-
-        /* icon ring */
-        .icon-ring {
-          width: 96px; height: 96px; border-radius: 50%;
-          margin: 0 auto 24px;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 38px; font-weight: 900;
-          background: rgba(255,255,255,.15);
-          border: 2px solid rgba(255,255,255,.25);
-          animation: popIn .4s cubic-bezier(.34,1.56,.64,1) both;
-          color: #fff;
-        }
-        @keyframes popIn { from { transform: scale(0); opacity: 0 } to { transform: scale(1); opacity: 1 } }
-
-        .spin-ring {
-          width: 96px; height: 96px; border-radius: 50%;
-          margin: 0 auto 24px;
-          border: 4px solid rgba(255,255,255,.2);
-          border-top-color: rgba(255,255,255,.85);
-          animation: rot .7s linear infinite;
-        }
-        @keyframes rot { to { transform: rotate(360deg) } }
-
-        .s-title {
-          font-size: 34px; font-weight: 900; color: #fff;
-          line-height: 1.2; margin-bottom: 10px;
-        }
-        .s-sub {
-          font-size: 14px; color: rgba(255,255,255,.7);
-          line-height: 1.65;
-        }
-
-        /* MoMo brand badge at top */
-        .brand-badge {
-          position: absolute; top: 28px; left: 32px;
-          display: flex; align-items: center; gap: 10px;
-          z-index: 1;
-        }
-        .bb-mark {
-          width: 36px; height: 36px; border-radius: 10px;
-          background: rgba(255,255,255,.15);
-          border: 1px solid rgba(255,255,255,.2);
-          display: flex; align-items: center; justify-content: center;
-        }
-        .bb-name { font-size: 13px; font-weight: 800; color: #fff; }
-        .bb-sub  { font-size: 10px; color: rgba(255,255,255,.55); margin-top: 1px; }
-
-        /* RIGHT detail panel */
-        .detail-panel {
+        /* CARD GIAO DIỆN SÁNG CAO CẤP */
+        .container-card {
           background: var(--surface);
-          border-left: 1px solid var(--mm-border);
+          width: 100%;
+          max-width: 900px;
+          border-radius: 24px;
+          box-shadow: 0 15px 40px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.02);
+          border: 1px solid rgba(0, 0, 0, 0.04);
+          display: grid;
+          grid-template-columns: 1.1fr 0.9fr;
+          overflow: hidden;
+          transition: all 0.3s ease;
+        }
+
+        /* PHẦN TRÁI: TRẠNG THÁI (Màu sáng sạch sẽ) */
+        .status-section {
+          background: #ffffff;
+          padding: 50px 40px;
           display: flex;
           flex-direction: column;
+          align-items: center;
           justify-content: center;
-          padding: 48px 40px;
+          text-align: center;
+          position: relative;
+          border-right: 1px dashed #e9ecef;
         }
 
-        .detail-title {
-          font-size: 16px; font-weight: 900; color: var(--text);
-          margin-bottom: 20px;
+        /* Logo góc trên hoặc tiêu đề thương hiệu */
+        .brand-header {
+          position: absolute;
+          top: 24px;
+          left: 32px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .brand-logo {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          object-fit: contain;
+        }
+        .brand-title {
+          font-size: 14px;
+          font-weight: 800;
+          color: var(--text);
+          letter-spacing: -0.2px;
         }
 
-        /* Info rows */
-        .info-box {
-          background: var(--surface2);
-          border: 1.5px solid var(--mm-border);
-          border-radius: 12px;
-          overflow: hidden;
+        /* Vòng tròn Icon TO, RÕ */
+        .icon-wrapper {
+          width: 110px;
+          height: 110px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 46px;
+          font-weight: 900;
+          margin-bottom: 24px;
+          margin-top: 20px;
+          box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+          animation: scaleUp 0.4s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes scaleUp { from { transform: scale(0.7); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+
+        .loading-spinner {
+          width: 80px;
+          height: 80px;
+          border-radius: 50%;
+          border: 5px solid #e9ecef;
+          border-top-color: var(--mm);
+          animation: spin 0.8s linear infinite;
           margin-bottom: 24px;
         }
-        .info-row {
-          display: flex; justify-content: space-between; align-items: center;
-          padding: 13px 18px; font-size: 13px;
-          border-bottom: 1px solid var(--mm-border);
-        }
-        .info-row:last-child { border-bottom: none; }
-        .info-k { color: var(--muted); font-weight: 500; }
-        .info-v { font-weight: 700; color: var(--text); max-width: 55%; text-align: right; word-break: break-all; font-size: 13px; }
-        .info-v.big { font-size: 22px; color: var(--mm); }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Back button */
-        .btn {
-          display: flex; align-items: center; justify-content: center; gap: 8px;
-          width: 100%; padding: 15px;
-          border-radius: 12px; border: none;
-          background: linear-gradient(135deg, #ae0070, #c4007e);
-          color: #fff;
-          font-family: 'Be Vietnam Pro', sans-serif;
-          font-size: 15px; font-weight: 800;
-          text-decoration: none; cursor: pointer;
-          box-shadow: 0 6px 20px rgba(174,0,112,.32);
-          transition: opacity .14s, transform .14s;
+        /* Chữ TO RÕ */
+        .status-title {
+          font-size: 28px;
+          font-weight: 800;
+          line-height: 1.3;
+          margin-bottom: 12px;
+          word-break: break-word;
         }
-        .btn:hover { opacity: .9; transform: translateY(-1px); }
-        .btn:active { transform: scale(.99); }
-
-        .detail-empty {
-          text-align: center; padding: 32px 0;
+        .status-subtitle {
+          font-size: 15px;
+          color: var(--muted);
+          line-height: 1.5;
+          max-width: 320px;
         }
-        .detail-empty p { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
 
-        /* Mobile: stack */
-        @media (max-width: 780px) {
-          .layout { grid-template-columns: 1fr; min-height: unset; }
-          .status-panel {
-            min-height: 44vh;
-            padding: 40px 28px 44px;
+        /* PHẦN PHẢI: CHI TIẾT ĐƠN HÀNG */
+        .details-section {
+          background: #fafbfa;
+          padding: 50px 40px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+
+        .details-heading {
+          font-size: 18px;
+          font-weight: 800;
+          color: var(--text);
+          margin-bottom: 24px;
+          letter-spacing: -0.3px;
+        }
+
+        /* Khối hiển thị thông tin bảng đơn hàng */
+        .info-card {
+          background: #ffffff;
+          border: 1px solid #eedbe5;
+          border-radius: 16px;
+          overflow: hidden;
+          margin-bottom: 28px;
+          box-shadow: 0 4px 12px rgba(174, 0, 112, 0.02);
+        }
+
+        .info-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px 20px;
+          font-size: 14px;
+          border-bottom: 1px solid #f8f2f5;
+        }
+        .info-item:last-child { border-bottom: none; }
+        
+        .info-label {
+          color: var(--muted);
+          font-weight: 500;
+        }
+        .info-value {
+          font-weight: 700;
+          color: var(--text);
+          text-align: right;
+          max-width: 60%;
+          word-break: break-all;
+        }
+        /* Số tiền nổi bật hơn hẳn */
+        .info-value.amount-highlight {
+          font-size: 24px;
+          font-weight: 900;
+          color: var(--mm);
+        }
+
+        /* Nút quay lại lớn và dễ bấm */
+        .action-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          padding: 16px;
+          border-radius: 14px;
+          background: var(--mm);
+          color: #ffffff;
+          font-size: 16px;
+          font-weight: 700;
+          text-decoration: none;
+          text-align: center;
+          box-shadow: 0 8px 24px rgba(174, 0, 112, 0.2);
+          transition: all 0.2s ease;
+          border: none;
+          cursor: pointer;
+        }
+        .action-button:hover {
+          background: #91005d;
+          transform: translateY(-2px);
+          box-shadow: 0 12px 28px rgba(174, 0, 112, 0.3);
+        }
+        .action-button:active { transform: translateY(0); }
+
+        .state-empty-text {
+          font-size: 14px;
+          color: var(--muted);
+          text-align: center;
+          padding: 20px 0;
+        }
+
+        /* RESPONSIVE: CHUYỂN THÀNH 1 CỘT TRÊN ĐIỆN THOẠI */
+        @media (max-width: 768px) {
+          .wrapper {
+            padding: 12px;
           }
-          .brand-badge { top: 20px; left: 20px; }
-          .detail-panel {
-            border-left: none;
-            border-top: 1px solid var(--mm-border);
-            padding: 32px 24px;
-            justify-content: flex-start;
+          .container-card {
+            grid-template-columns: 1fr;
+            max-width: 480px;
+            border-radius: 20px;
+          }
+          .status-section {
+            border-right: none;
+            border-bottom: 1px dashed #e9ecef;
+            padding: 45px 24px 35px 24px;
+          }
+          .brand-header {
+            top: 16px;
+            left: 20px;
+          }
+          .icon-wrapper {
+            width: 90px;
+            height: 90px;
+            font-size: 38px;
+            margin-bottom: 16px;
+          }
+          .status-title {
+            font-size: 24px;
+          }
+          .details-section {
+            padding: 35px 24px;
           }
         }
       `}</style>
 
-      <div className="layout">
-        {/* Left: status */}
-        <div className="status-panel" style={{ background: `linear-gradient(160deg, ${m.bg}dd 0%, ${m.bg}aa 100%)` }}>
-          {/* fallback: behind gradient the status color */}
-          <div className="sp-bg" style={{ background: m.spin
-            ? 'linear-gradient(160deg, #ae0070 0%, #7a0052 100%)'
-            : `linear-gradient(160deg, ${m.bg} 0%, ${m.bg}bb 100%)` }} />
-
-          {/* Brand */}
-          <div className="brand-badge">
-            <div className="bb-mark">
-              <svg viewBox="0 0 30 30" fill="none" width="22" height="22">
-                <circle cx="9.5" cy="15" r="6" fill="white" />
-                <circle cx="20.5" cy="15" r="6" fill="white" />
-                <circle cx="9.5" cy="15" r="3" fill="#ae0070" />
-                <circle cx="20.5" cy="15" r="3" fill="#ae0070" />
-              </svg>
+      <div className="wrapper">
+        <div className="container-card">
+          
+          {/* CỘT TRÁI: TRẠNG THÁI TRỰC QUAN */}
+          <div className="status-section">
+            <div className="brand-header">
+              <img src="/Main.png" alt="Logo" className="brand-logo" />
+              <span className="brand-title">Green Coffee</span>
             </div>
-            <div>
-              <div className="bb-name">MoMo</div>
-              <div className="bb-sub">Kết quả giao dịch</div>
-            </div>
-          </div>
 
-          <div className="status-inner">
-            {m.spin
-              ? <div className="spin-ring" />
-              : <div className="icon-ring">{m.icon}</div>
-            }
-            <div className="s-title">{m.title}</div>
-            <div className="s-sub">
+            {m.spin ? (
+              <div className="loading-spinner" />
+            ) : (
+              <div className="icon-wrapper" style={{ backgroundColor: m.bg, color: m.accent }}>
+                {m.icon}
+              </div>
+            )}
+
+            <h1 className="status-title" style={{ color: m.spin ? 'var(--text)' : m.accent }}>
+              {m.title}
+            </h1>
+            <p className="status-subtitle">
               {m.sub || (status === 'failed' ? info?.message || 'Giao dịch không thành công' : '')}
-            </div>
+            </p>
           </div>
-        </div>
 
-        {/* Right: details */}
-        <div className="detail-panel">
-          {(status === 'success' || status === 'failed') && (
-            <div className="detail-title">Chi tiết giao dịch</div>
-          )}
+          {/* CỘT PHẢI: CHI TIẾT GIAO DỊCH */}
+          <div className="details-section">
+            {(status === 'success' || status === 'failed') && (
+              <h2 className="details-heading">Thông tin đơn hàng</h2>
+            )}
 
-          {status === 'success' && info && (
-            <div className="info-box">
-              {info.amount > 0 && (
-                <div className="info-row">
-                  <span className="info-k">Số tiền</span>
-                  <span className="info-v big">{fmt(info.amount)} ₫</span>
+            {status === 'success' && info && (
+              <div className="info-card">
+                {info.amount > 0 && (
+                  <div className="info-item">
+                    <span className="info-label">Số tiền</span>
+                    <span className="info-value amount-highlight">{fmt(info.amount)} ₫</span>
+                  </div>
+                )}
+                <div className="info-item">
+                  <span className="info-label">Mã đơn hàng</span>
+                  <span className="info-value">{info.orderId}</span>
                 </div>
-              )}
-              <div className="info-row">
-                <span className="info-k">Mã đơn hàng</span>
-                <span className="info-v">{info.orderId}</span>
+                {info.transId && (
+                  <div className="info-item">
+                    <span className="info-label">Mã GD MoMo</span>
+                    <span className="info-value">{info.transId}</span>
+                  </div>
+                )}
+                {info.payType && (
+                  <div className="info-item">
+                    <span className="info-label">Hình thức</span>
+                    <span className="info-value">{info.payType}</span>
+                  </div>
+                )}
               </div>
-              {info.transId && (
-                <div className="info-row">
-                  <span className="info-k">Mã GD MoMo</span>
-                  <span className="info-v">{info.transId}</span>
-                </div>
-              )}
-              {info.payType && (
-                <div className="info-row">
-                  <span className="info-k">Hình thức</span>
-                  <span className="info-v">{info.payType}</span>
-                </div>
-              )}
-            </div>
-          )}
+            )}
 
-          {status === 'failed' && info?.resultCode && (
-            <div className="info-box">
-              <div className="info-row">
-                <span className="info-k">Mã lỗi</span>
-                <span className="info-v">{info.resultCode}</span>
+            {status === 'failed' && info?.resultCode && (
+              <div className="info-card">
+                <div className="info-item">
+                  <span className="info-label">Mã lỗi hệ thống</span>
+                  <span className="info-value" style={{ color: 'var(--danger)' }}>{info.resultCode}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Đơn hàng số</span>
+                  <span className="info-value">{info.orderId}</span>
+                </div>
+                {info.message && (
+                  <div className="info-item">
+                    <span className="info-label">Nguyên nhân</span>
+                    <span className="info-value">{info.message}</span>
+                  </div>
+                )}
               </div>
-              <div className="info-row">
-                <span className="info-k">Đơn hàng</span>
-                <span className="info-v">{info.orderId}</span>
+            )}
+
+            {status === 'loading' && (
+              <div className="state-empty-text">
+                <p>Đang đồng bộ dữ liệu kết quả từ MoMo...</p>
               </div>
-              {info.message && (
-                <div className="info-row">
-                  <span className="info-k">Lý do</span>
-                  <span className="info-v">{info.message}</span>
-                </div>
-              )}
-            </div>
-          )}
+            )}
 
-          {status === 'loading' && (
-            <div className="detail-empty">
-              <p>Đang tải thông tin giao dịch…</p>
-            </div>
-          )}
+            {status !== 'loading' && (
+              <Link href="/" className="action-button">
+                {status === 'failed' ? 'Thử thanh toán lại' : 'Quay lại trang chủ'}
+              </Link>
+            )}
+          </div>
 
-          {status !== 'loading' && (
-            <Link href="/" className="btn">
-              ← {status === 'failed' ? 'Thử thanh toán lại' : 'Về trang thanh toán'}
-            </Link>
-          )}
         </div>
       </div>
     </>
