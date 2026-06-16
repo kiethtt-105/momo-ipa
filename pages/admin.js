@@ -280,4 +280,92 @@ const CSS = `
   .title { font-size: 28px; font-weight: 900; }
   .input-group input { width: 100%; padding: 16px; border: 2px solid #ddd; border-radius: 12px; font-size: 16px; margin: 20px 0; }
   .login-btn { width: 100%; padding: 16px; background: var(--mm); color: white; border: none; border-radius: 12px; font-size: 17px; font-weight: 700; }
+  .fixed-header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  background: white;
+  border-bottom: 1px solid #e8c4d8;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(165,0,100,0.08);
+}
+
+.header-content {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.logo {
+  font-size: 26px;
+  font-weight: 900;
+  color: #a50064;
+  white-space: nowrap;
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  background: white;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-btn.active {
+  background: #a50064;
+  color: white;
+  border-color: #a50064;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search-box input {
+  padding: 10px 18px;
+  border: 2px solid #e0d4db;
+  border-radius: 12px;
+  width: 320px;
+  font-size: 15px;
+  outline: none;
+}
+
+.search-box input:focus {
+  border-color: #a50064;
+}
+
+.refresh-btn {
+  padding: 10px 20px;
+  background: white;
+  border: 2px solid #ddd;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.logout-btn {
+  padding: 10px 20px;
+  background: #fee2e2;
+  color: #ef4444;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
 `
