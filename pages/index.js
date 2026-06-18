@@ -12,7 +12,8 @@ const fmtDisplay = n => n ? parseInt(n).toLocaleString('vi-VN') : ''
 export default function Home() {
   const [rawAmount, setRawAmount] = useState('') // số thô, không format
   const [loading,   setLoading]   = useState(false)
-  const [redirecting, setRedirecting] = useState(false) // ẩn form khi đang redirect
+  const [redirecting, setRedirecting] = useState(false)
+  const [autoLoading, setAutoLoading] = useState(false) // ẩn form khi auto-pay từ URL
   const [error,     setError]     = useState('')
   const inputRef  = useRef(null)
   const autoPayRef = useRef(null) // lưu amount từ URL để auto-pay
@@ -43,6 +44,7 @@ export default function Home() {
     const amt = parseInt(params.get('amount'))
     if (amt >= MIN_AMOUNT && amt <= MAX_AMOUNT) {
       autoPayRef.current = amt
+      setAutoLoading(true) // ẩn form ngay lập tức
       setRawAmount(String(amt))
     }
   }, [])
@@ -99,7 +101,7 @@ export default function Home() {
   }
 
   // ── Màn chờ redirect ─────────────────────────────────────────
-  if (redirecting) {
+  if (redirecting || autoLoading) {
     return (
       <>
         <Head>
