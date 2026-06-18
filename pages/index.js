@@ -14,7 +14,8 @@ export default function Home() {
   const [loading,   setLoading]   = useState(false)
   const [redirecting, setRedirecting] = useState(false) // ẩn form khi đang redirect
   const [error,     setError]     = useState('')
-  const inputRef = useRef(null)
+  const inputRef  = useRef(null)
+  const autoPayRef = useRef(null) // lưu amount từ URL để auto-pay
 
   const numVal = parseInt(rawAmount) || 0
   const display = fmtDisplay(rawAmount)
@@ -35,6 +36,24 @@ export default function Home() {
     if (digits.length > 8) return
     setRawAmount(digits)
   }
+
+  // ── Đọc ?amount= từ URL (iPhone Shortcut) ────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const amt = parseInt(params.get('amount'))
+    if (amt >= MIN_AMOUNT && amt <= MAX_AMOUNT) {
+      autoPayRef.current = amt
+      setRawAmount(String(amt))
+    }
+  }, [])
+
+  // ── Auto-pay khi rawAmount đã set từ URL param ────────────────
+  useEffect(() => {
+    if (autoPayRef.current && rawAmount === String(autoPayRef.current)) {
+      autoPayRef.current = null // chỉ chạy 1 lần
+      handlePay()
+    }
+  }, [rawAmount])
 
   // ── Giữ cursor cuối sau khi format ───────────────────────────
   const handleKeyDown = e => {
