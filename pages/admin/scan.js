@@ -288,12 +288,7 @@ export default function ScanPage() {
                 type="number" placeholder="Nhập số tiền..."
                 value={amount} onChange={e => setAmount(e.target.value)}
                 style={S.input} min={1000} max={5000000} autoFocus
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    const orderInput = document.querySelector('input[placeholder*="mã đơn hàng"]');
-                    if (orderInput) orderInput.focus();
-                  }
-                }}
+                
               />
 
               <div style={{ paddingTop:12, borderTop:'1px solid #f3f4f6', marginBottom:14 }}>
