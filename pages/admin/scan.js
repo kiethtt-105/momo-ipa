@@ -322,41 +322,7 @@ export default function ScanPage() {
               )}
 
               <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:32 }}>
-                {!isSuccess && (
-                  <button 
-                    onClick={async () => {
-                      setResult(null);
-                      setManualCode('');
-                      setManualErr('');
-                      setIsServerErr(false);
-                      
-                      // Tự động sinh mã đơn hàng mới để chống trùng đơn khi thử lại
-                      const newGeneratedId = `POS${Date.now()}`;
-                      setCurrentOrderId(newGeneratedId);
-                      
-                      submitting.current = true;
-                      try {
-                        // Lưu lại log PENDING mới lên Redis
-                        await fetch('/api/momo/save-pending', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ 
-                            orderId: newGeneratedId, 
-                            amount: parseInt(amount), 
-                            orderInfo: orderInfo || newGeneratedId
-                          }),
-                        });
-                      } catch (e) {
-                        console.error(e);
-                      } finally {
-                        submitting.current = false;
-                      }
-                    }}
-                    style={{ ...S.btnPrimary, background: '#f59e0b' }}
-                  >
-                    🔄 Thử thanh toán lại
-                  </button>
-                )}
+
 
                 <button onClick={resetAll} style={S.btnPrimary}>
                   {isSuccess ? 'Giao Dịch Mới' : 'Nhập số tiền mới'}
