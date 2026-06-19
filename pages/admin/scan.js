@@ -397,46 +397,93 @@ useEffect(() => {
 
               {/* === TÓM TẮT ĐƠN HÀNG ĐẦY ĐỦ === */}
               {(amount || orderInfo) && (
-                <div style={{
-                  background: '#f0f9ff',
-                  border: '2px solid #bae6fd',
-                  borderRadius: 12,
-                  padding: '16px 18px',
-                  marginBottom: 24,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-                }}>
-                  <p style={{ fontSize: 13, color: '#0369a1', fontWeight: 700, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <div
+                  style={{
+                    background: '#f0f9ff',
+                    border: '2px solid #bae6fd',
+                    borderRadius: 12,
+                    padding: '16px 18px',
+                    marginBottom: 24,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: 13,
+                      color: '#0369a1',
+                      fontWeight: 700,
+                      marginBottom: 12,
+                      textTransform: 'uppercase',
+                    }}
+                  >
                     THÔNG TIN ĐƠN HÀNG
                   </p>
-                  
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span style={{ color: '#475569', fontWeight: 500 }}>Số tiền thanh toán:</span>
-                    <span style={{ fontSize: 22, fontWeight: 800, color: '#ae0070' }}>
-                      {fmt(amount)} ₫
+
+                  <div style={{ marginBottom: 10 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <span>Số tiền thanh toán:</span>
+                      <span
+                        style={{
+                          fontSize: 22,
+                          fontWeight: 800,
+                          color: '#ae0070',
+                        }}
+                      >
+                        {fmt(amount)} ₫
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      borderTop: '1px dashed #cbd5e1',
+                      margin: '10px 0',
+                    }}
+                  />
+
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Nội dung:</strong>
+                    <div>{orderInfo || 'Không có'}</div>
+                  </div>
+
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Mã đơn hàng:</strong>
+                    <div>{currentOrderId || 'Chưa tạo'}</div>
+                  </div>
+
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Ngày tạo:</strong>
+                    <div>{new Date().toLocaleString('vi-VN')}</div>
+                  </div>
+
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Trạng thái:</strong>
+                    <span
+                      style={{
+                        color: '#f59e0b',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Chờ thanh toán
                     </span>
                   </div>
 
-                  {orderInfo && (
-                    <div>
-                      <span style={{ color: '#475569', fontWeight: 500, fontSize: 13 }}>Nội dung:</span>
-                      <p style={{ 
-                        margin: '6px 0 0 0', 
-                        fontSize: 15.5, 
-                        lineHeight: 1.5,
-                        color: '#1e2937',
-                        fontWeight: 500 
-                      }}>
-                        {orderInfo}
-                      </p>
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Mã thanh toán:</strong>
+                    <div
+                      style={{
+                        fontFamily: 'monospace',
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      {manualCode || 'Chưa quét'}
                     </div>
-                  )}
-
-                  {/* Có thể thêm thông tin khác sau này như Mã đơn */}
-                  {/* {currentOrderId && (
-                    <div style={{ marginTop: 8, fontSize: 13, color: '#64748b' }}>
-                      Mã đơn: <span style={{ fontFamily: 'monospace' }}>{currentOrderId}</span>
-                    </div>
-                  )} */}
+                  </div>
                 </div>
               )}
               {/* Input mã thủ công */}
