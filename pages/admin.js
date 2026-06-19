@@ -7,10 +7,10 @@ const REFRESH_INTERVAL = 1000
 const EXPIRE_MINUTES   = 10
 
 const STATUS_META = {
-  PAID:    { label: 'Thành công', color: '#16a34a', bg: '#dcfce7', dot: '#22c55e' },
-  FAILED:  { label: 'Thất bại',   color: '#dc2626', bg: '#fee2e2', dot: '#ef4444' },
-  PENDING: { label: 'Chờ xử lý',  color: '#d97706', bg: '#fef3c7', dot: '#f59e0b' },
-  EXPIRED: { label: 'Hết hạn',    color: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af' },
+  PAID:    { label: 'Thành công', text: 'text-emerald-300', ring: 'ring-emerald-400/30', bg: 'bg-emerald-400/15', dot: 'bg-emerald-400' },
+  FAILED:  { label: 'Thất bại',   text: 'text-rose-300',    ring: 'ring-rose-400/30',    bg: 'bg-rose-400/15',    dot: 'bg-rose-400' },
+  PENDING: { label: 'Chờ xử lý',  text: 'text-amber-300',   ring: 'ring-amber-400/30',   bg: 'bg-amber-400/15',   dot: 'bg-amber-400' },
+  EXPIRED: { label: 'Hết hạn',    text: 'text-slate-300',   ring: 'ring-slate-400/30',   bg: 'bg-slate-400/15',   dot: 'bg-slate-400' },
 }
 
 // ─── UTILS ───────────────────────────────────────────────────
@@ -192,12 +192,12 @@ export default function AdminPage() {
   }
 
   const openConfirmForOrder = (orderId, amount) => {
-  setConfirmOrderId(orderId)
-  setConfirmAmount(amount)
-  setConfirmResult(null)
-  setConfirmError(null)
-  setConfirmModal(true)
-}
+    setConfirmOrderId(orderId)
+    setConfirmAmount(amount)
+    setConfirmResult(null)
+    setConfirmError(null)
+    setConfirmModal(true)
+  }
 
   const doMomoConfirm = async (requestType) => {
     setConfirmLoading(true)
@@ -290,10 +290,11 @@ export default function AdminPage() {
 
   // ── ĐANG KIỂM TRA SESSION ─────────────────────────────────
   if (checkingSession) return (
-    <div className="bg-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <Orbs /><style>{CSS}</style>
-      <div className="sync-dot syncing" style={{ position: 'relative', zIndex: 10 }} />
-    </div>
+    <PageShell>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-3 w-3 animate-ping rounded-full bg-fuchsia-400" />
+      </div>
+    </PageShell>
   )
 
   // ── LOGIN SCREEN ──────────────────────────────────────────
@@ -304,28 +305,35 @@ export default function AdminPage() {
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
-      <div className="bg-wrap">
-        <Orbs /><style>{CSS}</style>
-        <div className="login-wrap">
-          <div className="login-card">
-            <div className="login-logo-box">
-              <img src="/Main.png" alt="Logo" className="login-logo" />
+      <PageShell>
+        <div className="relative z-10 flex min-h-screen items-center justify-center p-5">
+          <div className="w-full max-w-[400px] rounded-3xl border border-white/15 bg-white/[0.07] p-9 text-center shadow-[0_24px_70px_-20px_rgba(214,36,159,0.45)] backdrop-blur-2xl">
+            <div className="mx-auto mb-5 flex h-[60px] w-[60px] items-center justify-center rounded-2xl border border-white/15 bg-white/10 shadow-lg">
+              <img src="/Main.png" alt="Logo" className="h-11 w-11 object-contain" />
             </div>
-            <h1 className="login-title">Quản trị viên</h1>
-            <p className="login-sub">Hệ thống quản lý giao dịch MoMo</p>
-            <div className={`pw-group ${pwError ? 'error' : ''}`}>
+            <h1 className="font-display text-[22px] font-extrabold tracking-tight text-white">Quản trị viên</h1>
+            <p className="mb-7 mt-1.5 text-[13px] text-fuchsia-100/60">Hệ thống quản lý giao dịch MoMo</p>
+            <div>
               <input
                 type="password" placeholder="Mật khẩu quản trị"
                 value={password} autoFocus
                 onChange={e => { setPassword(e.target.value); setPwError(false) }}
                 onKeyDown={e => e.key === 'Enter' && login()}
+                className={`mb-3 w-full rounded-xl border bg-white/5 px-4 py-3.5 text-[15px] text-white placeholder:text-fuchsia-100/30 outline-none transition focus:bg-white/10 focus:ring-4 ${
+                  pwError ? 'border-rose-400/60 focus:ring-rose-400/15' : 'border-white/15 focus:border-fuchsia-400/50 focus:ring-fuchsia-400/15'
+                }`}
               />
             </div>
-            {pwError && <p className="pw-error">⚠ Mật khẩu không chính xác</p>}
-            <button className="login-btn" onClick={login}>Đăng nhập</button>
+            {pwError && <p className="mb-3.5 text-[13px] font-semibold text-rose-300">⚠ Mật khẩu không chính xác</p>}
+            <button
+              onClick={login}
+              className="w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-pink-600 py-3.5 text-[15px] font-bold text-white shadow-[0_8px_24px_-6px_rgba(214,36,159,0.6)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-6px_rgba(214,36,159,0.7)]"
+            >
+              Đăng nhập
+            </button>
           </div>
         </div>
-      </div>
+      </PageShell>
     </>
   )
 
@@ -360,9 +368,7 @@ export default function AdminPage() {
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
-      <div className="bg-wrap">
-        <Orbs /><style>{CSS}</style>
-
+      <PageShell>
         {/* ── DETAIL MODAL ── */}
         {detailOrder && (
           <DetailModal
@@ -370,11 +376,7 @@ export default function AdminPage() {
             onClose={() => setDetail(null)}
             onDelete={id => doDelete([id])}
             onQuery={id => { setDetail(null); openQueryForOrder(id) }}
-            order={detailOrder}
-            onClose={() => setDetail(null)}
-            onDelete={id => doDelete([id])}
-            onQuery={id => { setDetail(null); openQueryForOrder(id) }}
-            onConfirm={(id, amount) => { setDetail(null); openConfirmForOrder(id, amount) }}  
+            onConfirm={(id, amount) => { setDetail(null); openConfirmForOrder(id, amount) }}
           />
         )}
 
@@ -404,78 +406,90 @@ export default function AdminPage() {
           />
         )}
 
-
-        <div className="dashboard">
+        <div className="relative z-10 min-h-screen">
           {/* ── HEADER ── */}
-          <header className="topbar">
-            <div className="topbar-inner">
-              <div className="logo-area">
-                <img src="/Main.png" alt="" className="logo-img" />
-                <span className="logo-text">MoMo Admin</span>
+          <header className="sticky top-0 z-20 border-b border-white/10 bg-[#1a0b2e]/60 backdrop-blur-xl">
+            <div className="mx-auto flex h-[60px] max-w-[1400px] flex-wrap items-center gap-3 px-5">
+              <div className="flex items-center gap-2.5">
+                <img src="/Main.png" alt="" className="h-7 w-7 rounded-lg object-contain" />
+                <span className="font-display text-[15px] font-bold text-white">MoMo Admin</span>
                 <span
-                  className={`sync-dot ${fetching ? 'syncing' : 'idle'}`}
                   title={lastSync ? `Sync: ${fmtDate(lastSync)}` : 'Chưa sync'}
+                  className={`h-2 w-2 rounded-full ${fetching ? 'animate-pulse bg-amber-400' : 'bg-emerald-400'}`}
                 />
               </div>
 
-              <nav className="filter-tabs">
+              <nav className="order-3 flex w-full gap-1.5 overflow-x-auto pb-0.5 sm:order-none sm:w-auto">
                 {FILTERS.map(f => (
                   <button
                     key={f.key}
-                    className={`ftab ${filter === f.key ? 'active' : ''}`}
                     onClick={() => setFilter(f.key)}
+                    className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${
+                      filter === f.key
+                        ? 'bg-gradient-to-r from-fuchsia-500/80 to-pink-600/80 text-white shadow-md ring-1 ring-white/20'
+                        : 'text-fuchsia-100/60 hover:bg-white/10 hover:text-white'
+                    }`}
                   >
                     {f.label}
-                    <span className={`ftab-count ${filter === f.key ? 'active' : ''}`}>
+                    <span className={`rounded-full px-1.5 text-[11px] ${filter === f.key ? 'bg-white/25' : 'bg-white/10'}`}>
                       {counts[f.key]}
                     </span>
                   </button>
                 ))}
               </nav>
 
-              <div className="topbar-right">
-                <div className="searchbox">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-fuchsia-200/50"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                   <input
                     type="text" placeholder="Tìm kiếm..."
                     value={search} onChange={e => setSearch(e.target.value)}
+                    className="w-[150px] bg-transparent text-[13px] text-white placeholder:text-fuchsia-100/30 outline-none focus:w-[180px] transition-[width]"
                   />
-                  {search && <button className="search-clear" onClick={() => setSearch('')}>✕</button>}
+                  {search && <button onClick={() => setSearch('')} className="text-fuchsia-200/50 hover:text-white">✕</button>}
                 </div>
 
                 {selected.size > 0 && (
-                  <button className="btn-danger" onClick={() => doDelete([...selected])}>
+                  <button
+                    onClick={() => doDelete([...selected])}
+                    className="rounded-lg border border-rose-400/30 bg-rose-500/15 px-3 py-1.5 text-[13px] font-bold text-rose-200 transition hover:bg-rose-500/30"
+                  >
                     🗑 Xóa ({selected.size})
                   </button>
                 )}
 
                 {/* ── QUERY BUTTON ── */}
                 <button
-                  className="btn-query"
                   onClick={() => { setQueryOrderId(''); setQueryResult(null); setQueryError(null); setQueryModal(true) }}
                   title="Tra cứu trạng thái giao dịch MoMo"
+                  className="flex items-center gap-1.5 rounded-lg border border-indigo-400/30 bg-indigo-500/15 px-3 py-1.5 text-[13px] font-bold text-indigo-200 transition hover:bg-indigo-500/30"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <circle cx="11" cy="11" r="8"/>
-                    <path d="m21 21-4.35-4.35"/>
-                    <path d="M11 8v3l2 2"/>
+                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/>
                   </svg>
                   Tra cứu MoMo
                 </button>
 
-                <button className="btn-scan" onClick={() => router.push('/admin/scan')}>
+                <button
+                  onClick={() => router.push('/admin/scan')}
+                  className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-[13px] font-bold text-white transition hover:bg-white/15"
+                >
                   📷 Scan QR
                 </button>
-                <button className="btn-refresh" onClick={() => fetchOrders({ force: true })} disabled={fetching}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={fetching ? 'spin' : ''}>
+                <button
+                  onClick={() => fetchOrders({ force: true })} disabled={fetching}
+                  className="flex h-[32px] w-[32px] items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white transition hover:bg-white/15 disabled:opacity-50"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={fetching ? 'animate-spin' : ''}>
                     <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
                     <path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
                     <path d="M8 16H3v5"/>
                   </svg>
                 </button>
-                <button className="btn-logout" onClick={() => {
-                  fetch('/api/admin/session', { method: 'DELETE' }).finally(() => setAuthed(false))
-                }}>
+                <button
+                  onClick={() => { fetch('/api/admin/session', { method: 'DELETE' }).finally(() => setAuthed(false)) }}
+                  className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-fuchsia-100/60 transition hover:text-white"
+                >
                   Đăng xuất
                 </button>
               </div>
@@ -483,45 +497,46 @@ export default function AdminPage() {
           </header>
 
           {/* ── MAIN ── */}
-          <main className="main">
+          <main className="mx-auto max-w-[1400px] p-5">
             {/* STAT CARDS */}
-            <div className="stat-grid">
-              <StatCard label="Doanh thu"   value={`${fmt(totalRevenue)} ₫`} color="var(--mm)"  sub={`${counts.PAID} giao dịch thành công`} />
-              <StatCard label="Thành công"  value={`${counts.PAID} GD`}      color="#16a34a"    sub={`${counts.PAID ? Math.round(counts.PAID / counts.ALL * 100) : 0}% tỉ lệ thành công`} />
-              <StatCard label="Thất bại"    value={`${counts.FAILED} GD`}    color="#dc2626"    sub={`${counts.EXPIRED} đơn hết hạn`} />
-              <StatCard label="Tổng đơn"    value={`${counts.ALL} GD`}       color="#374151"    sub={`${counts.PENDING} đang chờ xử lý`} />
+            <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatCard label="Doanh thu"   value={`${fmt(totalRevenue)} ₫`} accent="text-fuchsia-300"  sub={`${counts.PAID} giao dịch thành công`} />
+              <StatCard label="Thành công"  value={`${counts.PAID} GD`}      accent="text-emerald-300"  sub={`${counts.PAID ? Math.round(counts.PAID / counts.ALL * 100) : 0}% tỉ lệ thành công`} />
+              <StatCard label="Thất bại"    value={`${counts.FAILED} GD`}    accent="text-rose-300"     sub={`${counts.EXPIRED} đơn hết hạn`} />
+              <StatCard label="Tổng đơn"    value={`${counts.ALL} GD`}       accent="text-white"        sub={`${counts.PENDING} đang chờ xử lý`} />
             </div>
 
             {/* TABLE */}
-            <div className="table-wrap">
+            <div className="overflow-hidden rounded-2xl border border-white/12 bg-white/[0.05] backdrop-blur-xl">
               {filtered.length === 0 ? (
-                <div className="empty">
-                  <div className="empty-icon">🔍</div>
-                  <div className="empty-text">Không tìm thấy giao dịch nào</div>
+                <div className="flex flex-col items-center gap-2 py-20 text-center">
+                  <div className="text-3xl opacity-60">🔍</div>
+                  <div className="text-[14px] text-fuchsia-100/50">Không tìm thấy giao dịch nào</div>
                 </div>
               ) : (
-                <div className="table-scroll">
-                  <table className="tbl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-[13px]">
                     <thead>
-                      <tr>
-                        <th className="th-check">
+                      <tr className="border-b border-white/10 text-[11px] uppercase tracking-wide text-fuchsia-100/45">
+                        <th className="w-10 px-4 py-3">
                           <input
                             type="checkbox"
                             checked={selected.size > 0 && selected.size === filtered.length}
                             ref={el => el && (el.indeterminate = selected.size > 0 && selected.size < filtered.length)}
                             onChange={toggleAll}
+                            className="accent-fuchsia-500"
                           />
                         </th>
-                        <th>Trạng thái</th>
-                        <th>Số tiền</th>
-                        <th>Nội dung</th>
-                        <th>Mã đơn</th>
-                        <th>Mã GD MoMo</th>
-                        <th>Hình thức</th>
-                        <th>Result</th>
-                        <th>Tạo lúc</th>
-                        <th>Hoàn tất</th>
-                        <th className="th-action">Thao tác</th>
+                        <th className="px-3 py-3">Trạng thái</th>
+                        <th className="px-3 py-3">Số tiền</th>
+                        <th className="px-3 py-3">Nội dung</th>
+                        <th className="px-3 py-3">Mã đơn</th>
+                        <th className="px-3 py-3">Mã GD MoMo</th>
+                        <th className="px-3 py-3">Hình thức</th>
+                        <th className="px-3 py-3">Result</th>
+                        <th className="px-3 py-3">Tạo lúc</th>
+                        <th className="px-3 py-3">Hoàn tất</th>
+                        <th className="px-3 py-3 text-center">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -531,43 +546,43 @@ export default function AdminPage() {
                         return (
                           <tr
                             key={o.orderId}
-                            className={`trow ${sel ? 'sel' : ''}`}
                             onClick={() => setDetail(o.orderId)}
+                            className={`cursor-pointer border-b border-white/5 transition hover:bg-white/[0.06] ${sel ? 'bg-fuchsia-500/10' : ''}`}
                           >
-                            <td className="td-check" onClick={e => e.stopPropagation()}>
-                              <input type="checkbox" checked={sel} onChange={() => toggleOne(o.orderId)} />
+                            <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                              <input type="checkbox" checked={sel} onChange={() => toggleOne(o.orderId)} className="accent-fuchsia-500" />
                             </td>
-                            <td>
-                              <span className="badge" style={{ background: sm.bg, color: sm.color }}>
-                                <span className="badge-dot" style={{ background: sm.dot }} />
+                            <td className="px-3 py-3">
+                              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ${sm.bg} ${sm.text} ring-1 ${sm.ring}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${sm.dot}`} />
                                 {sm.label}
                               </span>
                             </td>
-                            <td className="td-amount">{fmt(o.amount)} ₫</td>
-                            <td className="td-info" title={o.orderInfo}>{o.orderInfo || '—'}</td>
-                            <td className="td-code">{o.orderId}</td>
-                            <td className="td-code">{o.transId || '—'}</td>
-                            <td>
+                            <td className="px-3 py-3 font-bold text-white">{fmt(o.amount)} ₫</td>
+                            <td className="max-w-[180px] truncate px-3 py-3 text-fuchsia-100/70" title={o.orderInfo}>{o.orderInfo || '—'}</td>
+                            <td className="px-3 py-3 font-mono text-[12px] text-fuchsia-100/60">{o.orderId}</td>
+                            <td className="px-3 py-3 font-mono text-[12px] text-fuchsia-100/60">{o.transId || '—'}</td>
+                            <td className="px-3 py-3">
                               {o.payType
-                                ? <span className="chip">{o.payType}</span>
-                                : <span className="muted">—</span>}
+                                ? <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-fuchsia-100/70">{o.payType}</span>
+                                : <span className="text-fuchsia-100/30">—</span>}
                             </td>
-                            <td>
+                            <td className="px-3 py-3 font-mono text-[12px]">
                               {o.resultCode !== undefined
-                                ? <span className="result-code" style={{ color: o.resultCode === 0 ? '#16a34a' : '#dc2626' }}>
+                                ? <span className={o.resultCode === 0 ? 'text-emerald-300' : 'text-rose-300'}>
                                     {o.resultCode === 0 ? '✓ 0' : `✗ ${o.resultCode}`}
                                   </span>
-                                : <span className="muted">—</span>}
+                                : <span className="text-fuchsia-100/30">—</span>}
                             </td>
-                            <td className="td-date">{fmtDate(o.createdAt)}</td>
-                            <td className="td-date">{o.paidAt ? fmtDate(o.paidAt) : <span className="muted">—</span>}</td>
-                            <td className="td-action" onClick={e => e.stopPropagation()}>
-                              <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                            <td className="whitespace-nowrap px-3 py-3 text-fuchsia-100/50">{fmtDate(o.createdAt)}</td>
+                            <td className="whitespace-nowrap px-3 py-3 text-fuchsia-100/50">{o.paidAt ? fmtDate(o.paidAt) : <span className="text-fuchsia-100/30">—</span>}</td>
+                            <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                              <div className="flex justify-center gap-1.5">
                                 {/* Tra cứu MoMo */}
                                 <button
-                                  className="btn-action-row btn-query-row"
                                   onClick={() => openQueryForOrder(o.orderId)}
                                   title="Tra cứu MoMo API"
+                                  className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-400/30 bg-indigo-500/15 text-indigo-200 transition hover:bg-indigo-500/40"
                                 >
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                     <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/>
@@ -575,9 +590,9 @@ export default function AdminPage() {
                                 </button>
                                 {/* Xóa */}
                                 <button
-                                  className="btn-action-row btn-del-row"
                                   onClick={() => doDelete([o.orderId])}
                                   title="Xóa"
+                                  className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-400/30 bg-rose-500/15 text-rose-200 transition hover:bg-rose-500/40"
                                 >
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
@@ -587,9 +602,9 @@ export default function AdminPage() {
                                 {/* Confirm — chỉ hiện khi resultCode 9000 */}
                                 {o.resultCode === 9000 && (
                                   <button
-                                    className="btn-action-row btn-confirm-row"
                                     onClick={() => openConfirmForOrder(o.orderId, o.amount)}
                                     title="Xác nhận / Huỷ giao dịch (9000)"
+                                    className="flex h-7 w-7 items-center justify-center rounded-md border border-emerald-400/30 bg-emerald-500/15 text-emerald-200 transition hover:bg-emerald-500/40"
                                   >
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                       <polyline points="20 6 9 17 4 12"/>
@@ -606,14 +621,14 @@ export default function AdminPage() {
                 </div>
               )}
 
-              <div className="table-footer">
-                <span className="table-count">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-5 py-3 text-[12px] text-fuchsia-100/45">
+                <span>
                   {filtered.length} giao dịch
                   {filter !== 'ALL' && ` · lọc theo "${FILTERS.find(f => f.key === filter)?.label}"`}
                   {search && ` · tìm "${search}"`}
                 </span>
                 {lastSync && (
-                  <span className="last-sync">
+                  <span>
                     Cập nhật lúc {lastSync.toLocaleTimeString('vi-VN')}
                     {fetching && ' · đang tải...'}
                   </span>
@@ -622,124 +637,148 @@ export default function AdminPage() {
             </div>
           </main>
         </div>
-      </div>
+      </PageShell>
     </>
+  )
+}
+
+// ─── PAGE SHELL (background + glow orbs) ──────────────────────
+function PageShell({ children }) {
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-[#150821] font-sans text-white">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
+        .font-sans { font-family: 'Inter', sans-serif; }
+        .font-display { font-family: 'Sora', sans-serif; }
+        @keyframes drift { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(30px,-40px) scale(1.08)} }
+        @keyframes modalIn { from{transform:translateY(14px);opacity:0} to{transform:none;opacity:1} }
+        .animate-modal { animation: modalIn .18s ease both; }
+      `}</style>
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute -left-32 -top-32 h-[420px] w-[420px] rounded-full bg-fuchsia-600/30 blur-[110px]" style={{ animation: 'drift 16s ease-in-out infinite' }} />
+        <div className="absolute right-[-10%] top-1/4 h-[380px] w-[380px] rounded-full bg-violet-600/25 blur-[110px]" style={{ animation: 'drift 20s ease-in-out infinite reverse' }} />
+        <div className="absolute bottom-[-15%] left-1/3 h-[440px] w-[440px] rounded-full bg-pink-500/20 blur-[120px]" style={{ animation: 'drift 24s ease-in-out infinite' }} />
+        <div className="absolute bottom-0 right-0 h-[300px] w-[300px] rounded-full bg-indigo-500/20 blur-[100px]" style={{ animation: 'drift 18s ease-in-out infinite reverse' }} />
+      </div>
+      {children}
+    </div>
   )
 }
 
 // ─── SUB COMPONENTS ──────────────────────────────────────────
 
-function Orbs() {
-  return <>
-    <div className="orb orb1"/><div className="orb orb2"/>
-    <div className="orb orb3"/><div className="orb orb4"/>
-  </>
-}
-
-function StatCard({ label, value, color, sub }) {
+function StatCard({ label, value, accent, sub }) {
   return (
-    <div className="scard">
-      <div className="scard-label">{label}</div>
-      <div className="scard-value" style={{ color }}>{value}</div>
-      {sub && <div className="scard-sub">{sub}</div>}
+    <div className="rounded-2xl border border-white/12 bg-white/[0.06] p-4 backdrop-blur-xl transition hover:border-white/20 sm:p-5">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-fuchsia-100/45">{label}</div>
+      <div className={`mt-1 font-display text-[22px] font-extrabold tracking-tight sm:text-[26px] ${accent}`}>{value}</div>
+      {sub && <div className="mt-1 text-[12px] text-fuchsia-100/40">{sub}</div>}
     </div>
   )
 }
 
-function DetailModal({ order, onClose, onDelete, onQuery }) {
+function ModalShell({ children, wide, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div
+        onClick={e => e.stopPropagation()}
+        className={`animate-modal flex max-h-[88vh] w-full flex-col overflow-hidden rounded-3xl border border-white/15 bg-[#1d0e2e]/95 shadow-[0_32px_80px_-20px_rgba(0,0,0,0.6)] backdrop-blur-2xl ${wide ? 'max-w-[580px]' : 'max-w-[520px]'}`}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function DetailModal({ order, onClose, onDelete, onQuery, onConfirm }) {
   const sm    = STATUS_META[order.status] || STATUS_META.PENDING
   const extra = decodeExtra(order.extraData)
   const copy  = text => navigator.clipboard?.writeText(text)
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-hd">
-          <div>
-            <div className="modal-hd-label">Chi tiết giao dịch</div>
-            <div className="modal-hd-id">{order.orderId}</div>
-          </div>
-          <button className="modal-x" onClick={onClose}>✕</button>
+    <ModalShell onClose={onClose}>
+      <div className="flex flex-shrink-0 items-start justify-between border-b border-white/10 px-6 py-5">
+        <div>
+          <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-fuchsia-100/40">Chi tiết giao dịch</div>
+          <div className="font-mono text-[13px] text-fuchsia-100/80">{order.orderId}</div>
         </div>
+        <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-fuchsia-100/70 transition hover:bg-rose-500/30 hover:text-white">✕</button>
+      </div>
 
-        <div className="modal-hero" style={{ background: sm.bg }}>
-          <span className="badge" style={{ background: 'white', color: sm.color }}>
-            <span className="badge-dot" style={{ background: sm.dot }} />
-            {sm.label}
-          </span>
-          <div className="modal-amount" style={{ color: sm.color }}>{fmt(order.amount)} ₫</div>
-          <div className="modal-orderinfo">{order.orderInfo || '—'}</div>
-        </div>
+      <div className={`flex flex-shrink-0 flex-col gap-2 px-6 py-5 ${sm.bg}`}>
+        <span className={`inline-flex w-fit items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[12px] font-semibold ${sm.text}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${sm.dot}`} />
+          {sm.label}
+        </span>
+        <div className={`font-display text-[28px] font-extrabold tracking-tight ${sm.text}`}>{fmt(order.amount)} ₫</div>
+        <div className="text-[13px] font-medium text-fuchsia-100/70">{order.orderInfo || '—'}</div>
+      </div>
 
-        <div className="modal-body">
-          <Section title="Thông tin giao dịch">
-            <Row label="Mã đơn"     value={order.orderId}   mono copy={() => copy(order.orderId)} />
-            <Row label="Request ID" value={order.requestId} mono copy={() => copy(order.requestId)} />
-            <Row label="Mã GD MoMo" value={order.transId}   mono copy={() => copy(order.transId)} />
+      <div className="flex-1 overflow-y-auto py-1">
+        <Section title="Thông tin giao dịch">
+          <Row label="Mã đơn"     value={order.orderId}   mono copy={() => copy(order.orderId)} />
+          <Row label="Request ID" value={order.requestId} mono copy={() => copy(order.requestId)} />
+          <Row label="Mã GD MoMo" value={order.transId}   mono copy={() => copy(order.transId)} />
+        </Section>
+
+        <Section title="Kết quả">
+          <Row label="Result Code" value={
+            order.resultCode !== undefined
+              ? <span className={`font-mono font-bold ${order.resultCode === 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  {order.resultCode === 0
+                    ? `✓ ${order.resultCode} — Thành công`
+                    : `✗ ${order.resultCode} — ${getResultDesc(order.resultCode)}`}
+                </span>
+              : null
+          } />
+          <Row label="Message"   value={order.message} />
+          <Row label="Loại đơn" value={order.orderType} />
+          <Row label="Hình thức" value={order.payType ? <Chip>{order.payType}</Chip> : null} />
+          <Row label="Nguồn"     value={order.source  ? <Chip>{order.source}</Chip>  : null} />
+        </Section>
+
+        <Section title="Thời gian">
+          <Row label="Tạo lúc"       value={fmtDate(order.createdAt)} />
+          <Row label="MoMo phản hồi" value={fmtMs(order.responseTime)} />
+          <Row label="Hoàn tất lúc"  value={fmtDate(order.paidAt)} />
+        </Section>
+
+        {order.extraData && (
+          <Section title="Extra Data">
+            <pre className="mx-6 mb-1 whitespace-pre-wrap break-all rounded-lg border border-white/10 bg-black/30 p-3 font-mono text-[11.5px] text-fuchsia-100/70">
+              {typeof extra === 'object' ? JSON.stringify(extra, null, 2) : extra}
+            </pre>
           </Section>
+        )}
+      </div>
 
-          <Section title="Kết quả">
-            <Row label="Result Code" value={
-              order.resultCode !== undefined
-                ? <span style={{ fontFamily: 'monospace', fontWeight: 700, color: order.resultCode === 0 ? '#16a34a' : '#dc2626' }}>
-                    {order.resultCode === 0
-                      ? `✓ ${order.resultCode} — Thành công`
-                      : `✗ ${order.resultCode} — ${getResultDesc(order.resultCode)}`}
-                  </span>
-                : null
-            } />
-            <Row label="Message"   value={order.message} />
-            <Row label="Loại đơn" value={order.orderType} />
-            <Row label="Hình thức" value={order.payType ? <span className="chip">{order.payType}</span> : null} />
-            <Row label="Nguồn"     value={order.source  ? <span className="chip">{order.source}</span>  : null} />
-          </Section>
-
-          <Section title="Thời gian">
-            <Row label="Tạo lúc"       value={fmtDate(order.createdAt)} />
-            <Row label="MoMo phản hồi" value={fmtMs(order.responseTime)} />
-            <Row label="Hoàn tất lúc"  value={fmtDate(order.paidAt)} />
-          </Section>
-
-          {order.extraData && (
-            <Section title="Extra Data">
-              <div className="extra-block">
-                {typeof extra === 'object' ? JSON.stringify(extra, null, 2) : extra}
-              </div>
-            </Section>
-          )}
-        </div>
-
-        <div className="modal-ft">
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn-del-modal" onClick={() => { onClose(); onDelete(order.orderId) }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
-                <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-              </svg>
-              Xóa giao dịch
-            </button>
-            <button className="btn-query-modal" onClick={() => onQuery(order.orderId)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/>
-              </svg>
-              Tra cứu MoMo
-            </button>
-            {order.resultCode === 9000 && (
-            <button
-              className="btn-confirm-modal"
-              onClick={() => { onClose(); onConfirm(order.orderId, order.amount) }}
-            >
+      <div className="flex flex-shrink-0 items-center justify-between border-t border-white/10 px-6 py-4">
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => { onClose(); onDelete(order.orderId) }} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/30 bg-rose-500/15 px-3 py-2 text-[13px] font-bold text-rose-200 transition hover:bg-rose-500/30">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+              <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+            </svg>
+            Xóa giao dịch
+          </button>
+          <button onClick={() => onQuery(order.orderId)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-400/30 bg-indigo-500/15 px-3 py-2 text-[13px] font-bold text-indigo-200 transition hover:bg-indigo-500/30">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/>
+            </svg>
+            Tra cứu MoMo
+          </button>
+          {order.resultCode === 9000 && (
+            <button onClick={() => { onClose(); onConfirm(order.orderId, order.amount) }} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-3 py-2 text-[13px] font-bold text-emerald-200 transition hover:bg-emerald-500/30">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
               Xác nhận (9000)
             </button>
           )}
-          </div>
-          <button className="btn-close-modal" onClick={onClose}>Đóng</button>
         </div>
+        <button onClick={onClose} className="rounded-lg border border-white/15 bg-white/5 px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-white/15">Đóng</button>
       </div>
-    </div>
+    </ModalShell>
   )
 }
 
@@ -750,114 +789,96 @@ function QueryModal({ orderId, setOrderId, loading, result, error, onQuery, onCl
   const rc     = result?.resultCode
   const isOk   = rc === 0 || rc === 9000
   const rcDesc = rc !== undefined ? getResultDesc(rc) : null
+  const heroBg = isOk ? 'bg-emerald-400/15' : (rc === 1000 || rc === 7000) ? 'bg-amber-400/15' : 'bg-rose-400/15'
+  const heroText = isOk ? 'text-emerald-300' : (rc === 1000 || rc === 7000) ? 'text-amber-300' : 'text-rose-300'
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal modal-query" onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
-        <div className="modal-hd">
-          <div>
-            <div className="modal-hd-label">Tra cứu giao dịch MoMo</div>
-            <div className="modal-hd-id" style={{ color: '#6b7280', fontSize: 12 }}>
-              POST /v2/gateway/api/query
-            </div>
-          </div>
-          <button className="modal-x" onClick={onClose}>✕</button>
+    <ModalShell wide onClose={onClose}>
+      <div className="flex flex-shrink-0 items-start justify-between border-b border-white/10 px-6 py-5">
+        <div>
+          <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-fuchsia-100/40">Tra cứu giao dịch MoMo</div>
+          <div className="text-[12px] text-fuchsia-100/50">POST /v2/gateway/api/query</div>
         </div>
-
-        {/* Input */}
-        <div className="qinput-wrap">
-          <label className="qinput-label">Order ID</label>
-          <div className="qinput-row">
-            <input
-              className="qinput"
-              type="text"
-              placeholder="Nhập mã đơn hàng (orderId)..."
-              value={orderId}
-              onChange={e => setOrderId(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !loading && onQuery()}
-              autoFocus
-            />
-            <button className="btn-do-query" onClick={onQuery} disabled={loading || !orderId.trim()}>
-              {loading
-                ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="spin"><path d="M3 12a9 9 0 0 1 9-9"/></svg>
-                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-              }
-              {loading ? 'Đang tra cứu...' : 'Tra cứu'}
-            </button>
-          </div>
-          <div className="qinput-hint">
-            API sẽ gọi trực tiếp đến MoMo server để lấy trạng thái thực tế.
-          </div>
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="qerror">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
-            {error}
-          </div>
-        )}
-
-        {/* Result */}
-        {result && (
-          <div className="modal-body">
-            {/* Status hero */}
-            <div className="qresult-hero" style={{
-              background: isOk ? '#dcfce7' : rc === 1000 || rc === 7000 ? '#fef3c7' : '#fee2e2'
-            }}>
-              <div className="qresult-rc" style={{ color: isOk ? '#16a34a' : rc === 1000 || rc === 7000 ? '#d97706' : '#dc2626' }}>
-                {isOk ? '✓' : '✗'} {rc}
-              </div>
-              <div className="qresult-desc">{rcDesc}</div>
-              {result.message && <div className="qresult-msg">{result.message}</div>}
-            </div>
-
-            {/* Detail fields */}
-            <Section title="Thông tin đơn hàng">
-              <Row label="Order ID"    value={result.orderId}    mono copy={() => copy(result.orderId)} />
-              <Row label="Request ID"  value={result.requestId}  mono copy={() => copy(result.requestId)} />
-              <Row label="Trans ID"    value={result.transId}    mono copy={() => copy(result.transId)} />
-              <Row label="Order Info"  value={result.orderInfo} />
-            </Section>
-
-            <Section title="Kết quả thanh toán">
-              <Row label="Result Code" value={
-                rc !== undefined
-                  ? <span style={{ fontFamily: 'monospace', fontWeight: 700, color: isOk ? '#16a34a' : '#dc2626' }}>
-                      {rc} — {rcDesc}
-                    </span>
-                  : null
-              } />
-              <Row label="Số tiền"     value={result.amount !== undefined ? `${fmt(result.amount)} ₫` : null} />
-              <Row label="Hình thức"   value={result.payType   ? <span className="chip">{result.payType}</span>   : null} />
-              <Row label="Order Type"  value={result.orderType ? <span className="chip">{result.orderType}</span> : null} />
-            </Section>
-
-            <Section title="Thời gian">
-              <Row label="Response Time" value={result.responseTime ? fmtMs(result.responseTime) : null} />
-              <Row label="Pay Time"      value={result.payTime      ? fmtMs(result.payTime)      : null} />
-            </Section>
-
-            {/* Raw JSON toggle */}
-            <Section title="Raw Response">
-              <div className="extra-block" style={{ maxHeight: 200, overflowY: 'auto' }}>
-                {JSON.stringify(result, null, 2)}
-              </div>
-            </Section>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="modal-ft">
-          <div style={{ fontSize: 12, color: '#9ca3af' }}>
-            Timeout tối thiểu: <strong>30s</strong> · MoMo API v2
-          </div>
-          <button className="btn-close-modal" onClick={onClose}>Đóng</button>
-        </div>
+        <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-fuchsia-100/70 transition hover:bg-rose-500/30 hover:text-white">✕</button>
       </div>
-    </div>
+
+      <div className="flex-shrink-0 border-b border-white/10 px-6 py-4">
+        <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-fuchsia-100/40">Order ID</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Nhập mã đơn hàng (orderId)..."
+            value={orderId}
+            onChange={e => setOrderId(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !loading && onQuery()}
+            autoFocus
+            className="flex-1 rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 font-mono text-[14px] text-white outline-none transition focus:border-indigo-400/60 focus:bg-white/10 focus:ring-4 focus:ring-indigo-400/15"
+          />
+          <button
+            onClick={onQuery} disabled={loading || !orderId.trim()}
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-500 px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-indigo-600 disabled:opacity-40"
+          >
+            {loading
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="animate-spin"><path d="M3 12a9 9 0 0 1 9-9"/></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            }
+            {loading ? 'Đang tra cứu...' : 'Tra cứu'}
+          </button>
+        </div>
+        <div className="mt-1.5 text-[11px] text-fuchsia-100/40">API sẽ gọi trực tiếp đến MoMo server để lấy trạng thái thực tế.</div>
+      </div>
+
+      {error && (
+        <div className="mx-6 mt-3 flex flex-shrink-0 items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-[13px] font-semibold text-rose-300">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="flex-1 overflow-y-auto">
+          <div className={`flex flex-col gap-1 px-6 py-4 ${heroBg}`}>
+            <div className={`font-mono text-[22px] font-extrabold tracking-tight ${heroText}`}>{isOk ? '✓' : '✗'} {rc}</div>
+            <div className="text-[14px] font-bold text-fuchsia-50">{rcDesc}</div>
+            {result.message && <div className="text-[12px] text-fuchsia-100/50">{result.message}</div>}
+          </div>
+
+          <Section title="Thông tin đơn hàng">
+            <Row label="Order ID"    value={result.orderId}    mono copy={() => copy(result.orderId)} />
+            <Row label="Request ID"  value={result.requestId}  mono copy={() => copy(result.requestId)} />
+            <Row label="Trans ID"    value={result.transId}    mono copy={() => copy(result.transId)} />
+            <Row label="Order Info"  value={result.orderInfo} />
+          </Section>
+
+          <Section title="Kết quả thanh toán">
+            <Row label="Result Code" value={
+              rc !== undefined
+                ? <span className={`font-mono font-bold ${isOk ? 'text-emerald-300' : 'text-rose-300'}`}>{rc} — {rcDesc}</span>
+                : null
+            } />
+            <Row label="Số tiền"     value={result.amount !== undefined ? `${fmt(result.amount)} ₫` : null} />
+            <Row label="Hình thức"   value={result.payType   ? <Chip>{result.payType}</Chip>   : null} />
+            <Row label="Order Type"  value={result.orderType ? <Chip>{result.orderType}</Chip> : null} />
+          </Section>
+
+          <Section title="Thời gian">
+            <Row label="Response Time" value={result.responseTime ? fmtMs(result.responseTime) : null} />
+            <Row label="Pay Time"      value={result.payTime      ? fmtMs(result.payTime)      : null} />
+          </Section>
+
+          <Section title="Raw Response">
+            <pre className="mx-6 mb-1 max-h-[200px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-white/10 bg-black/30 p-3 font-mono text-[11.5px] text-fuchsia-100/70">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          </Section>
+        </div>
+      )}
+
+      <div className="flex flex-shrink-0 items-center justify-between border-t border-white/10 px-6 py-4">
+        <div className="text-[12px] text-fuchsia-100/40">Timeout tối thiểu: <strong className="text-fuchsia-100/60">30s</strong> · MoMo API v2</div>
+        <button onClick={onClose} className="rounded-lg border border-white/15 bg-white/5 px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-white/15">Đóng</button>
+      </div>
+    </ModalShell>
   )
 }
 
@@ -866,93 +887,85 @@ function ConfirmModal({ orderId, amount, loading, result, error, onConfirm, onCa
   const isOk = rc === 0
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal modal-query" onClick={e => e.stopPropagation()}>
-        <div className="modal-hd">
-          <div>
-            <div className="modal-hd-label">Xác nhận / Huỷ giao dịch</div>
-            <div className="modal-hd-id" style={{ color: '#6b7280', fontSize: 12 }}>
-              POST /v2/gateway/api/confirm · {orderId}
-            </div>
-          </div>
-          <button className="modal-x" onClick={onClose}>✕</button>
+    <ModalShell wide onClose={onClose}>
+      <div className="flex flex-shrink-0 items-start justify-between border-b border-white/10 px-6 py-5">
+        <div>
+          <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-fuchsia-100/40">Xác nhận / Huỷ giao dịch</div>
+          <div className="text-[12px] text-fuchsia-100/50">POST /v2/gateway/api/confirm · {orderId}</div>
         </div>
-
-        <div className="qinput-wrap">
-          <div style={{ fontSize: 13, color: '#374151', marginBottom: 12 }}>
-            Giao dịch <strong style={{ fontFamily: 'monospace' }}>{orderId}</strong> đang ở trạng thái <strong style={{ color: '#d97706' }}>9000 — Authorized</strong>.
-            <br />Số tiền: <strong>{parseInt(amount || 0).toLocaleString('vi-VN')} ₫</strong>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              className="btn-do-query"
-              style={{ background: '#16a34a' }}
-              onClick={onConfirm}
-              disabled={loading || !!result}
-            >
-              {loading
-                ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="spin"><path d="M3 12a9 9 0 0 1 9-9"/></svg>
-                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              }
-              Capture (xác nhận)
-            </button>
-            <button
-              className="btn-do-query"
-              style={{ background: '#dc2626' }}
-              onClick={onCancel}
-              disabled={loading || !!result}
-            >
-              {loading
-                ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="spin"><path d="M3 12a9 9 0 0 1 9-9"/></svg>
-                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              }
-              Cancel (huỷ)
-            </button>
-          </div>
-          <div className="qinput-hint">
-            Capture → chuyển tiền về ví đối tác. Cancel → hoàn tiền về người dùng.
-          </div>
-        </div>
-
-        {error && (
-          <div className="qerror">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
-            {error}
-          </div>
-        )}
-
-        {result && (
-          <div className="modal-body">
-            <div className="qresult-hero" style={{ background: isOk ? '#dcfce7' : '#fee2e2' }}>
-              <div className="qresult-rc" style={{ color: isOk ? '#16a34a' : '#dc2626' }}>
-                {isOk ? '✓' : '✗'} {rc}
-              </div>
-              <div className="qresult-desc">
-                {result.requestType === 'capture' ? 'Capture' : 'Cancel'} — {getResultDesc(rc)}
-              </div>
-              {result.message && <div className="qresult-msg">{result.message}</div>}
-            </div>
-            <Section title="Raw Response">
-              <div className="extra-block" style={{ maxHeight: 180, overflowY: 'auto' }}>
-                {JSON.stringify(result, null, 2)}
-              </div>
-            </Section>
-          </div>
-        )}
-
-        <div className="modal-ft">
-          <div style={{ fontSize: 12, color: '#9ca3af' }}>Chỉ áp dụng cho giao dịch resultCode = 9000</div>
-          <button className="btn-close-modal" onClick={onClose}>Đóng</button>
-        </div>
+        <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-fuchsia-100/70 transition hover:bg-rose-500/30 hover:text-white">✕</button>
       </div>
-    </div>
+
+      <div className="flex-shrink-0 border-b border-white/10 px-6 py-4">
+        <div className="mb-3 text-[13px] text-fuchsia-100/70">
+          Giao dịch <strong className="font-mono text-white">{orderId}</strong> đang ở trạng thái <strong className="text-amber-300">9000 — Authorized</strong>.
+          <br />Số tiền: <strong className="text-white">{parseInt(amount || 0).toLocaleString('vi-VN')} ₫</strong>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onConfirm} disabled={loading || !!result}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-emerald-700 disabled:opacity-40"
+          >
+            {loading
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="animate-spin"><path d="M3 12a9 9 0 0 1 9-9"/></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            }
+            Capture (xác nhận)
+          </button>
+          <button
+            onClick={onCancel} disabled={loading || !!result}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-rose-700 disabled:opacity-40"
+          >
+            {loading
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="animate-spin"><path d="M3 12a9 9 0 0 1 9-9"/></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            }
+            Cancel (huỷ)
+          </button>
+        </div>
+        <div className="mt-1.5 text-[11px] text-fuchsia-100/40">Capture → chuyển tiền về ví đối tác. Cancel → hoàn tiền về người dùng.</div>
+      </div>
+
+      {error && (
+        <div className="mx-6 mt-3 flex flex-shrink-0 items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-[13px] font-semibold text-rose-300">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="flex-1 overflow-y-auto">
+          <div className={`flex flex-col gap-1 px-6 py-4 ${isOk ? 'bg-emerald-400/15' : 'bg-rose-400/15'}`}>
+            <div className={`font-mono text-[22px] font-extrabold tracking-tight ${isOk ? 'text-emerald-300' : 'text-rose-300'}`}>{isOk ? '✓' : '✗'} {rc}</div>
+            <div className="text-[14px] font-bold text-fuchsia-50">
+              {result.requestType === 'capture' ? 'Capture' : 'Cancel'} — {getResultDesc(rc)}
+            </div>
+            {result.message && <div className="text-[12px] text-fuchsia-100/50">{result.message}</div>}
+          </div>
+          <Section title="Raw Response">
+            <pre className="mx-6 mb-1 max-h-[180px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-white/10 bg-black/30 p-3 font-mono text-[11.5px] text-fuchsia-100/70">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          </Section>
+        </div>
+      )}
+
+      <div className="flex flex-shrink-0 items-center justify-between border-t border-white/10 px-6 py-4">
+        <div className="text-[12px] text-fuchsia-100/40">Chỉ áp dụng cho giao dịch resultCode = 9000</div>
+        <button onClick={onClose} className="rounded-lg border border-white/15 bg-white/5 px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-white/15">Đóng</button>
+      </div>
+    </ModalShell>
   )
+}
+
+function Chip({ children }) {
+  return <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-fuchsia-100/70">{children}</span>
 }
 
 function Section({ title, children }) {
   return (
-    <div className="msection">
-      <div className="msection-title">{title}</div>
+    <div className="border-t border-white/10 px-6 py-3 first:border-t-0">
+      <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-fuchsia-100/35">{title}</div>
       {children}
     </div>
   )
@@ -961,12 +974,12 @@ function Section({ title, children }) {
 function Row({ label, value, mono, copy }) {
   if (!value && value !== 0) return null
   return (
-    <div className="mrow">
-      <span className="mrow-label">{label}</span>
-      <span className={`mrow-value ${mono ? 'mono' : ''}`}>
+    <div className="flex items-start gap-3 border-b border-white/5 py-2 last:border-b-0">
+      <span className="min-w-[120px] flex-shrink-0 pt-0.5 text-[12px] font-semibold text-fuchsia-100/40">{label}</span>
+      <span className={`flex flex-1 items-center gap-1.5 break-all text-[13px] text-fuchsia-50 ${mono ? 'font-mono text-[12px]' : ''}`}>
         {value}
         {copy && value && value !== '—' && (
-          <button className="copy-btn" onClick={copy} title="Copy">
+          <button onClick={copy} title="Copy" className="flex-shrink-0 rounded p-0.5 text-fuchsia-100/40 transition hover:text-fuchsia-200">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -977,397 +990,3 @@ function Row({ label, value, mono, copy }) {
     </div>
   )
 }
-
-// ─── CSS ─────────────────────────────────────────────────────
-const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --mm:      #ae0070;
-    --mm-light:#fff0f7;
-    --success: #16a34a;
-    --danger:  #dc2626;
-    --warning: #d97706;
-    --muted:   #6b7280;
-    --border:  rgba(174,0,112,0.1);
-    --surface: rgba(255,255,255,0.92);
-    --text:    #111827;
-    --font:    'Inter', sans-serif;
-  }
-
-  body { font-family: var(--font); color: var(--text); }
-
-  /* ── BG ── */
-  .bg-wrap { position: relative; min-height: 100vh; width: 100vw; background: #f5edf2; overflow-x: hidden; }
-  .orb { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.55; z-index: 0; pointer-events: none; }
-  .orb1 { top:-5%; left:-5%; width:45vw; height:45vw; background:#ff9cb7; animation: om1 7s infinite alternate ease-in-out; }
-  .orb2 { bottom:-5%; right:-5%; width:55vw; height:55vw; background:#b0bec5; animation: om2 9s infinite alternate ease-in-out; }
-  .orb3 { top:20%; right:-5%; width:40vw; height:40vw; background:#dfb2ea; animation: om3 8s infinite alternate ease-in-out; }
-  .orb4 { bottom:-5%; left:5%; width:35vw; height:35vw; background:#80cbc4; animation: om1 8.5s infinite alternate ease-in-out; }
-  @keyframes om1 { 0%{transform:translate(0,0)scale(1)} 50%{transform:translate(8vw,4vh)scale(1.15)} 100%{transform:translate(-4vw,7vh)scale(0.9)} }
-  @keyframes om2 { 0%{transform:translate(0,0)scale(1.1)} 50%{transform:translate(-10vw,-6vh)scale(0.9)} 100%{transform:translate(6vw,4vh)scale(1.1)} }
-  @keyframes om3 { 0%{transform:translate(0,0)scale(0.9)} 50%{transform:translate(-5vw,7vh)scale(1.2)} 100%{transform:translate(7vw,-4vh)scale(1)} }
-
-  /* ── TOPBAR ── */
-  .topbar {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 200;
-    background: rgba(255,255,255,0.88);
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border);
-    box-shadow: 0 1px 16px rgba(174,0,112,0.06);
-  }
-  .topbar-inner {
-    max-width: 1600px; margin: 0 auto;
-    padding: 0 24px; height: 60px;
-    display: flex; align-items: center; gap: 20px;
-  }
-
-  .logo-area { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
-  .logo-img  { width: 30px; height: 30px; border-radius: 8px; object-fit: contain; }
-  .logo-text { font-size: 17px; font-weight: 800; color: var(--mm); letter-spacing: -0.3px; }
-  .sync-dot  { width: 8px; height: 8px; border-radius: 50%; transition: background 0.3s; }
-  .sync-dot.idle    { background: #22c55e; }
-  .sync-dot.syncing { background: #f59e0b; animation: pulse 0.8s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-
-  .filter-tabs { display: flex; gap: 2px; flex: 1; justify-content: center; }
-  .ftab {
-    padding: 6px 14px; border: none; border-radius: 8px;
-    background: transparent; font-size: 13px; font-weight: 600;
-    color: var(--muted); cursor: pointer; transition: all 0.15s;
-    display: flex; align-items: center; gap: 6px; font-family: var(--font);
-  }
-  .ftab:hover { background: var(--mm-light); color: var(--mm); }
-  .ftab.active { background: var(--mm); color: #fff; }
-  .ftab-count {
-    font-size: 11px; font-weight: 700;
-    background: rgba(0,0,0,0.08); color: inherit;
-    padding: 2px 7px; border-radius: 20px; line-height: 1.4;
-  }
-  .ftab.active .ftab-count { background: rgba(255,255,255,0.25); }
-
-  .topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-
-  .searchbox { position: relative; display: flex; align-items: center; }
-  .searchbox svg { position: absolute; left: 11px; color: var(--muted); pointer-events: none; }
-  .searchbox input {
-    padding: 7px 32px 7px 34px;
-    border: 1px solid var(--border); border-radius: 10px;
-    background: rgba(255,255,255,0.7); font-size: 13px;
-    font-family: var(--font); width: 220px; color: var(--text); transition: all 0.2s;
-  }
-  .searchbox input:focus { outline: none; border-color: var(--mm); background: #fff; box-shadow: 0 0 0 3px rgba(174,0,112,0.08); width: 260px; }
-  .search-clear { position: absolute; right: 10px; background: none; border: none; font-size: 12px; color: var(--muted); cursor: pointer; line-height: 1; }
-
-  .btn-danger  { background: var(--danger); color: #fff; border: none; padding: 7px 14px; border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font); }
-  .btn-refresh {
-    width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--border);
-    background: rgba(255,255,255,0.7); cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--muted); transition: all 0.15s;
-  }
-  .btn-refresh:hover { border-color: var(--mm); color: var(--mm); background: var(--mm-light); }
-  .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-logout  { padding: 7px 14px; border-radius: 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.7); font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; font-family: var(--font); }
-  .btn-logout:hover { color: var(--danger); border-color: var(--danger); background: #fff; }
-
-  .btn-scan {
-    padding: 7px 14px; border-radius: 9px;
-    border: 1px solid rgba(174,0,112,0.3);
-    background: #fff0f7; color: #ae0070;
-    font-size: 13px; font-weight: 700;
-    cursor: pointer; font-family: var(--font); transition: all 0.15s;
-  }
-  .btn-scan:hover { background: #ae0070; color: #fff; }
-
-  /* ── QUERY BUTTON ── */
-  .btn-query {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 7px 14px; border-radius: 9px;
-    border: 1px solid rgba(99,102,241,0.3);
-    background: #eef2ff; color: #4f46e5;
-    font-size: 13px; font-weight: 700;
-    cursor: pointer; font-family: var(--font); transition: all 0.15s;
-  }
-  .btn-query:hover { background: #4f46e5; color: #fff; border-color: #4f46e5; }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .spin { animation: spin 0.8s linear infinite; }
-
-  /* ── MAIN ── */
-  .dashboard { padding-top: 60px; position: relative; z-index: 1; }
-  .main { max-width: 1600px; margin: 0 auto; padding: 24px; }
-
-  /* ── STAT CARDS ── */
-  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
-  @media(max-width:900px) { .stat-grid { grid-template-columns: repeat(2,1fr); } }
-  .scard {
-    background: var(--surface);
-    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-    border-radius: 16px; padding: 20px 22px;
-    border: 1px solid rgba(255,255,255,0.7);
-    box-shadow: 0 2px 20px rgba(174,0,112,0.04);
-    transition: transform 0.15s, box-shadow 0.15s;
-  }
-  .scard:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(174,0,112,0.08); }
-  .scard-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.6px; text-transform: uppercase; }
-  .scard-value { font-size: 26px; font-weight: 800; margin-top: 6px; letter-spacing: -0.5px; }
-  .scard-sub   { font-size: 12px; color: var(--muted); margin-top: 5px; }
-
-  /* ── TABLE ── */
-  .table-wrap {
-    background: var(--surface);
-    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-    border-radius: 16px;
-    border: 1px solid rgba(255,255,255,0.7);
-    box-shadow: 0 4px 30px rgba(0,0,0,0.04);
-    overflow: hidden;
-  }
-  .table-scroll { overflow-x: auto; }
-  .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 1100px; }
-  .tbl thead tr { background: rgba(245,237,242,0.8); }
-  .tbl th {
-    padding: 13px 16px; text-align: left;
-    font-size: 11px; font-weight: 700; color: var(--muted);
-    letter-spacing: 0.5px; text-transform: uppercase;
-    border-bottom: 1px solid var(--border); white-space: nowrap;
-  }
-  .th-check, .td-check  { width: 44px; text-align: center !important; }
-  .th-action, .td-action { width: 80px; text-align: center !important; }
-  .tbl td { padding: 14px 16px; border-bottom: 1px solid rgba(174,0,112,0.03); vertical-align: middle; }
-  .trow { cursor: pointer; transition: background 0.1s; }
-  .trow:hover { background: rgba(255,255,255,0.6); }
-  .trow.sel   { background: rgba(174,0,112,0.05) !important; }
-  .trow:last-child td { border-bottom: none; }
-
-  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 20px; font-size: 12px; font-weight: 700; white-space: nowrap; }
-  .badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-  .td-amount { font-weight: 800; color: var(--mm); font-size: 14px; white-space: nowrap; }
-  .td-info   { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; }
-  .td-code   { font-family: monospace; font-size: 12px; color: #4b5563; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
-  .td-date   { font-size: 12px; color: var(--muted); white-space: nowrap; }
-  .chip      { background: rgba(0,0,0,0.06); padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 600; }
-  .result-code { font-family: monospace; font-size: 13px; font-weight: 700; }
-  .muted { color: #9ca3af; }
-
-  /* Row action buttons */
-  .btn-action-row {
-    width: 28px; height: 28px; border-radius: 7px; border: none;
-    background: transparent; cursor: pointer;
-    display: inline-flex; align-items: center; justify-content: center;
-    transition: all 0.15s;
-  }
-  .btn-query-row { color: #6366f1; }
-  .btn-query-row:hover { background: #eef2ff; color: #4f46e5; }
-  .btn-del-row { color: #9ca3af; }
-  .btn-del-row:hover { background: #fee2e2; color: var(--danger); }
-
-  .table-footer {
-    padding: 12px 20px;
-    display: flex; justify-content: space-between; align-items: center;
-    border-top: 1px solid var(--border);
-    font-size: 12px; color: var(--muted);
-  }
-  .table-count { font-weight: 600; }
-  .last-sync   { font-style: italic; }
-
-  .empty      { padding: 72px 24px; text-align: center; }
-  .empty-icon { font-size: 40px; margin-bottom: 12px; }
-  .empty-text { font-size: 15px; font-weight: 600; color: var(--muted); }
-
-  /* ── MODAL ── */
-  .overlay {
-    position: fixed; inset: 0; z-index: 300;
-    background: rgba(17,7,13,0.5);
-    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-    display: flex; align-items: center; justify-content: center;
-    padding: 20px;
-    animation: fadein 0.15s ease;
-  }
-  @keyframes fadein { from{opacity:0} to{opacity:1} }
-  .modal {
-    background: #fff; border-radius: 20px;
-    width: 100%; max-width: 520px; max-height: 88vh;
-    display: flex; flex-direction: column;
-    box-shadow: 0 32px 80px rgba(0,0,0,0.2), 0 0 0 1px rgba(174,0,112,0.08);
-    animation: slideup 0.2s ease;
-    overflow: hidden;
-  }
-  .modal-query { max-width: 580px; }
-  @keyframes slideup { from{transform:translateY(16px);opacity:0} to{transform:none;opacity:1} }
-
-  .modal-hd {
-    display: flex; align-items: flex-start; justify-content: space-between;
-    padding: 20px 22px 16px;
-    border-bottom: 1px solid #f3f4f6;
-    flex-shrink: 0;
-  }
-  .modal-hd-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
-  .modal-hd-id    { font-family: monospace; font-size: 13px; color: #374151; }
-  .modal-x {
-    width: 30px; height: 30px; border-radius: 8px; border: none;
-    background: #f3f4f6; color: #6b7280; font-size: 14px;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; margin-left: 12px; transition: all 0.15s;
-  }
-  .modal-x:hover { background: #fee2e2; color: var(--danger); }
-
-  .modal-hero {
-    padding: 20px 22px; flex-shrink: 0;
-    display: flex; flex-direction: column; gap: 8px;
-  }
-  .modal-amount    { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
-  .modal-orderinfo { font-size: 13px; color: #374151; font-weight: 500; }
-
-  .modal-body       { overflow-y: auto; flex: 1; padding: 4px 0; }
-  .msection         { padding: 0 22px; margin-bottom: 4px; }
-  .msection-title   {
-    font-size: 10px; font-weight: 700; color: var(--muted);
-    letter-spacing: 0.8px; text-transform: uppercase;
-    padding: 14px 0 8px; border-top: 1px solid #f3f4f6;
-  }
-  .msection:first-child .msection-title { border-top: none; }
-  .mrow { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; border-bottom: 1px solid #f9fafb; }
-  .mrow:last-child { border-bottom: none; }
-  .mrow-label { min-width: 130px; font-size: 12px; font-weight: 600; color: var(--muted); padding-top: 1px; flex-shrink: 0; }
-  .mrow-value { font-size: 13px; color: var(--text); flex: 1; word-break: break-all; display: flex; align-items: center; gap: 6px; }
-  .mrow-value.mono { font-family: monospace; font-size: 12px; }
-  .copy-btn {
-    flex-shrink: 0; background: none; border: none; color: #9ca3af;
-    cursor: pointer; padding: 2px; border-radius: 4px;
-    display: inline-flex; align-items: center; transition: color 0.15s;
-  }
-  .copy-btn:hover { color: var(--mm); }
-
-  .extra-block {
-    background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px;
-    padding: 12px; font-family: monospace; font-size: 11.5px; color: #374151;
-    white-space: pre-wrap; word-break: break-all; margin-bottom: 4px;
-  }
-
-  .modal-ft {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 22px; border-top: 1px solid #f3f4f6; flex-shrink: 0;
-  }
-  .btn-del-modal {
-    display: inline-flex; align-items: center; gap: 7px;
-    padding: 8px 14px; border-radius: 9px;
-    border: 1px solid #fecaca; background: #fff5f5;
-    color: var(--danger); font-size: 13px; font-weight: 700;
-    cursor: pointer; font-family: var(--font); transition: all 0.15s;
-  }
-  .btn-del-modal:hover { background: #fee2e2; border-color: var(--danger); }
-
-  .btn-query-modal {
-    display: inline-flex; align-items: center; gap: 7px;
-    padding: 8px 14px; border-radius: 9px;
-    border: 1px solid rgba(99,102,241,0.3); background: #eef2ff;
-    color: #4f46e5; font-size: 13px; font-weight: 700;
-    cursor: pointer; font-family: var(--font); transition: all 0.15s;
-  }
-  .btn-query-modal:hover { background: #4f46e5; color: #fff; border-color: #4f46e5; }
-
-  .btn-close-modal {
-    padding: 8px 20px; border-radius: 9px;
-    border: 1px solid var(--border); background: #f9fafb;
-    font-size: 13px; font-weight: 600; color: #374151;
-    cursor: pointer; font-family: var(--font); transition: all 0.15s;
-  }
-  .btn-close-modal:hover { background: #fff; }
-
-  /* ── QUERY MODAL SPECIFIC ── */
-  .qinput-wrap { padding: 16px 22px; border-bottom: 1px solid #f3f4f6; flex-shrink: 0; }
-  .qinput-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; display: block; margin-bottom: 8px; }
-  .qinput-row { display: flex; gap: 8px; }
-  .qinput {
-    flex: 1; padding: 10px 14px;
-    border: 1.5px solid var(--border); border-radius: 10px;
-    font-size: 14px; font-family: monospace; color: var(--text);
-    background: #fafafa; transition: all 0.2s;
-  }
-  .qinput:focus { outline: none; border-color: #6366f1; background: #fff; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
-  .qinput-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
-  .btn-do-query {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 10px 18px; border-radius: 10px;
-    border: none; background: #4f46e5; color: #fff;
-    font-size: 13px; font-weight: 700; cursor: pointer;
-    font-family: var(--font); transition: all 0.15s; white-space: nowrap;
-  }
-  .btn-do-query:hover:not(:disabled) { background: #4338ca; }
-  .btn-do-query:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  .qerror {
-    margin: 12px 22px; padding: 10px 14px;
-    background: #fff5f5; border: 1px solid #fecaca; border-radius: 10px;
-    color: var(--danger); font-size: 13px; font-weight: 600;
-    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
-  }
-
-  .qresult-hero {
-    margin: 0; padding: 16px 22px; flex-shrink: 0;
-    display: flex; flex-direction: column; gap: 4px;
-  }
-  .qresult-rc   { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; font-family: monospace; }
-  .qresult-desc { font-size: 14px; font-weight: 700; color: #374151; }
-  .qresult-msg  { font-size: 12px; color: var(--muted); }
-
-  /* ── LOGIN ── */
-  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; position: relative; z-index: 10; }
-  .login-card {
-    background: rgba(255,255,255,0.95);
-    backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
-    border-radius: 24px; padding: 40px 36px; width: 100%; max-width: 400px;
-    text-align: center;
-    box-shadow: 0 24px 60px rgba(174,0,112,0.1), 0 0 0 1px rgba(255,255,255,0.8);
-  }
-  .login-logo-box { width: 60px; height: 60px; border-radius: 16px; background: #fff; border: 1px solid rgba(174,0,112,0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; box-shadow: 0 4px 12px rgba(174,0,112,0.08); }
-  .login-logo     { width: 44px; height: 44px; object-fit: contain; }
-  .login-title    { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; }
-  .login-sub      { font-size: 13px; color: var(--muted); margin-top: 5px; margin-bottom: 28px; }
-  .pw-group input {
-    width: 100%; padding: 13px 16px; border: 1.5px solid rgba(174,0,112,0.15);
-    border-radius: 12px; font-size: 15px; font-family: var(--font);
-    margin-bottom: 12px; background: rgba(245,237,242,0.5); color: var(--text);
-    transition: all 0.2s;
-  }
-  .pw-group input:focus { outline: none; border-color: var(--mm); background: #fff; box-shadow: 0 0 0 4px rgba(174,0,112,0.07); }
-  .pw-group.error input { border-color: var(--danger); background: #fff5f5; }
-  .pw-error  { font-size: 13px; color: var(--danger); font-weight: 600; margin-bottom: 14px; }
-  .login-btn {
-    width: 100%; padding: 13px; background: var(--mm); color: #fff;
-    border: none; border-radius: 12px; font-size: 15px; font-weight: 700;
-    cursor: pointer; font-family: var(--font);
-    box-shadow: 0 6px 20px rgba(174,0,112,0.2); transition: all 0.2s;
-  }
-  .login-btn:hover { background: #91005d; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(174,0,112,0.25); }
-
-  /* ── RESPONSIVE ── */
-  @media(max-width:768px) {
-    .topbar-inner { flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 10px; }
-    .filter-tabs  { order: 3; width: 100%; overflow-x: auto; justify-content: flex-start; padding-bottom: 2px; }
-    .topbar-right { margin-left: auto; }
-    .searchbox input { width: 160px; }
-    .searchbox input:focus { width: 180px; }
-    .dashboard { padding-top: 0; }
-    .main { padding: 16px; }
-    .stat-grid { grid-template-columns: repeat(2,1fr); gap: 12px; }
-  }
-
-  .btn-confirm-row {
-  color: #16a34a; border-color: rgba(22,163,74,0.3); background: #f0fdf4;
-}
-.btn-confirm-row:hover { background: #16a34a; color: #fff; border-color: #16a34a; }
-
-.btn-confirm-modal {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 8px 14px; border-radius: 9px;
-  border: 1px solid rgba(22,163,74,0.3); background: #f0fdf4;
-  color: #16a34a; font-size: 13px; font-weight: 700;
-  cursor: pointer; font-family: var(--font); transition: all 0.15s;
-}
-.btn-confirm-modal:hover { background: #16a34a; color: #fff; border-color: #16a34a; }
-
-`
