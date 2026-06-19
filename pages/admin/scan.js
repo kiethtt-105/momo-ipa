@@ -5,6 +5,16 @@ import { useRouter } from 'next/router'
 const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
 const QUICK_AMOUNTS = [10000, 20000, 50000, 100000, 200000, 500000]
 
+function cleanCode(raw) {
+  if (!raw) return ''
+  const s = raw.trim()
+  const m1 = s.match(/^[Mm]{2}(\d{18})$/)
+  if (m1) return 'MM' + m1[1]
+  const m2 = s.match(/(\d{18})/)
+  if (m2) return m2[1]
+  return s
+}
+
 export default function ScanPage() {
   const router = useRouter()
 
@@ -12,21 +22,22 @@ export default function ScanPage() {
   const [password, setPassword] = useState('')
   const [pwError,  setPwError]  = useState(false)
 
+  // step: 'amount' | 'scan'
+  const [step, setStep] = useState('amount')
+
   const videoRef  = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
   const rafRef    = useRef(null)
+  const submitting = useRef(false) // chặn double-submit
 
-  const [ready,       setReady]       = useState(false)   // jsQR loaded
-  const [scanning,    setScanning]    = useState(false)
-  const [paymentCode, setPaymentCode] = useState('')
-  const [manualCode,  setManualCode]  = useState('')
-  const [camError,    setCamError]    = useState('')
+  const [ready,    setReady]    = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [camError, setCamError] = useState('')
 
   const [amount,    setAmount]    = useState('')
   const [orderInfo, setOrderInfo] = useState('Thanh toán tại quầy')
-  const [loading,   setLoading]   = useState(false)
-  const [result,    setResult]    = useState(null)
+  const [result,    setResult]    = useState(null) // { success, data, amount }
 
   // ── Load jsQR ──────────────────────────────────────────────
   useEffect(() => {
@@ -46,24 +57,19 @@ export default function ScanPage() {
       .catch(() => setAuthed(false))
   }, [])
 
-  // ── Auto-start camera sau khi authed + jsQR ready ──────────
+  // ── Tự mở camera khi vào step scan ────────────────────────
   useEffect(() => {
-    if (authed === true && ready) startCamera()
-  }, [authed, ready])
+    if (step === 'scan' && ready) {
+      setCamError('')
+      submitting.current = false
+      setScanning(true)
+    }
+  }, [step, ready])
 
-  // ── Camera ─────────────────────────────────────────────────
-  async function startCamera() {
-    setCamError('')
-    setScanning(true) // set true TRƯỚC để React render <video> rồi mới gán srcObject
-  }
-
-  // Dùng callback ref — chạy sau khi <video> mount vào DOM
-  const videoCallbackRef = useRef(null)
+  // ── Callback ref — chạy sau khi <video> mount ──────────────
   function setVideoRef(el) {
     videoRef.current = el
-    if (el && scanning && !streamRef.current) {
-      initStream(el)
-    }
+    if (el && !streamRef.current) initStream(el)
   }
 
   async function initStream(videoEl) {
@@ -79,11 +85,11 @@ export default function ScanPage() {
     } catch (err) {
       setScanning(false)
       if (err.name === 'NotAllowedError')
-        setCamError('Bị từ chối quyền camera. Vào Settings trình duyệt → cho phép Camera rồi thử lại.')
+        setCamError('Bị từ chối quyền camera. Vào Settings trình duyệt → cho phép Camera.')
       else if (err.name === 'NotFoundError')
         setCamError('Không tìm thấy camera.')
       else
-        setCamError(`Lỗi: ${err.message}`)
+        setCamError(`Lỗi camera: ${err.message}`)
     }
   }
 
@@ -92,20 +98,17 @@ export default function ScanPage() {
     const canvas = canvasRef.current
     if (!video || !canvas) return
     if (video.readyState < 2) { rafRef.current = requestAnimationFrame(tick); return }
-
     canvas.width  = video.videoWidth
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
     ctx.drawImage(video, 0, 0)
     const img  = ctx.getImageData(0, 0, canvas.width, canvas.height)
     const code = window.jsQR?.(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' })
-    if (code?.data) { onDetected(code.data); return }
+    if (code?.data && !submitting.current) {
+      onDetected(code.data)
+      return
+    }
     rafRef.current = requestAnimationFrame(tick)
-  }
-
-  function onDetected(raw) {
-    stopCamera()
-    setPaymentCode(raw)
   }
 
   function stopCamera() {
@@ -117,15 +120,16 @@ export default function ScanPage() {
 
   useEffect(() => () => stopCamera(), [])
 
-  // ── Submit ─────────────────────────────────────────────────
-  async function submit() {
-    const code = paymentCode || manualCode.trim()
+  // ── Quét xong → submit ngay ────────────────────────────────
+  async function onDetected(raw) {
+    if (submitting.current) return
+    submitting.current = true
+    stopCamera()
+
+    const code = cleanCode(raw)
     const amt  = parseInt(amount)
-    if (!code)              return alert('Chưa có mã thanh toán')
-    if (!amt || amt < 1000) return alert('Số tiền tối thiểu 1,000 ₫')
-    if (amt > 5_000_000)    return alert('Số tiền tối đa 5,000,000 ₫')
-    setLoading(true)
     const orderId = `POS${Date.now()}`
+
     try {
       const res  = await fetch('/api/momo/pos', {
         method: 'POST',
@@ -133,24 +137,24 @@ export default function ScanPage() {
         body: JSON.stringify({ orderId, amount: amt, orderInfo, paymentCode: code }),
       })
       const data = await res.json()
-      setResult({ success: data.resultCode === 0, data })
+      setResult({ success: data.resultCode === 0, data, amount: amt })
     } catch {
-      setResult({ success: false, data: { message: 'Lỗi kết nối server' } })
-    } finally {
-      setLoading(false)
+      setResult({ success: false, data: { message: 'Lỗi kết nối server' }, amount: amt })
     }
   }
 
-  function reset() {
-    setResult(null); setPaymentCode(''); setManualCode(''); setAmount('')
-    setTimeout(() => startCamera(), 100)
+  function resetAll() {
+    setResult(null)
+    setAmount('')
+    setStep('amount')
+    submitting.current = false
   }
 
   // ── Loading auth ───────────────────────────────────────────
   if (authed === null) return (
     <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#fff8fb' }}>
       <style>{`@keyframes p{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
-      <div style={{ width:10, height:10, borderRadius:'50%', background:'#ae0070', animation:'p 0.8s infinite' }} />
+      <div style={{ width:10, height:10, borderRadius:'50%', background:'#ae0070', animation:'p .8s infinite' }} />
     </div>
   )
 
@@ -169,13 +173,12 @@ export default function ScanPage() {
       <>
         <Head><title>Admin · Đăng nhập</title></Head>
         <style>{CSS}</style>
-        <div style={S.bg}>
+        <div style={{ ...S.bg, position:'relative' }}>
           <div style={S.loginCard}>
             <img src="/Main.png" alt="" style={{ width:48, height:48, borderRadius:12, marginBottom:16 }} />
             <h1 style={{ fontSize:20, fontWeight:800, color:'#111', marginBottom:6 }}>Quản trị viên</h1>
-            <p style={{ fontSize:13, color:'#6b7280', marginBottom:24 }}>MoMo POS · Quét mã thanh toán</p>
-            <input
-              type="password" placeholder="Mật khẩu" value={password} autoFocus
+            <p style={{ fontSize:13, color:'#6b7280', marginBottom:24 }}>MoMo POS · Thu tiền tại quầy</p>
+            <input type="password" placeholder="Mật khẩu" value={password} autoFocus
               onChange={e => { setPassword(e.target.value); setPwError(false) }}
               onKeyDown={e => e.key === 'Enter' && login()}
               style={{ ...S.input, borderColor: pwError ? '#dc2626' : 'rgba(174,0,112,0.2)', marginBottom:8 }}
@@ -191,35 +194,41 @@ export default function ScanPage() {
   // ── Result ─────────────────────────────────────────────────
   if (result) return (
     <>
-      <Head><title>Kết quả</title></Head>
+      <Head><title>Kết quả thanh toán</title></Head>
       <style>{CSS}</style>
       <div style={S.bg}>
-        <div style={S.card}>
-          <div style={{ fontSize:52, marginBottom:12 }}>{result.success ? '✅' : '❌'}</div>
-          <h2 style={{ fontSize:22, fontWeight:800, color: result.success ? '#16a34a' : '#dc2626', marginBottom:8 }}>
-            {result.success ? 'Thanh toán thành công' : 'Thanh toán thất bại'}
-          </h2>
-          {result.success && <div style={{ fontSize:28, fontWeight:800, color:'#ae0070', marginBottom:8 }}>{fmt(amount)} ₫</div>}
-          <p style={{ fontSize:13, color:'#6b7280', marginBottom:4 }}>{result.data.message}</p>
-          {result.data.transId && <p style={{ fontSize:12, fontFamily:'monospace', color:'#374151' }}>Mã GD: {result.data.transId}</p>}
-          {!result.success && <p style={{ fontSize:12, color:'#dc2626', marginTop:4 }}>Code: {result.data.resultCode}</p>}
-          <div style={{ display:'flex', gap:10, marginTop:24, width:'100%' }}>
-            <button onClick={reset} style={S.btnPrimary}>Thu tiếp</button>
-            <button onClick={() => router.push('/admin')} style={S.btnSecondary}>Về Admin</button>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:20 }}>
+          <div style={{ ...S.card, maxWidth:400, width:'100%', textAlign:'center', padding:'36px 24px' }}>
+            <div style={{ fontSize:56, marginBottom:12 }}>{result.success ? '✅' : '❌'}</div>
+            <h2 style={{ fontSize:22, fontWeight:800, color: result.success ? '#16a34a' : '#dc2626', marginBottom:8 }}>
+              {result.success ? 'Thanh toán thành công' : 'Thanh toán thất bại'}
+            </h2>
+            <div style={{ fontSize:28, fontWeight:800, color:'#ae0070', marginBottom:8 }}>{fmt(result.amount)} ₫</div>
+            <p style={{ fontSize:13, color:'#6b7280', marginBottom:4 }}>{result.data.message}</p>
+            {result.data.transId && (
+              <p style={{ fontSize:12, fontFamily:'monospace', color:'#374151', marginTop:4 }}>Mã GD: {result.data.transId}</p>
+            )}
+            {!result.success && result.data.resultCode !== undefined && (
+              <p style={{ fontSize:12, color:'#dc2626', marginTop:4 }}>Result code: {result.data.resultCode}</p>
+            )}
+            <div style={{ display:'flex', gap:10, marginTop:28 }}>
+              <button onClick={resetAll} style={S.btnPrimary}>Thu tiếp</button>
+              <button onClick={() => router.push('/admin')} style={S.btnSecondary}>Về Admin</button>
+            </div>
           </div>
         </div>
       </div>
     </>
   )
 
-  // ── Main ───────────────────────────────────────────────────
-  const hasCode = paymentCode || manualCode.trim()
-  const canPay  = hasCode && parseInt(amount) >= 1000
+  // ── Step indicators ────────────────────────────────────────
+  const stepIdx = step === 'amount' ? 0 : 1
+  const STEPS   = ['Số tiền', 'Quét & Thu']
 
   return (
     <>
       <Head>
-        <title>Admin · Quét QR MoMo</title>
+        <title>Admin · MoMo POS</title>
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
@@ -228,140 +237,143 @@ export default function ScanPage() {
 
         {/* Header */}
         <div style={S.header}>
-          <button onClick={() => router.push('/admin')} style={S.backBtn}>←</button>
+          <button
+            onClick={() => step === 'amount' ? router.push('/admin') : (stopCamera(), setStep('amount'))}
+            style={S.backBtn}
+          >←</button>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             <img src="/Main.png" alt="" style={{ width:26, height:26, borderRadius:6 }} />
-            <span style={{ fontWeight:800, color:'#ae0070', fontSize:16 }}>Quét QR · MoMo POS</span>
+            <span style={{ fontWeight:800, color:'#ae0070', fontSize:16 }}>MoMo POS</span>
           </div>
           <div style={{ width:34 }} />
         </div>
 
+        {/* Step bar */}
+        <div style={{ display:'flex', justifyContent:'center', alignItems:'center', padding:'14px 24px 0', gap:0, maxWidth:480, margin:'0 auto' }}>
+          {STEPS.map((label, i) => (
+            <div key={i} style={{ display:'flex', alignItems:'center', flex: i < STEPS.length-1 ? 1 : 'none' }}>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                <div style={{
+                  width:28, height:28, borderRadius:'50%',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize:12, fontWeight:800, transition:'all .3s',
+                  background: i <= stepIdx ? '#ae0070' : '#e5e7eb',
+                  color:      i <= stepIdx ? '#fff'    : '#9ca3af',
+                }}>{i < stepIdx ? '✓' : i + 1}</div>
+                <span style={{ fontSize:10, fontWeight:600, whiteSpace:'nowrap', color: i <= stepIdx ? '#ae0070' : '#9ca3af' }}>{label}</span>
+              </div>
+              {i < STEPS.length-1 && (
+                <div style={{ flex:1, height:2, margin:'0 8px', marginBottom:18, transition:'all .3s', background: i < stepIdx ? '#ae0070' : '#e5e7eb' }} />
+              )}
+            </div>
+          ))}
+        </div>
+
         <div style={S.content}>
 
-          {/* Camera / Code section */}
-          <div style={S.card}>
-            <h3 style={S.sectionTitle}>📷 Mã thanh toán</h3>
-
-            {paymentCode ? (
-              /* Detected */
-              <div style={{ textAlign:'center' }}>
-                <div style={{ fontSize:36, marginBottom:8 }}>✅</div>
-                <p style={{ fontSize:12, color:'#6b7280', marginBottom:6 }}>Quét thành công</p>
-                <div style={{
-                  background:'#f0fdf4', border:'1px solid #86efac', borderRadius:10,
-                  padding:'10px 14px', fontFamily:'monospace', fontSize:11,
-                  color:'#15803d', wordBreak:'break-all', marginBottom:12,
-                }}>{paymentCode}</div>
-                <button onClick={() => { setPaymentCode(''); setTimeout(startCamera, 100) }}
-                  style={{ ...S.btnSecondary, width:'auto', padding:'8px 20px' }}>
-                  Quét lại
-                </button>
+          {/* ── STEP 1: AMOUNT ── */}
+          {step === 'amount' && (
+            <div style={S.card}>
+              <h3 style={S.sectionTitle}>💰 Nhập số tiền cần thu</h3>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:14 }}>
+                {QUICK_AMOUNTS.map(a => (
+                  <button key={a} onClick={() => setAmount(String(a))} style={{
+                    padding:'10px 4px', borderRadius:10, border:'none',
+                    fontSize:13, fontWeight:700, cursor:'pointer',
+                    background: amount === String(a) ? '#ae0070' : '#f9f0f5',
+                    color:      amount === String(a) ? '#fff'    : '#ae0070',
+                  }}>{fmt(a)}</button>
+                ))}
               </div>
-            ) : scanning ? (
-              /* Camera live */
-              <div>
-                <div style={{ position:'relative', borderRadius:12, overflow:'hidden', background:'#000', marginBottom:10 }}>
-                  <video
-                    ref={setVideoRef}
-                    playsInline muted
-                    style={{ width:'100%', display:'block', maxHeight:280, objectFit:'cover' }}
-                  />
-                  <canvas ref={canvasRef} style={{ display:'none' }} />
-                  {/* Scan overlay */}
-                  <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
-                    <div style={{ position:'relative', width:'55%', aspectRatio:'1' }}>
-                      {[
-                        { top:0, left:0, borderTop:'3px solid #ae0070', borderLeft:'3px solid #ae0070', borderRadius:'4px 0 0 0' },
-                        { top:0, right:0, borderTop:'3px solid #ae0070', borderRight:'3px solid #ae0070', borderRadius:'0 4px 0 0' },
-                        { bottom:0, left:0, borderBottom:'3px solid #ae0070', borderLeft:'3px solid #ae0070', borderRadius:'0 0 0 4px' },
-                        { bottom:0, right:0, borderBottom:'3px solid #ae0070', borderRight:'3px solid #ae0070', borderRadius:'0 0 4px 0' },
-                      ].map((st, i) => <div key={i} style={{ position:'absolute', width:22, height:22, ...st }} />)}
-                      <div className="scan-line" style={{ position:'absolute', left:0, right:0 }} />
-                    </div>
-                  </div>
-                </div>
-                {camError && <p style={{ fontSize:12, color:'#d97706', background:'#fef3c7', padding:'8px 12px', borderRadius:8, marginBottom:8 }}>⚠ {camError}</p>}
-                <p style={{ fontSize:12, color:'#6b7280', textAlign:'center' }}>Hướng camera vào mã QR trên màn hình khách</p>
-              </div>
-            ) : (
-              /* Idle / error */
-              <div style={{ textAlign:'center' }}>
-                {camError
-                  ? <p style={{ fontSize:13, color:'#dc2626', background:'#fff5f5', padding:'12px', borderRadius:10, marginBottom:14 }}>⚠ {camError}</p>
-                  : <p style={{ fontSize:13, color:'#6b7280', marginBottom:16 }}>Đang khởi động camera...</p>
-                }
-                <button onClick={startCamera} style={S.btnPrimary} disabled={!ready}>
-                  📷 {camError ? 'Thử lại' : 'Mở camera'}
-                </button>
-              </div>
-            )}
-
-            {/* Manual fallback */}
-            {!paymentCode && (
-              <div style={{ marginTop:16, paddingTop:16, borderTop:'1px solid #f3f4f6' }}>
-                <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', letterSpacing:'0.5px', textTransform:'uppercase', marginBottom:8 }}>
-                  Hoặc nhập mã thủ công
-                </p>
+              <input
+                type="number" placeholder="Hoặc nhập số tiền khác..."
+                value={amount} onChange={e => setAmount(e.target.value)}
+                style={S.input} min={1000} max={5000000} autoFocus
+              />
+              {amount && parseInt(amount) >= 1000 && (
+                <p style={{ fontSize:15, color:'#ae0070', fontWeight:800, marginBottom:12 }}>= {fmt(amount)} ₫</p>
+              )}
+              <div style={{ paddingTop:12, borderTop:'1px solid #f3f4f6', marginBottom:14 }}>
+                <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>Nội dung</p>
                 <input
-                  placeholder="MM561918531775222861"
-                  value={manualCode}
-                  onChange={e => setManualCode(e.target.value)}
-                  style={{ ...S.input, fontFamily:'monospace', fontSize:13 }}
+                  placeholder="Nội dung đơn hàng"
+                  value={orderInfo} onChange={e => setOrderInfo(e.target.value)}
+                  style={S.input}
                 />
               </div>
-            )}
-          </div>
-
-          {/* Amount */}
-          <div style={S.card}>
-            <h3 style={S.sectionTitle}>💰 Số tiền</h3>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:12 }}>
-              {QUICK_AMOUNTS.map(a => (
-                <button key={a} onClick={() => setAmount(String(a))} style={{
-                  padding:'9px 4px', borderRadius:10, border:'none',
-                  fontSize:13, fontWeight:700, cursor:'pointer',
-                  background: amount === String(a) ? '#ae0070' : '#f9f0f5',
-                  color:      amount === String(a) ? '#fff'    : '#ae0070',
-                }}>{fmt(a)}</button>
-              ))}
+              <button
+                onClick={() => setStep('scan')}
+                disabled={!amount || parseInt(amount) < 1000}
+                style={{ ...S.btnPrimary, opacity: (!amount || parseInt(amount) < 1000) ? 0.4 : 1 }}
+              >
+                Xác nhận · Mở camera quét →
+              </button>
             </div>
-            <input
-              type="number" placeholder="Nhập số tiền khác..."
-              value={amount} onChange={e => setAmount(e.target.value)}
-              style={S.input} min={1000} max={5000000}
-            />
-            {amount && parseInt(amount) >= 1000 && (
-              <p style={{ fontSize:13, color:'#ae0070', fontWeight:700, marginTop:4 }}>= {fmt(amount)} ₫</p>
-            )}
-          </div>
+          )}
 
-          {/* Order info */}
-          <div style={S.card}>
-            <h3 style={S.sectionTitle}>📝 Nội dung</h3>
-            <input
-              placeholder="Nội dung đơn hàng"
-              value={orderInfo} onChange={e => setOrderInfo(e.target.value)}
-              style={S.input}
-            />
-          </div>
-
-          {/* Submit */}
-          <button onClick={submit} disabled={!canPay || loading} style={{
-            ...S.btnPrimary, padding:'15px', fontSize:16,
-            opacity: canPay && !loading ? 1 : 0.4,
-            cursor:  canPay && !loading ? 'pointer' : 'not-allowed',
-          }}>
-            {loading
-              ? <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                  <span className="spinner" /> Đang xử lý...
+          {/* ── STEP 2: SCAN & AUTO-PAY ── */}
+          {step === 'scan' && (
+            <div style={S.card}>
+              {/* Amount badge */}
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+                <h3 style={{ ...S.sectionTitle, marginBottom:0 }}>📷 Quét mã MoMo của khách</h3>
+                <span style={{ background:'#ae0070', color:'#fff', borderRadius:20, padding:'4px 12px', fontSize:13, fontWeight:800 }}>
+                  {fmt(amount)} ₫
                 </span>
-              : `Thu ${amount && parseInt(amount) >= 1000 ? fmt(amount) + ' ₫' : 'tiền'}`
-            }
-          </button>
+              </div>
 
-          <button onClick={() => router.push('/admin')} style={{ ...S.btnSecondary, marginTop:4 }}>
-            ← Về trang Admin
-          </button>
+              <p style={{ fontSize:12, color:'#6b7280', marginBottom:12, lineHeight:1.6 }}>
+                Khách mở app MoMo → <b>Mã thanh toán</b><br/>
+                Hướng camera vào màn hình khách — <b>sẽ tự động thu tiền khi quét được</b>
+              </p>
+
+              {scanning ? (
+                <>
+                  <div style={{ position:'relative', borderRadius:14, overflow:'hidden', background:'#000', marginBottom:10 }}>
+                    <video ref={setVideoRef} playsInline muted
+                      style={{ width:'100%', display:'block', maxHeight:320, objectFit:'cover' }} />
+                    <canvas ref={canvasRef} style={{ display:'none' }} />
+                    {/* Overlay */}
+                    <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
+                      <div style={{ position:'relative', width:'60%', aspectRatio:'1' }}>
+                        {[
+                          { top:0, left:0, borderTop:'3px solid #ae0070', borderLeft:'3px solid #ae0070', borderRadius:'4px 0 0 0' },
+                          { top:0, right:0, borderTop:'3px solid #ae0070', borderRight:'3px solid #ae0070', borderRadius:'0 4px 0 0' },
+                          { bottom:0, left:0, borderBottom:'3px solid #ae0070', borderLeft:'3px solid #ae0070', borderRadius:'0 0 0 4px' },
+                          { bottom:0, right:0, borderBottom:'3px solid #ae0070', borderRight:'3px solid #ae0070', borderRadius:'0 0 4px 0' },
+                        ].map((st, i) => <div key={i} style={{ position:'absolute', width:24, height:24, ...st }} />)}
+                        <div className="scan-line" style={{ position:'absolute', left:0, right:0 }} />
+                      </div>
+                    </div>
+                    {/* Processing overlay */}
+                    {submitting.current && (
+                      <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12 }}>
+                        <span className="spinner" style={{ width:32, height:32, borderWidth:3 }} />
+                        <span style={{ color:'#fff', fontWeight:700, fontSize:14 }}>Đang xử lý...</span>
+                      </div>
+                    )}
+                  </div>
+                  {camError && <p style={{ fontSize:12, color:'#d97706', background:'#fef3c7', padding:'8px 12px', borderRadius:8, marginBottom:8 }}>⚠ {camError}</p>}
+                </>
+              ) : (
+                <div style={{ textAlign:'center', padding:'16px 0' }}>
+                  {camError
+                    ? <p style={{ fontSize:13, color:'#dc2626', background:'#fff5f5', padding:'12px', borderRadius:10, marginBottom:14 }}>⚠ {camError}</p>
+                    : <p style={{ fontSize:13, color:'#6b7280', marginBottom:14 }}>Đang khởi động camera...</p>
+                  }
+                  <button onClick={() => { setCamError(''); submitting.current = false; setScanning(true) }}
+                    style={{ ...S.btnPrimary, width:'auto', padding:'10px 24px' }} disabled={!ready}>
+                    📷 {camError ? 'Thử lại' : 'Mở camera'}
+                  </button>
+                </div>
+              )}
+
+              <button onClick={() => { stopCamera(); setStep('amount') }}
+                style={{ ...S.btnSecondary, marginTop:12 }}>
+                ← Quay lại đổi số tiền
+              </button>
+            </div>
+          )}
 
         </div>
       </div>
@@ -377,9 +389,9 @@ const S = {
   card:      { background:'rgba(255,255,255,0.96)', borderRadius:16, padding:'18px 16px', boxShadow:'0 2px 16px rgba(174,0,112,0.06)', border:'1px solid rgba(255,255,255,0.8)' },
   loginCard: { background:'white', borderRadius:20, padding:'36px 28px', width:'100%', maxWidth:360, boxShadow:'0 20px 60px rgba(174,0,112,0.12)', display:'flex', flexDirection:'column', alignItems:'center', position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)' },
   sectionTitle: { fontSize:13, fontWeight:700, color:'#374151', marginBottom:14 },
-  input:     { width:'100%', padding:'11px 14px', border:'1.5px solid rgba(174,0,112,0.15)', borderRadius:10, fontSize:14, background:'rgba(245,237,242,0.4)', color:'#111', marginBottom:4 },
-  btnPrimary:   { background:'#ae0070', color:'#fff', border:'none', borderRadius:12, padding:'12px 24px', fontSize:14, fontWeight:700, cursor:'pointer', width:'100%', boxShadow:'0 4px 16px rgba(174,0,112,0.25)' },
-  btnSecondary: { background:'white', color:'#374151', border:'1px solid rgba(0,0,0,0.1)', borderRadius:12, padding:'11px 24px', fontSize:14, fontWeight:600, cursor:'pointer', width:'100%' },
+  input:     { width:'100%', padding:'11px 14px', border:'1.5px solid rgba(174,0,112,0.15)', borderRadius:10, fontSize:14, background:'rgba(245,237,242,0.4)', color:'#111', marginBottom:8 },
+  btnPrimary:   { background:'#ae0070', color:'#fff', border:'none', borderRadius:12, padding:'13px 24px', fontSize:14, fontWeight:700, cursor:'pointer', width:'100%', boxShadow:'0 4px 16px rgba(174,0,112,0.25)' },
+  btnSecondary: { background:'white', color:'#374151', border:'1px solid rgba(0,0,0,0.1)', borderRadius:12, padding:'12px 24px', fontSize:14, fontWeight:600, cursor:'pointer', width:'100%' },
 }
 
 const CSS = `
