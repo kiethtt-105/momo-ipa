@@ -245,7 +245,7 @@ useEffect(() => {
                 <p style={{ fontSize:12, fontFamily:'monospace', color:'#374151', marginTop:4 }}>Mã GD: {result.data.transId}</p>
               )}
               <div style={{ display:'flex', gap:10, marginTop:28 }}>
-                <button onClick={resetAll} style={S.btnPrimary}>Thu tiếp</button>
+                <button onClick={resetAll} style={S.btnPrimary}>Giao Dịch Mới</button>
                 <button onClick={() => router.push('/admin')} style={S.btnSecondary}>Về Admin</button>
               </div>
             </div>
