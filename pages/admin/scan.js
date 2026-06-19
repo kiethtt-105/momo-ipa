@@ -94,6 +94,15 @@ export default function ScanPage() {
         }
   }, [urlAmount, urlOrderInfo, quick])
 
+  // Thêm đoạn này ở khu vực các useEffect đầu file để tự focus khi nhấn thử lại
+  useEffect(() => {
+    if (!result && step === 'scan') {
+      const inputEl = document.querySelector('input[placeholder*="Bắn mã"]');
+      if (inputEl) inputEl.focus();
+    }
+  }, [result, step]);
+
+
   function setVideoRef(el) {
     videoRef.current = el
     if (el && !streamRef.current) initStream(el)
@@ -315,12 +324,33 @@ export default function ScanPage() {
               <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:32 }}>
                 {!isSuccess && (
                   <button 
-                    onClick={() => {
+                    onClick={async () => {
                       setResult(null);
                       setManualCode('');
                       setManualErr('');
-                      setIsServerErr(false); 
-                      submitting.current = false;
+                      setIsServerErr(false);
+                      
+                      // Tự động sinh mã đơn hàng mới để chống trùng đơn khi thử lại
+                      const newGeneratedId = `POS${Date.now()}`;
+                      setCurrentOrderId(newGeneratedId);
+                      
+                      submitting.current = true;
+                      try {
+                        // Lưu lại log PENDING mới lên Redis
+                        await fetch('/api/momo/save-pending', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ 
+                            orderId: newGeneratedId, 
+                            amount: parseInt(amount), 
+                            orderInfo: orderInfo || newGeneratedId
+                          }),
+                        });
+                      } catch (e) {
+                        console.error(e);
+                      } finally {
+                        submitting.current = false;
+                      }
                     }}
                     style={{ ...S.btnPrimary, background: '#f59e0b' }}
                   >
@@ -491,7 +521,7 @@ export default function ScanPage() {
               {/* Input mã thủ công & Súng Quét */}
               <div style={{ marginBottom: 16, padding:'14px', background:'#f9f0f5', borderRadius:10, border:'1px solid rgba(174,0,112,0.15)' }}>
                 <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>
-                  MÃ THANH TOÁN MOMO (DÙNG SÚNG QUÉT / NHẬP TAY)
+                  MÃ THANH TOÁN MOMO 
                 </p>
                 <input
                   autoFocus
