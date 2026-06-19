@@ -36,6 +36,8 @@ export default function ScanPage() {
   const [manualErr,  setManualErr]  = useState('')
 
   const [currentOrderId, setCurrentOrderId] = useState(null)
+
+  const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
   // Load jsQR
   useEffect(() => {
     if (window.jsQR) { setReady(true); return }
@@ -62,6 +64,19 @@ export default function ScanPage() {
       setScanning(true)
     }
   }, [step, ready])
+
+  // Load amount và orderInfo từ query params
+  useEffect(() => {
+    if (urlAmount) {
+      setAmount(urlAmount)
+    }
+    if (urlOrderInfo) {
+      setOrderInfo(urlOrderInfo)
+    }
+    if (quick === 'true' && urlAmount) {
+      setStep('scan')
+    }
+  }, [urlAmount, urlOrderInfo, quick])
 
   function setVideoRef(el) {
     videoRef.current = el
