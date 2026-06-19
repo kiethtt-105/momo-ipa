@@ -31,7 +31,7 @@ export default function ScanPage() {
   const [camError, setCamError] = useState('')
 
   const [amount,    setAmount]    = useState('')
-  const [orderInfo, setOrderInfo] = useState('Thanh toán tại quầy')
+  const [orderInfo, setOrderInfo] = useState('Thanh toan tai quay')
   const [result,    setResult]    = useState(null) // { success, data, amount }
 
   // ── Nhập mã thủ công (khi không quét được) ──────────────────
