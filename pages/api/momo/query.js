@@ -9,13 +9,22 @@
 import crypto from 'crypto'
 
 // MoMo docs: dùng endpoint test khi chưa go-live, đổi sang production khi đã duyệt merchant
-const MOMO_ENDPOINT =process.env.MOMO_QUERY_ENDPOINT
+// Cố tình KHÔNG phụ thuộc biến môi trường ở đây để loại trừ khả năng URL bị undefined.
+// Nếu bạn cần đổi sang production, sửa trực tiếp dòng dưới (hoặc thêm lại env sau khi đã xác nhận chạy ổn).
+const MOMO_ENDPOINT = 'https://test-payment.momo.vn/v2/gateway/api/query'
 
 // ⚠️ Đổi tên các biến env này để KHỚP với những gì bạn đã dùng ở
 // các route MoMo khác (create order, ipn...). Đây chỉ là tên gợi ý.
 const PARTNER_CODE = process.env.MOMO_PARTNER_CODE
 const ACCESS_KEY = process.env.MOMO_ACCESS_KEY
 const SECRET_KEY = process.env.MOMO_SECRET_KEY
+
+console.log('[momo/query] boot check ->', {
+  hasPartnerCode: !!PARTNER_CODE,
+  hasAccessKey: !!ACCESS_KEY,
+  hasSecretKey: !!SECRET_KEY,
+  endpoint: MOMO_ENDPOINT,
+})
 
 // Yêu cầu timeout MIN 30s theo docs MoMo. Next.js (>=13.4) đọc được
 // `maxDuration` export trong cả pages/api và app/api khi deploy lên Vercel.
@@ -72,7 +81,16 @@ export default async function handler(req, res) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 28_000)
 
+  // Guard rõ ràng: nếu vì lý do gì đó MOMO_ENDPOINT không phải string hợp lệ,
+  // báo lỗi tường minh ngay tại đây thay vì để fetch() ném lỗi mơ hồ.
+  if (typeof MOMO_ENDPOINT !== 'string' || !MOMO_ENDPOINT.startsWith('http')) {
+    clearTimeout(timer)
+    console.error('[momo/query] MOMO_ENDPOINT không hợp lệ:', MOMO_ENDPOINT)
+    return res.status(500).json({ message: 'Lỗi cấu hình: MOMO_ENDPOINT không hợp lệ' })
+  }
+
   try {
+    console.log('[momo/query] Gọi MoMo:', MOMO_ENDPOINT, 'orderId=', orderId, 'requestId=', requestId)
     const momoRes = await fetch(MOMO_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
