@@ -227,26 +227,61 @@ useEffect(() => {
   }
 
   if (result) {
-    // ... (phần result giữ nguyên)
+    const isSuccess = result.success;
+
     return (
       <>
         <Head><title>Kết quả thanh toán</title></Head>
         <style>{CSS}</style>
         <div style={S.bg}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:20 }}>
-            <div style={{ ...S.card, maxWidth:400, width:'100%', textAlign:'center', padding:'36px 24px' }}>
-              <div style={{ fontSize:56, marginBottom:12 }}>{result.success ? '✅' : '❌'}</div>
-              <h2 style={{ fontSize:22, fontWeight:800, color: result.success ? '#16a34a' : '#dc2626', marginBottom:8 }}>
-                {result.success ? 'Thanh toán thành công' : 'Thanh toán thất bại'}
+            <div style={{ ...S.card, maxWidth:420, width:'100%', textAlign:'center', padding:'40px 24px' }}>
+              <div style={{ fontSize:56, marginBottom:12 }}>{isSuccess ? '✅' : '❌'}</div>
+              
+              <h2 style={{ fontSize:22, fontWeight:800, color: isSuccess ? '#16a34a' : '#dc2626', marginBottom:8 }}>
+                {isSuccess ? 'Thanh toán thành công' : 'Thanh toán thất bại'}
               </h2>
-              <div style={{ fontSize:28, fontWeight:800, color:'#ae0070', marginBottom:8 }}>{fmt(result.amount)} ₫</div>
+              
+              <div style={{ fontSize:28, fontWeight:800, color:'#ae0070', marginBottom:8 }}>
+                {fmt(result.amount)} ₫
+              </div>
+
               <p style={{ fontSize:13, color:'#6b7280', marginBottom:4 }}>{result.data.message}</p>
               {result.data.transId && (
-                <p style={{ fontSize:12, fontFamily:'monospace', color:'#374151', marginTop:4 }}>Mã GD: {result.data.transId}</p>
+                <p style={{ fontSize:12, fontFamily:'monospace', color:'#374151', marginTop:4 }}>
+                  Mã GD: {result.data.transId}
+                </p>
               )}
-              <div style={{ display:'flex', gap:10, marginTop:28 }}>
-                <button onClick={resetAll} style={S.btnPrimary}>Giao Dịch Mới</button>
-                <button onClick={() => router.push('/admin')} style={S.btnSecondary}>Về Admin</button>
+
+              <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:32 }}>
+                {/* Nút Thử lại - Ưu tiên khi thất bại */}
+                {!isSuccess && (
+                  <button 
+                    onClick={() => {
+                      setResult(null);
+                      setManualCode('');
+                      submitting.current = false;
+                      // Giữ nguyên amount và orderInfo để thử lại
+                    }}
+                    style={{ ...S.btnPrimary, background: '#f59e0b' }}
+                  >
+                    🔄 Thử thanh toán lại
+                  </button>
+                )}
+
+                <button 
+                  onClick={resetAll} 
+                  style={S.btnPrimary}
+                >
+                  {isSuccess ? 'Giao Dịch Mới' : 'Nhập số tiền mới'}
+                </button>
+
+                <button 
+                  onClick={() => router.push('/admin')} 
+                  style={S.btnSecondary}
+                >
+                  ← Về Admin
+                </button>
               </div>
             </div>
           </div>
