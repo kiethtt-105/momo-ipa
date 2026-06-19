@@ -519,7 +519,7 @@ useEffect(() => {
                 {manualErr && <p style={{ fontSize:12, color:'#dc2626', marginBottom:8 }}>⚠ {manualErr}</p>}
               </div>
               
-              /// === CAMERA SCAN ===
+  
               {!submitting.current && (
                 <>
                   {scanning ? (
@@ -535,7 +535,7 @@ useEffect(() => {
                     {scanning ? (
                       <div style={{ fontSize: 13, color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 500 }}>
                         <span style={{ width: 8, height: 8, background: '#22c55e', borderRadius: '50%', display: 'inline-block', animation: 'p .8s infinite' }} />
-                        Hệ thống quét mã tự động (Camera ngầm) đang bật...
+                        Hệ thống quét mã tự động 
                       </div>
                     ) : (
                       <button 
