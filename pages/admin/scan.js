@@ -68,32 +68,42 @@ export default function ScanPage() {
     }
   }, [step, ready])
 
-  // Load amount và orderInfo từ query params
+  // Load amount và orderInfo từ query params & Dọn dẹp URL chống lặp logic
   useEffect(() => {
+    if (!router.isReady) return
+
     if (urlAmount) {
       setAmount(urlAmount)
     }
     if (urlOrderInfo) {
       setOrderInfo(urlOrderInfo)
     }
+    
     if (quick === 'true' && urlAmount && !currentOrderId && !submitting.current) {
-          const generatedId = `POS${Date.now()}`;
-          setCurrentOrderId(generatedId);
-          setStep('scan');
+      const generatedId = `POS${Date.now()}`;
+      setCurrentOrderId(generatedId);
+      setStep('scan');
 
-          // Tự động gọi API tạo log PENDING ngầm luôn
-          fetch('/api/momo/save-pending', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              orderId: generatedId, 
-              amount: parseInt(urlAmount), 
-              orderInfo: urlOrderInfo || generatedId
-            }),
-          }).catch(e => console.error("Lỗi đơn quét nhanh:", e));
-        }
-  }, [urlAmount, urlOrderInfo, quick])
-
+      // Tự động gọi API tạo log PENDING ngầm luôn
+      fetch('/api/momo/save-pending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          orderId: generatedId, 
+          amount: parseInt(urlAmount), 
+          orderInfo: urlOrderInfo || generatedId
+        }),
+      })
+      .then(() => {
+        // 🌟 DỌN SẠCH URL: Biến thanh địa chỉ về /admin/scan trơn, xóa bỏ hoàn toàn các param cũ
+        router.replace('/admin/scan', undefined, { shallow: true });
+      })
+      .catch(e => {
+        console.error("Lỗi đơn quét nhanh:", e);
+        router.replace('/admin/scan', undefined, { shallow: true });
+      });
+    }
+  }, [urlAmount, urlOrderInfo, quick, router.isReady])
   // Thêm đoạn này ở khu vực các useEffect đầu file để tự focus khi nhấn thử lại
   useEffect(() => {
     if (!result && step === 'scan') {
