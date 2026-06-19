@@ -508,6 +508,7 @@ useEffect(() => {
                   MÃ THANH TOÁN MOMO
                 </p>
                 <input
+                  autoFocus
                   placeholder="Code QR hoặc mã thanh toán MoMo "
                   value={manualCode}
                   onChange={e => { setManualCode(e.target.value); setManualErr('') }}
@@ -517,38 +518,39 @@ useEffect(() => {
                 />
                 {manualErr && <p style={{ fontSize:12, color:'#dc2626', marginBottom:8 }}>⚠ {manualErr}</p>}
               </div>
-
-              {/* === PHẦN MỚI: ẨN CAMERA KHI ĐANG XỬ LÝ === */}
+              
+              /// === CAMERA SCAN ===
               {!submitting.current && (
                 <>
                   {scanning ? (
-                    <div style={{ position:'relative', borderRadius:14, overflow:'hidden', background:'#000', marginBottom:16 }}>
-                      <video ref={setVideoRef} playsInline muted
-                        style={{ width:'100%', display:'block', maxHeight:320, objectFit:'cover' }} />
-                      <canvas ref={canvasRef} style={{ display:'none' }} />
-                      {/* Overlay QR giữ nguyên */}
-                      <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
-                        <div style={{ position:'relative', width:'60%', aspectRatio:'1' }}>
-                          {[
-                            { top:0, left:0, borderTop:'3px solid #ae0070', borderLeft:'3px solid #ae0070', borderRadius:'4px 0 0 0' },
-                            { top:0, right:0, borderTop:'3px solid #ae0070', borderRight:'3px solid #ae0070', borderRadius:'0 4px 0 0' },
-                            { bottom:0, left:0, borderBottom:'3px solid #ae0070', borderLeft:'3px solid #ae0070', borderRadius:'0 0 0 4px' },
-                            { bottom:0, right:0, borderBottom:'3px solid #ae0070', borderRight:'3px solid #ae0070', borderRadius:'0 0 4px 0' },
-                          ].map((st, i) => <div key={i} style={{ position:'absolute', width:24, height:24, ...st }} />)}
-                          <div className="scan-line" style={{ position:'absolute', left:0, right:0 }} />
-                        </div>
+                    /* Ẩn hoàn toàn thẻ video và canvas bằng CSS để không gây mất thẩm mỹ */
+                    <div style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+                      <video ref={setVideoRef} playsInline muted style={{ width: '100%' }} />
+                      <canvas ref={canvasRef} />
+                    </div>
+                  ) : null}
+
+                  {/* Trạng thái thông báo camera chạy ngầm hoặc nút bấm thủ công tùy chọn */}
+                  <div style={{ textAlign: 'center', padding: '10px 0', marginBottom: 16 }}>
+                    {scanning ? (
+                      <div style={{ fontSize: 13, color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 500 }}>
+                        <span style={{ width: 8, height: 8, background: '#22c55e', borderRadius: '50%', display: 'inline-block', animation: 'p .8s infinite' }} />
+                        Hệ thống quét mã tự động (Camera ngầm) đang bật...
                       </div>
-                    </div>
-                  ) : (
-                    <div style={{ textAlign:'center', padding:'20px 0' }}>
-                      <button onClick={() => { setCamError(''); setScanning(true) }}
-                        style={{ ...S.btnPrimary, width:'auto', padding:'12px 32px' }} disabled={!ready}>
-                        📷 Mở Camera
+                    ) : (
+                      <button 
+                        onClick={() => { setCamError(''); setScanning(true) }}
+                        style={{ ...S.btnSecondary, width: 'auto', padding: '8px 16px', fontSize: 13, borderColor: 'rgba(174,0,112,0.2)', color: '#ae0070' }} 
+                        disabled={!ready}
+                      >
+                        📷 Bật quét bằng Camera (Nếu không dùng súng)
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </>
               )}
+
+
 
               {/* Trạng thái đang xử lý thanh toán */}
               {submitting.current && (
