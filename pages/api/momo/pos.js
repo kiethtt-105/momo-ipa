@@ -9,7 +9,7 @@ const redis = new Redis({
 const PARTNER_CODE = process.env.MOMO_PARTNER_CODE
 const ACCESS_KEY   = process.env.MOMO_ACCESS_KEY
 const SECRET_KEY   = process.env.MOMO_SECRET_KEY
-const PUBLIC_KEY   = process.env.MOMO_POS_PUBLIC_KEY
+const PUBLIC_KEY   = process.env.MOMO_POS_PUBLIC_KEY || ''
 const POS_ENDPOINT = process.env.MOMO_POS_ENDPOINT ||
   (process.env.MOMO_ENDPOINT || '').replace(/\/create$/, '/pos')
 
@@ -18,9 +18,9 @@ function sign(raw) {
 }
 
 function encryptPaymentCode(code) {
-  // MoMo yêu cầu RSA encrypt paymentCode bằng public key
+  if (!PUBLIC_KEY) throw new Error('MOMO_POS_PUBLIC_KEY chưa được set trong env')
   const pubKey = PUBLIC_KEY.includes('-----BEGIN')
-    ? PUBLIC_KEY
+    ? PUBLIC_KEY.replace(/\\n/g, '\n')
     : `-----BEGIN PUBLIC KEY-----\n${PUBLIC_KEY}\n-----END PUBLIC KEY-----`
   return crypto.publicEncrypt(
     { key: pubKey, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING },
@@ -30,6 +30,8 @@ function encryptPaymentCode(code) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+
+  console.log('[POS] PUBLIC_KEY set:', !!PUBLIC_KEY, '| length:', PUBLIC_KEY?.length)
 
   const cookie = req.headers.cookie || ''
   const sessionRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/admin/session`, {
@@ -53,16 +55,7 @@ export default async function handler(req, res) {
   const requestId = `${orderId}_${Date.now()}`
   const extraData = ''
 
-  // Encrypt paymentCode bằng RSA public key trước khi ký và gửi
-  let encryptedCode
-  try {
-    encryptedCode = encryptPaymentCode(paymentCode)
-  } catch (err) {
-    console.error('[POS] RSA encrypt error:', err)
-    return res.status(500).json({ error: 'Lỗi mã hóa paymentCode' })
-  }
-
-  // Signature dùng paymentCode đã encrypt (đúng theo docs)
+  // Signature dùng paymentCode PLAIN TEXT (theo docs Image 3)
   const rawSignature = [
     `accessKey=${ACCESS_KEY}`,
     `amount=${amt}`,
@@ -70,9 +63,18 @@ export default async function handler(req, res) {
     `orderId=${orderId}`,
     `orderInfo=${orderInfo}`,
     `partnerCode=${PARTNER_CODE}`,
-    `paymentCode=${encryptedCode}`,
+    `paymentCode=${paymentCode}`,
     `requestId=${requestId}`,
   ].join('&')
+
+  // Body gửi đi dùng paymentCode đã RSA encrypt
+  let encryptedCode
+  try {
+    encryptedCode = encryptPaymentCode(paymentCode)
+  } catch (err) {
+    console.error('[POS] RSA encrypt error:', err.message)
+    return res.status(500).json({ error: err.message })
+  }
 
   const body = {
     partnerCode: PARTNER_CODE,
