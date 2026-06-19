@@ -3,11 +3,8 @@ import { useRouter } from 'next/router'
 import Head from 'next/head'
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const REFRESH_INTERVAL = 1000 
-// ĐÃ XOÁ: ADMIN_KEY / ADMIN_PASSWORD lấy từ NEXT_PUBLIC_* — biến NEXT_PUBLIC_
-// bị Next.js nhúng thẳng vào bundle JS, ai mở DevTools cũng đọc được.
-// Auth giờ xử lý hoàn toàn ở server qua /api/admin/login + cookie httpOnly.
-const EXPIRE_MINUTES = 10
+const REFRESH_INTERVAL = 1000
+const EXPIRE_MINUTES   = 10
 
 const STATUS_META = {
   PAID:    { label: 'Thành công', color: '#16a34a', bg: '#dcfce7', dot: '#22c55e' },
@@ -36,33 +33,75 @@ const normalizeStatus = (order) => {
   }
   return { ...order, status }
 }
+
+// ─── RESULT CODE DESCRIPTIONS (MoMo docs) ────────────────────
+const RESULT_CODE_MAP = {
+  0:    'Thành công',
+  10:   'Hệ thống đang bảo trì',
+  11:   'Truy cập bị từ chối',
+  12:   'Phiên bản API không được hỗ trợ',
+  13:   'Xác thực merchant thất bại',
+  20:   'Request sai định dạng',
+  21:   'Số tiền không hợp lệ',
+  22:   'orderId không hợp lệ',
+  23:   'requestId không hợp lệ',
+  24:   'Chữ ký không hợp lệ',
+  26:   'Thông tin đơn hàng không hợp lệ',
+  29:   'Vượt quá giới hạn tần suất API',
+  1000: 'Đang chờ xác nhận từ người dùng',
+  1001: 'Thanh toán thất bại (số dư không đủ)',
+  1002: 'Từ chối bởi nhà phát hành',
+  1003: 'Đơn hàng bị huỷ hoặc hết hạn',
+  1004: 'Số tiền vượt hạn mức cho phép',
+  1005: 'URL thanh toán đã hết hạn',
+  1006: 'Người dùng từ chối xác nhận',
+  1007: 'Tài khoản không được xác minh',
+  1017: 'Giao dịch bị huỷ bởi hệ thống',
+  1026: 'Bị giới hạn vì chính sách của MoMo',
+  2019: 'orderGroupId không hợp lệ',
+  4001: 'Giao dịch bị hạn chế (KYC)',
+  4010: 'Xác thực 2 yếu tố thất bại',
+  4011: 'OTP chưa được gửi hoặc đã hết hạn',
+  4100: 'Người dùng chưa đăng nhập',
+  7000: 'Đang xử lý',
+  7002: 'Đang xử lý bởi nhà cung cấp',
+  9000: 'Giao dịch đã được xác nhận thành công',
+}
+
+const getResultDesc = code =>
+  RESULT_CODE_MAP[code] !== undefined ? RESULT_CODE_MAP[code] : `Mã lỗi không xác định`
+
 // ─── MAIN COMPONENT ──────────────────────────────────────────
 export default function AdminPage() {
-  // authed: null = đang kiểm tra session với server, true/false = đã biết
-  const [authed, setAuthed] = useState(null)
+  const [authed,          setAuthed]          = useState(null)
   const [checkingSession, setCheckingSession] = useState(true)
-  const [password,  setPassword]  = useState('')
-  const [pwError,   setPwError]   = useState(false)
-  const [orders,    setOrders]    = useState([])
-  const [fetching,  setFetching]  = useState(false)   // spinner nhỏ trên header
-  const [lastSync,  setLastSync]  = useState(null)    // timestamp lần cuối sync
-  const [filter,    setFilter]    = useState('ALL')
-  const [search,    setSearch]    = useState('')
-  const [selected,  setSelected]  = useState(new Set())
-  const [detail,    setDetail]    = useState(null)    // orderId đang xem modal
+  const [password,        setPassword]        = useState('')
+  const [pwError,         setPwError]         = useState(false)
+  const [orders,          setOrders]          = useState([])
+  const [fetching,        setFetching]        = useState(false)
+  const [lastSync,        setLastSync]        = useState(null)
+  const [filter,          setFilter]          = useState('ALL')
+  const [search,          setSearch]          = useState('')
+  const [selected,        setSelected]        = useState(new Set())
+  const [detail,          setDetail]          = useState(null)
 
-  // Dùng ref để tránh stale closure trong interval
-  const ordersRef    = useRef([])
-  const fetchingRef  = useRef(false)
-  const selectedRef  = useRef(new Set())
-  const detailRef    = useRef(null)
+  // Query modal state
+  const [queryModal,      setQueryModal]      = useState(false)
+  const [queryOrderId,    setQueryOrderId]    = useState('')
+  const [queryLoading,    setQueryLoading]    = useState(false)
+  const [queryResult,     setQueryResult]     = useState(null)
+  const [queryError,      setQueryError]      = useState(null)
 
-  // Đồng bộ ref ↔ state
+  const ordersRef   = useRef([])
+  const fetchingRef = useRef(false)
+  const selectedRef = useRef(new Set())
+  const detailRef   = useRef(null)
+
   useEffect(() => { ordersRef.current   = orders   }, [orders])
   useEffect(() => { selectedRef.current = selected }, [selected])
   useEffect(() => { detailRef.current   = detail   }, [detail])
 
-  // ── Kiểm tra session với SERVER khi vào trang (thay sessionStorage) ──
+  // ── Kiểm tra session ──────────────────────────────────────
   useEffect(() => {
     fetch('/api/admin/session')
       .then(r => r.json())
@@ -71,38 +110,25 @@ export default function AdminPage() {
       .finally(() => setCheckingSession(false))
   }, [])
 
-  // ── FETCH LOGIC (dùng ref, không phụ thuộc state) ──────────
+  // ── FETCH ORDERS ──────────────────────────────────────────
   const fetchOrders = useCallback(async ({ force = false } = {}) => {
-    // Guard: không fetch nếu đang fetch, trừ force
     if (fetchingRef.current && !force) return
-
     fetchingRef.current = true
     setFetching(true)
-
     try {
-      // Cookie httpOnly tự được gửi kèm request — không cần truyền key qua URL nữa
-      const res  = await fetch('/api/momo/orders')
-      if (res.status === 401) {
-        // Session hết hạn / bị xoá ở nơi khác → đẩy về màn login
-        setAuthed(false)
-        return
-      }
+      const res = await fetch('/api/momo/orders')
+      if (res.status === 401) { setAuthed(false); return }
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       const raw  = data.orders || []
-
       setOrders(raw)
       setLastSync(new Date())
-
-      // Cập nhật modal nếu đang mở — dùng ref để không stale
       if (detailRef.current) {
         const fresh = raw.find(o => o.orderId === detailRef.current)
-        if (fresh) setDetail(fresh.orderId) // giữ nguyên id, data lấy từ orders state
+        if (fresh) setDetail(fresh.orderId)
       }
-
-      // Dọn selected đã bị xóa
       if (selectedRef.current.size > 0) {
-        const ids = new Set(raw.map(o => o.orderId))
+        const ids     = new Set(raw.map(o => o.orderId))
         const cleaned = new Set([...selectedRef.current].filter(id => ids.has(id)))
         if (cleaned.size !== selectedRef.current.size) setSelected(cleaned)
       }
@@ -112,26 +138,60 @@ export default function AdminPage() {
       fetchingRef.current = false
       setFetching(false)
     }
-  }, []) // không dependency → không bao giờ tạo lại
+  }, [])
 
-  // ── INTERVAL — chỉ mount/unmount 1 lần ─────────────────────
+  // ── INTERVAL ──────────────────────────────────────────────
   useEffect(() => {
     if (authed !== true) return
     fetchOrders({ force: true })
     const iv = setInterval(() => fetchOrders(), REFRESH_INTERVAL)
     return () => clearInterval(iv)
-  }, [authed, fetchOrders]) // fetchOrders stable → interval không restart
+  }, [authed, fetchOrders])
 
-  // ── ESC đóng modal ─────────────────────────────────────────
+  // ── ESC đóng modal ────────────────────────────────────────
   useEffect(() => {
-    const fn = e => { if (e.key === 'Escape') setDetail(null) }
+    const fn = e => {
+      if (e.key === 'Escape') {
+        setDetail(null)
+        setQueryModal(false)
+      }
+    }
     window.addEventListener('keydown', fn)
     return () => window.removeEventListener('keydown', fn)
   }, [])
 
-  // ── DERIVED DATA ────────────────────────────────────────────
-  const displayed = orders.map(normalizeStatus)
+  // ── MOMO QUERY API ────────────────────────────────────────
+  const doMomoQuery = async () => {
+    const id = queryOrderId.trim()
+    if (!id) return
+    setQueryLoading(true)
+    setQueryResult(null)
+    setQueryError(null)
+    try {
+      const res = await fetch('/api/momo/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`)
+      setQueryResult(data)
+    } catch (err) {
+      setQueryError(err.message || 'Lỗi không xác định')
+    } finally {
+      setQueryLoading(false)
+    }
+  }
 
+  const openQueryForOrder = (orderId) => {
+    setQueryOrderId(orderId)
+    setQueryResult(null)
+    setQueryError(null)
+    setQueryModal(true)
+  }
+
+  // ── DERIVED DATA ──────────────────────────────────────────
+  const displayed = orders.map(normalizeStatus)
   const counts = {
     ALL:     displayed.length,
     PAID:    displayed.filter(o => o.status === 'PAID').length,
@@ -156,10 +216,9 @@ export default function AdminPage() {
       )
     })
 
-  // Đơn đang xem modal (lấy từ state orders để luôn fresh)
   const detailOrder = detail ? displayed.find(o => o.orderId === detail) : null
 
-  // ── SELECT ──────────────────────────────────────────────────
+  // ── SELECT ────────────────────────────────────────────────
   const toggleOne = id => {
     const s = new Set(selected)
     s.has(id) ? s.delete(id) : s.add(id)
@@ -170,7 +229,7 @@ export default function AdminPage() {
       ? setSelected(new Set())
       : setSelected(new Set(filtered.map(o => o.orderId)))
 
-  // ── DELETE ──────────────────────────────────────────────────
+  // ── DELETE ────────────────────────────────────────────────
   const doDelete = async (ids) => {
     if (!confirm(`Xóa ${ids.length} đơn?\nKhông thể hoàn tác!`)) return
     try {
@@ -191,7 +250,8 @@ export default function AdminPage() {
   }
 
   const router = useRouter()
-  // ── ĐANG KIỂM TRA SESSION VỚI SERVER ────────────────────────
+
+  // ── ĐANG KIỂM TRA SESSION ─────────────────────────────────
   if (checkingSession) return (
     <div className="bg-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
       <Orbs /><style>{CSS}</style>
@@ -199,7 +259,7 @@ export default function AdminPage() {
     </div>
   )
 
-  // ── LOGIN SCREEN ────────────────────────────────────────────
+  // ── LOGIN SCREEN ──────────────────────────────────────────
   if (!authed) return (
     <>
       <Head>
@@ -240,19 +300,14 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
       })
-      if (res.ok) {
-        setAuthed(true)
-        setPassword('')
-      } else {
-        setPwError(true)
-        setPassword('')
-      }
+      if (res.ok) { setAuthed(true); setPassword('') }
+      else { setPwError(true); setPassword('') }
     } catch {
-      setPwError(true) // lỗi mạng cũng hiện lại form, không leak chi tiết
+      setPwError(true)
     }
   }
 
-  // ── DASHBOARD ───────────────────────────────────────────────
+  // ── DASHBOARD ─────────────────────────────────────────────
   const FILTERS = [
     { key: 'ALL',     label: 'Tất cả'     },
     { key: 'PAID',    label: 'Thành công' },
@@ -271,12 +326,26 @@ export default function AdminPage() {
       <div className="bg-wrap">
         <Orbs /><style>{CSS}</style>
 
-        {/* ── MODAL ── */}
+        {/* ── DETAIL MODAL ── */}
         {detailOrder && (
           <DetailModal
             order={detailOrder}
             onClose={() => setDetail(null)}
             onDelete={id => doDelete([id])}
+            onQuery={id => { setDetail(null); openQueryForOrder(id) }}
+          />
+        )}
+
+        {/* ── QUERY MODAL ── */}
+        {queryModal && (
+          <QueryModal
+            orderId={queryOrderId}
+            setOrderId={setQueryOrderId}
+            loading={queryLoading}
+            result={queryResult}
+            error={queryError}
+            onQuery={doMomoQuery}
+            onClose={() => { setQueryModal(false); setQueryResult(null); setQueryError(null) }}
           />
         )}
 
@@ -284,14 +353,15 @@ export default function AdminPage() {
           {/* ── HEADER ── */}
           <header className="topbar">
             <div className="topbar-inner">
-              {/* Logo + sync indicator */}
               <div className="logo-area">
                 <img src="/Main.png" alt="" className="logo-img" />
                 <span className="logo-text">MoMo Admin</span>
-                <span className={`sync-dot ${fetching ? 'syncing' : 'idle'}`} title={lastSync ? `Sync: ${fmtDate(lastSync)}` : 'Chưa sync'} />
+                <span
+                  className={`sync-dot ${fetching ? 'syncing' : 'idle'}`}
+                  title={lastSync ? `Sync: ${fmtDate(lastSync)}` : 'Chưa sync'}
+                />
               </div>
 
-              {/* Filter tabs */}
               <nav className="filter-tabs">
                 {FILTERS.map(f => (
                   <button
@@ -307,7 +377,6 @@ export default function AdminPage() {
                 ))}
               </nav>
 
-              {/* Right controls */}
               <div className="topbar-right">
                 <div className="searchbox">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -323,6 +392,21 @@ export default function AdminPage() {
                     🗑 Xóa ({selected.size})
                   </button>
                 )}
+
+                {/* ── QUERY BUTTON ── */}
+                <button
+                  className="btn-query"
+                  onClick={() => { setQueryOrderId(''); setQueryResult(null); setQueryError(null); setQueryModal(true) }}
+                  title="Tra cứu trạng thái giao dịch MoMo"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                    <path d="M11 8v3l2 2"/>
+                  </svg>
+                  Tra cứu MoMo
+                </button>
+
                 <button className="btn-scan" onClick={() => router.push('/admin/scan')}>
                   📷 Scan QR
                 </button>
@@ -333,7 +417,6 @@ export default function AdminPage() {
                     <path d="M8 16H3v5"/>
                   </svg>
                 </button>
-
                 <button className="btn-logout" onClick={() => {
                   fetch('/api/admin/session', { method: 'DELETE' }).finally(() => setAuthed(false))
                 }}>
@@ -345,13 +428,12 @@ export default function AdminPage() {
 
           {/* ── MAIN ── */}
           <main className="main">
-
             {/* STAT CARDS */}
             <div className="stat-grid">
-              <StatCard label="Doanh thu" value={`${fmt(totalRevenue)} ₫`} color="var(--mm)" sub={`${counts.PAID} giao dịch thành công`} />
-              <StatCard label="Thành công" value={`${counts.PAID} GD`} color="#16a34a" sub={`${counts.PAID ? Math.round(counts.PAID / counts.ALL * 100) : 0}% tỉ lệ thành công`} />
-              <StatCard label="Thất bại" value={`${counts.FAILED} GD`} color="#dc2626" sub={`${counts.EXPIRED} đơn hết hạn`} />
-              <StatCard label="Tổng đơn" value={`${counts.ALL} GD`} color="#374151" sub={`${counts.PENDING} đang chờ xử lý`} />
+              <StatCard label="Doanh thu"   value={`${fmt(totalRevenue)} ₫`} color="var(--mm)"  sub={`${counts.PAID} giao dịch thành công`} />
+              <StatCard label="Thành công"  value={`${counts.PAID} GD`}      color="#16a34a"    sub={`${counts.PAID ? Math.round(counts.PAID / counts.ALL * 100) : 0}% tỉ lệ thành công`} />
+              <StatCard label="Thất bại"    value={`${counts.FAILED} GD`}    color="#dc2626"    sub={`${counts.EXPIRED} đơn hết hạn`} />
+              <StatCard label="Tổng đơn"    value={`${counts.ALL} GD`}       color="#374151"    sub={`${counts.PENDING} đang chờ xử lý`} />
             </div>
 
             {/* TABLE */}
@@ -424,11 +506,29 @@ export default function AdminPage() {
                             <td className="td-date">{fmtDate(o.createdAt)}</td>
                             <td className="td-date">{o.paidAt ? fmtDate(o.paidAt) : <span className="muted">—</span>}</td>
                             <td className="td-action" onClick={e => e.stopPropagation()}>
-                              <button className="btn-del-row" onClick={() => doDelete([o.orderId])} title="Xóa">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                                </svg>
-                              </button>
+                              <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                                {/* Tra cứu MoMo */}
+                                <button
+                                  className="btn-action-row btn-query-row"
+                                  onClick={() => openQueryForOrder(o.orderId)}
+                                  title="Tra cứu MoMo API"
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/>
+                                  </svg>
+                                </button>
+                                {/* Xóa */}
+                                <button
+                                  className="btn-action-row btn-del-row"
+                                  onClick={() => doDelete([o.orderId])}
+                                  title="Xóa"
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                                    <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                                  </svg>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         )
@@ -438,11 +538,10 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Footer table */}
               <div className="table-footer">
                 <span className="table-count">
                   {filtered.length} giao dịch
-                  {filter !== 'ALL' && ` · lọc theo "${FILTERS.find(f=>f.key===filter)?.label}"`}
+                  {filter !== 'ALL' && ` · lọc theo "${FILTERS.find(f => f.key === filter)?.label}"`}
                   {search && ` · tìm "${search}"`}
                 </span>
                 {lastSync && (
@@ -479,19 +578,14 @@ function StatCard({ label, value, color, sub }) {
   )
 }
 
-function DetailModal({ order, onClose, onDelete }) {
-  const sm = STATUS_META[order.status] || STATUS_META.PENDING
+function DetailModal({ order, onClose, onDelete, onQuery }) {
+  const sm    = STATUS_META[order.status] || STATUS_META.PENDING
   const extra = decodeExtra(order.extraData)
-
-  const copyText = text => {
-    navigator.clipboard?.writeText(text)
-  }
+  const copy  = text => navigator.clipboard?.writeText(text)
 
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
         <div className="modal-hd">
           <div>
             <div className="modal-hd-label">Chi tiết giao dịch</div>
@@ -500,44 +594,42 @@ function DetailModal({ order, onClose, onDelete }) {
           <button className="modal-x" onClick={onClose}>✕</button>
         </div>
 
-        {/* Status + amount hero */}
         <div className="modal-hero" style={{ background: sm.bg }}>
           <span className="badge" style={{ background: 'white', color: sm.color }}>
             <span className="badge-dot" style={{ background: sm.dot }} />
             {sm.label}
           </span>
-          <div className="modal-amount" style={{ color: sm.color }}>
-            {fmt(order.amount)} ₫
-          </div>
+          <div className="modal-amount" style={{ color: sm.color }}>{fmt(order.amount)} ₫</div>
           <div className="modal-orderinfo">{order.orderInfo || '—'}</div>
         </div>
 
-        {/* Detail rows */}
         <div className="modal-body">
           <Section title="Thông tin giao dịch">
-            <Row label="Mã đơn"        value={order.orderId}   mono copy={() => copyText(order.orderId)} />
-            <Row label="Request ID"    value={order.requestId} mono copy={() => copyText(order.requestId)} />
-            <Row label="Mã GD MoMo"    value={order.transId}   mono copy={() => copyText(order.transId)} />
+            <Row label="Mã đơn"     value={order.orderId}   mono copy={() => copy(order.orderId)} />
+            <Row label="Request ID" value={order.requestId} mono copy={() => copy(order.requestId)} />
+            <Row label="Mã GD MoMo" value={order.transId}   mono copy={() => copy(order.transId)} />
           </Section>
 
           <Section title="Kết quả">
             <Row label="Result Code" value={
               order.resultCode !== undefined
                 ? <span style={{ fontFamily: 'monospace', fontWeight: 700, color: order.resultCode === 0 ? '#16a34a' : '#dc2626' }}>
-                    {order.resultCode === 0 ? `✓ ${order.resultCode} — Thành công` : `✗ ${order.resultCode}`}
+                    {order.resultCode === 0
+                      ? `✓ ${order.resultCode} — Thành công`
+                      : `✗ ${order.resultCode} — ${getResultDesc(order.resultCode)}`}
                   </span>
                 : null
             } />
-            <Row label="Message"     value={order.message} />
-            <Row label="Loại đơn"    value={order.orderType} />
-            <Row label="Hình thức"   value={order.payType ? <span className="chip">{order.payType}</span> : null} />
-            <Row label="Nguồn"       value={order.source  ? <span className="chip">{order.source}</span>  : null} />
+            <Row label="Message"   value={order.message} />
+            <Row label="Loại đơn" value={order.orderType} />
+            <Row label="Hình thức" value={order.payType ? <span className="chip">{order.payType}</span> : null} />
+            <Row label="Nguồn"     value={order.source  ? <span className="chip">{order.source}</span>  : null} />
           </Section>
 
           <Section title="Thời gian">
-            <Row label="Tạo lúc"        value={fmtDate(order.createdAt)} />
-            <Row label="MoMo phản hồi"  value={fmtMs(order.responseTime)} />
-            <Row label="Hoàn tất lúc"   value={fmtDate(order.paidAt)} />
+            <Row label="Tạo lúc"       value={fmtDate(order.createdAt)} />
+            <Row label="MoMo phản hồi" value={fmtMs(order.responseTime)} />
+            <Row label="Hoàn tất lúc"  value={fmtDate(order.paidAt)} />
           </Section>
 
           {order.extraData && (
@@ -549,15 +641,140 @@ function DetailModal({ order, onClose, onDelete }) {
           )}
         </div>
 
+        <div className="modal-ft">
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-del-modal" onClick={() => { onClose(); onDelete(order.orderId) }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+              </svg>
+              Xóa giao dịch
+            </button>
+            <button className="btn-query-modal" onClick={() => onQuery(order.orderId)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/>
+              </svg>
+              Tra cứu MoMo
+            </button>
+          </div>
+          <button className="btn-close-modal" onClick={onClose}>Đóng</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── QUERY MODAL (MoMo API) ───────────────────────────────────
+function QueryModal({ orderId, setOrderId, loading, result, error, onQuery, onClose }) {
+  const copy = text => navigator.clipboard?.writeText(String(text))
+
+  const rc     = result?.resultCode
+  const isOk   = rc === 0 || rc === 9000
+  const rcDesc = rc !== undefined ? getResultDesc(rc) : null
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal modal-query" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="modal-hd">
+          <div>
+            <div className="modal-hd-label">Tra cứu giao dịch MoMo</div>
+            <div className="modal-hd-id" style={{ color: '#6b7280', fontSize: 12 }}>
+              POST /v2/gateway/api/query
+            </div>
+          </div>
+          <button className="modal-x" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Input */}
+        <div className="qinput-wrap">
+          <label className="qinput-label">Order ID</label>
+          <div className="qinput-row">
+            <input
+              className="qinput"
+              type="text"
+              placeholder="Nhập mã đơn hàng (orderId)..."
+              value={orderId}
+              onChange={e => setOrderId(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !loading && onQuery()}
+              autoFocus
+            />
+            <button className="btn-do-query" onClick={onQuery} disabled={loading || !orderId.trim()}>
+              {loading
+                ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="spin"><path d="M3 12a9 9 0 0 1 9-9"/></svg>
+                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              }
+              {loading ? 'Đang tra cứu...' : 'Tra cứu'}
+            </button>
+          </div>
+          <div className="qinput-hint">
+            API sẽ gọi trực tiếp đến MoMo server để lấy trạng thái thực tế.
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="qerror">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+            {error}
+          </div>
+        )}
+
+        {/* Result */}
+        {result && (
+          <div className="modal-body">
+            {/* Status hero */}
+            <div className="qresult-hero" style={{
+              background: isOk ? '#dcfce7' : rc === 1000 || rc === 7000 ? '#fef3c7' : '#fee2e2'
+            }}>
+              <div className="qresult-rc" style={{ color: isOk ? '#16a34a' : rc === 1000 || rc === 7000 ? '#d97706' : '#dc2626' }}>
+                {isOk ? '✓' : '✗'} {rc}
+              </div>
+              <div className="qresult-desc">{rcDesc}</div>
+              {result.message && <div className="qresult-msg">{result.message}</div>}
+            </div>
+
+            {/* Detail fields */}
+            <Section title="Thông tin đơn hàng">
+              <Row label="Order ID"    value={result.orderId}    mono copy={() => copy(result.orderId)} />
+              <Row label="Request ID"  value={result.requestId}  mono copy={() => copy(result.requestId)} />
+              <Row label="Trans ID"    value={result.transId}    mono copy={() => copy(result.transId)} />
+              <Row label="Order Info"  value={result.orderInfo} />
+            </Section>
+
+            <Section title="Kết quả thanh toán">
+              <Row label="Result Code" value={
+                rc !== undefined
+                  ? <span style={{ fontFamily: 'monospace', fontWeight: 700, color: isOk ? '#16a34a' : '#dc2626' }}>
+                      {rc} — {rcDesc}
+                    </span>
+                  : null
+              } />
+              <Row label="Số tiền"     value={result.amount !== undefined ? `${fmt(result.amount)} ₫` : null} />
+              <Row label="Hình thức"   value={result.payType   ? <span className="chip">{result.payType}</span>   : null} />
+              <Row label="Order Type"  value={result.orderType ? <span className="chip">{result.orderType}</span> : null} />
+            </Section>
+
+            <Section title="Thời gian">
+              <Row label="Response Time" value={result.responseTime ? fmtMs(result.responseTime) : null} />
+              <Row label="Pay Time"      value={result.payTime      ? fmtMs(result.payTime)      : null} />
+            </Section>
+
+            {/* Raw JSON toggle */}
+            <Section title="Raw Response">
+              <div className="extra-block" style={{ maxHeight: 200, overflowY: 'auto' }}>
+                {JSON.stringify(result, null, 2)}
+              </div>
+            </Section>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="modal-ft">
-          <button className="btn-del-modal" onClick={() => { onClose(); onDelete(order.orderId) }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
-              <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-            </svg>
-            Xóa giao dịch
-          </button>
+          <div style={{ fontSize: 12, color: '#9ca3af' }}>
+            Timeout tối thiểu: <strong>30s</strong> · MoMo API v2
+          </div>
           <button className="btn-close-modal" onClick={onClose}>Đóng</button>
         </div>
       </div>
@@ -636,18 +853,14 @@ const CSS = `
   }
   .topbar-inner {
     max-width: 1600px; margin: 0 auto;
-    padding: 0 24px;
-    height: 60px;
+    padding: 0 24px; height: 60px;
     display: flex; align-items: center; gap: 20px;
   }
 
   .logo-area { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
-  .logo-img { width: 30px; height: 30px; border-radius: 8px; object-fit: contain; }
+  .logo-img  { width: 30px; height: 30px; border-radius: 8px; object-fit: contain; }
   .logo-text { font-size: 17px; font-weight: 800; color: var(--mm); letter-spacing: -0.3px; }
-  .sync-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    transition: background 0.3s;
-  }
+  .sync-dot  { width: 8px; height: 8px; border-radius: 50%; transition: background 0.3s; }
   .sync-dot.idle    { background: #22c55e; }
   .sync-dot.syncing { background: #f59e0b; animation: pulse 0.8s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
@@ -670,33 +883,48 @@ const CSS = `
 
   .topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
-  .searchbox {
-    position: relative; display: flex; align-items: center;
-  }
+  .searchbox { position: relative; display: flex; align-items: center; }
   .searchbox svg { position: absolute; left: 11px; color: var(--muted); pointer-events: none; }
   .searchbox input {
     padding: 7px 32px 7px 34px;
     border: 1px solid var(--border); border-radius: 10px;
     background: rgba(255,255,255,0.7); font-size: 13px;
-    font-family: var(--font); width: 220px; color: var(--text);
-    transition: all 0.2s;
+    font-family: var(--font); width: 220px; color: var(--text); transition: all 0.2s;
   }
   .searchbox input:focus { outline: none; border-color: var(--mm); background: #fff; box-shadow: 0 0 0 3px rgba(174,0,112,0.08); width: 260px; }
-  .search-clear {
-    position: absolute; right: 10px; background: none; border: none;
-    font-size: 12px; color: var(--muted); cursor: pointer; line-height: 1;
-  }
+  .search-clear { position: absolute; right: 10px; background: none; border: none; font-size: 12px; color: var(--muted); cursor: pointer; line-height: 1; }
 
-  .btn-danger { background: var(--danger); color: #fff; border: none; padding: 7px 14px; border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font); }
+  .btn-danger  { background: var(--danger); color: #fff; border: none; padding: 7px 14px; border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font); }
   .btn-refresh {
     width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--border);
-    background: rgba(255,255,255,0.7); cursor: pointer; display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.7); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
     color: var(--muted); transition: all 0.15s;
   }
   .btn-refresh:hover { border-color: var(--mm); color: var(--mm); background: var(--mm-light); }
   .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-logout { padding: 7px 14px; border-radius: 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.7); font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; font-family: var(--font); }
+  .btn-logout  { padding: 7px 14px; border-radius: 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.7); font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; font-family: var(--font); }
   .btn-logout:hover { color: var(--danger); border-color: var(--danger); background: #fff; }
+
+  .btn-scan {
+    padding: 7px 14px; border-radius: 9px;
+    border: 1px solid rgba(174,0,112,0.3);
+    background: #fff0f7; color: #ae0070;
+    font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: var(--font); transition: all 0.15s;
+  }
+  .btn-scan:hover { background: #ae0070; color: #fff; }
+
+  /* ── QUERY BUTTON ── */
+  .btn-query {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: 9px;
+    border: 1px solid rgba(99,102,241,0.3);
+    background: #eef2ff; color: #4f46e5;
+    font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: var(--font); transition: all 0.15s;
+  }
+  .btn-query:hover { background: #4f46e5; color: #fff; border-color: #4f46e5; }
 
   @keyframes spin { to { transform: rotate(360deg); } }
   .spin { animation: spin 0.8s linear infinite; }
@@ -719,7 +947,7 @@ const CSS = `
   .scard:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(174,0,112,0.08); }
   .scard-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.6px; text-transform: uppercase; }
   .scard-value { font-size: 26px; font-weight: 800; margin-top: 6px; letter-spacing: -0.5px; }
-  .scard-sub { font-size: 12px; color: var(--muted); margin-top: 5px; }
+  .scard-sub   { font-size: 12px; color: var(--muted); margin-top: 5px; }
 
   /* ── TABLE ── */
   .table-wrap {
@@ -739,36 +967,34 @@ const CSS = `
     letter-spacing: 0.5px; text-transform: uppercase;
     border-bottom: 1px solid var(--border); white-space: nowrap;
   }
-  .th-check, .td-check { width: 44px; text-align: center !important; }
-  .th-action, .td-action { width: 56px; text-align: center !important; }
-
+  .th-check, .td-check  { width: 44px; text-align: center !important; }
+  .th-action, .td-action { width: 80px; text-align: center !important; }
   .tbl td { padding: 14px 16px; border-bottom: 1px solid rgba(174,0,112,0.03); vertical-align: middle; }
   .trow { cursor: pointer; transition: background 0.1s; }
   .trow:hover { background: rgba(255,255,255,0.6); }
-  .trow.sel  { background: rgba(174,0,112,0.05) !important; }
+  .trow.sel   { background: rgba(174,0,112,0.05) !important; }
   .trow:last-child td { border-bottom: none; }
 
-  .badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 5px 11px; border-radius: 20px;
-    font-size: 12px; font-weight: 700; white-space: nowrap;
-  }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 20px; font-size: 12px; font-weight: 700; white-space: nowrap; }
   .badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-
   .td-amount { font-weight: 800; color: var(--mm); font-size: 14px; white-space: nowrap; }
-  .td-info { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; }
-  .td-code { font-family: monospace; font-size: 12px; color: #4b5563; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
-  .td-date { font-size: 12px; color: var(--muted); white-space: nowrap; }
-  .chip { background: rgba(0,0,0,0.06); padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+  .td-info   { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; }
+  .td-code   { font-family: monospace; font-size: 12px; color: #4b5563; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+  .td-date   { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .chip      { background: rgba(0,0,0,0.06); padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 600; }
   .result-code { font-family: monospace; font-size: 13px; font-weight: 700; }
   .muted { color: #9ca3af; }
 
-  .btn-del-row {
-    width: 30px; height: 30px; border-radius: 7px; border: none;
-    background: transparent; color: #9ca3af; cursor: pointer;
+  /* Row action buttons */
+  .btn-action-row {
+    width: 28px; height: 28px; border-radius: 7px; border: none;
+    background: transparent; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
     transition: all 0.15s;
   }
+  .btn-query-row { color: #6366f1; }
+  .btn-query-row:hover { background: #eef2ff; color: #4f46e5; }
+  .btn-del-row { color: #9ca3af; }
   .btn-del-row:hover { background: #fee2e2; color: var(--danger); }
 
   .table-footer {
@@ -778,9 +1004,9 @@ const CSS = `
     font-size: 12px; color: var(--muted);
   }
   .table-count { font-weight: 600; }
-  .last-sync { font-style: italic; }
+  .last-sync   { font-style: italic; }
 
-  .empty { padding: 72px 24px; text-align: center; }
+  .empty      { padding: 72px 24px; text-align: center; }
   .empty-icon { font-size: 40px; margin-bottom: 12px; }
   .empty-text { font-size: 15px; font-weight: 600; color: var(--muted); }
 
@@ -802,6 +1028,7 @@ const CSS = `
     animation: slideup 0.2s ease;
     overflow: hidden;
   }
+  .modal-query { max-width: 580px; }
   @keyframes slideup { from{transform:translateY(16px);opacity:0} to{transform:none;opacity:1} }
 
   .modal-hd {
@@ -811,13 +1038,12 @@ const CSS = `
     flex-shrink: 0;
   }
   .modal-hd-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
-  .modal-hd-id { font-family: monospace; font-size: 13px; color: #374151; }
+  .modal-hd-id    { font-family: monospace; font-size: 13px; color: #374151; }
   .modal-x {
     width: 30px; height: 30px; border-radius: 8px; border: none;
     background: #f3f4f6; color: #6b7280; font-size: 14px;
     cursor: pointer; display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; margin-left: 12px;
-    transition: all 0.15s;
+    flex-shrink: 0; margin-left: 12px; transition: all 0.15s;
   }
   .modal-x:hover { background: #fee2e2; color: var(--danger); }
 
@@ -825,21 +1051,18 @@ const CSS = `
     padding: 20px 22px; flex-shrink: 0;
     display: flex; flex-direction: column; gap: 8px;
   }
-  .modal-amount { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+  .modal-amount    { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
   .modal-orderinfo { font-size: 13px; color: #374151; font-weight: 500; }
 
-  .modal-body { overflow-y: auto; flex: 1; padding: 4px 0; }
-  .msection { padding: 0 22px; margin-bottom: 4px; }
-  .msection-title {
+  .modal-body       { overflow-y: auto; flex: 1; padding: 4px 0; }
+  .msection         { padding: 0 22px; margin-bottom: 4px; }
+  .msection-title   {
     font-size: 10px; font-weight: 700; color: var(--muted);
     letter-spacing: 0.8px; text-transform: uppercase;
     padding: 14px 0 8px; border-top: 1px solid #f3f4f6;
   }
   .msection:first-child .msection-title { border-top: none; }
-  .mrow {
-    display: flex; align-items: flex-start; gap: 12px;
-    padding: 9px 0; border-bottom: 1px solid #f9fafb;
-  }
+  .mrow { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; border-bottom: 1px solid #f9fafb; }
   .mrow:last-child { border-bottom: none; }
   .mrow-label { min-width: 130px; font-size: 12px; font-weight: 600; color: var(--muted); padding-top: 1px; flex-shrink: 0; }
   .mrow-value { font-size: 13px; color: var(--text); flex: 1; word-break: break-all; display: flex; align-items: center; gap: 6px; }
@@ -847,8 +1070,7 @@ const CSS = `
   .copy-btn {
     flex-shrink: 0; background: none; border: none; color: #9ca3af;
     cursor: pointer; padding: 2px; border-radius: 4px;
-    display: inline-flex; align-items: center;
-    transition: color 0.15s;
+    display: inline-flex; align-items: center; transition: color 0.15s;
   }
   .copy-btn:hover { color: var(--mm); }
 
@@ -870,6 +1092,16 @@ const CSS = `
     cursor: pointer; font-family: var(--font); transition: all 0.15s;
   }
   .btn-del-modal:hover { background: #fee2e2; border-color: var(--danger); }
+
+  .btn-query-modal {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 8px 14px; border-radius: 9px;
+    border: 1px solid rgba(99,102,241,0.3); background: #eef2ff;
+    color: #4f46e5; font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: var(--font); transition: all 0.15s;
+  }
+  .btn-query-modal:hover { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+
   .btn-close-modal {
     padding: 8px 20px; border-radius: 9px;
     border: 1px solid var(--border); background: #f9fafb;
@@ -877,6 +1109,43 @@ const CSS = `
     cursor: pointer; font-family: var(--font); transition: all 0.15s;
   }
   .btn-close-modal:hover { background: #fff; }
+
+  /* ── QUERY MODAL SPECIFIC ── */
+  .qinput-wrap { padding: 16px 22px; border-bottom: 1px solid #f3f4f6; flex-shrink: 0; }
+  .qinput-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; display: block; margin-bottom: 8px; }
+  .qinput-row { display: flex; gap: 8px; }
+  .qinput {
+    flex: 1; padding: 10px 14px;
+    border: 1.5px solid var(--border); border-radius: 10px;
+    font-size: 14px; font-family: monospace; color: var(--text);
+    background: #fafafa; transition: all 0.2s;
+  }
+  .qinput:focus { outline: none; border-color: #6366f1; background: #fff; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  .qinput-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .btn-do-query {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 18px; border-radius: 10px;
+    border: none; background: #4f46e5; color: #fff;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    font-family: var(--font); transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-do-query:hover:not(:disabled) { background: #4338ca; }
+  .btn-do-query:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .qerror {
+    margin: 12px 22px; padding: 10px 14px;
+    background: #fff5f5; border: 1px solid #fecaca; border-radius: 10px;
+    color: var(--danger); font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  }
+
+  .qresult-hero {
+    margin: 0; padding: 16px 22px; flex-shrink: 0;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .qresult-rc   { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; font-family: monospace; }
+  .qresult-desc { font-size: 14px; font-weight: 700; color: #374151; }
+  .qresult-msg  { font-size: 12px; color: var(--muted); }
 
   /* ── LOGIN ── */
   .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; position: relative; z-index: 10; }
@@ -888,9 +1157,9 @@ const CSS = `
     box-shadow: 0 24px 60px rgba(174,0,112,0.1), 0 0 0 1px rgba(255,255,255,0.8);
   }
   .login-logo-box { width: 60px; height: 60px; border-radius: 16px; background: #fff; border: 1px solid rgba(174,0,112,0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; box-shadow: 0 4px 12px rgba(174,0,112,0.08); }
-  .login-logo { width: 44px; height: 44px; object-fit: contain; }
-  .login-title { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; }
-  .login-sub { font-size: 13px; color: var(--muted); margin-top: 5px; margin-bottom: 28px; }
+  .login-logo     { width: 44px; height: 44px; object-fit: contain; }
+  .login-title    { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; }
+  .login-sub      { font-size: 13px; color: var(--muted); margin-top: 5px; margin-bottom: 28px; }
   .pw-group input {
     width: 100%; padding: 13px 16px; border: 1.5px solid rgba(174,0,112,0.15);
     border-radius: 12px; font-size: 15px; font-family: var(--font);
@@ -899,20 +1168,19 @@ const CSS = `
   }
   .pw-group input:focus { outline: none; border-color: var(--mm); background: #fff; box-shadow: 0 0 0 4px rgba(174,0,112,0.07); }
   .pw-group.error input { border-color: var(--danger); background: #fff5f5; }
-  .pw-error { font-size: 13px; color: var(--danger); font-weight: 600; margin-bottom: 14px; }
+  .pw-error  { font-size: 13px; color: var(--danger); font-weight: 600; margin-bottom: 14px; }
   .login-btn {
     width: 100%; padding: 13px; background: var(--mm); color: #fff;
     border: none; border-radius: 12px; font-size: 15px; font-weight: 700;
     cursor: pointer; font-family: var(--font);
-    box-shadow: 0 6px 20px rgba(174,0,112,0.2);
-    transition: all 0.2s;
+    box-shadow: 0 6px 20px rgba(174,0,112,0.2); transition: all 0.2s;
   }
   .login-btn:hover { background: #91005d; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(174,0,112,0.25); }
 
   /* ── RESPONSIVE ── */
   @media(max-width:768px) {
     .topbar-inner { flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 10px; }
-    .filter-tabs { order: 3; width: 100%; overflow-x: auto; justify-content: flex-start; padding-bottom: 2px; }
+    .filter-tabs  { order: 3; width: 100%; overflow-x: auto; justify-content: flex-start; padding-bottom: 2px; }
     .topbar-right { margin-left: auto; }
     .searchbox input { width: 160px; }
     .searchbox input:focus { width: 180px; }
@@ -920,13 +1188,4 @@ const CSS = `
     .main { padding: 16px; }
     .stat-grid { grid-template-columns: repeat(2,1fr); gap: 12px; }
   }
-  .btn-scan {
-    padding: 7px 14px; border-radius: 9px;
-    border: 1px solid rgba(174,0,112,0.3);
-    background: #fff0f7; color: #ae0070;
-    font-size: 13px; font-weight: 700;
-    cursor: pointer; font-family: var(--font);
-    transition: all 0.15s;
-  }
-  .btn-scan:hover { background: #ae0070; color: #fff; }
 `
