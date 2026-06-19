@@ -35,6 +35,7 @@ export default function ScanPage() {
   const [manualCode, setManualCode] = useState('')
   const [manualErr,  setManualErr]  = useState('')
 
+  const [currentOrderId, setCurrentOrderId] = useState(null)
   // Load jsQR
   useEffect(() => {
     if (window.jsQR) { setReady(true); return }
@@ -122,21 +123,23 @@ export default function ScanPage() {
 
     const code = cleanCode(raw)
     console.log('[SCAN] raw QR data:', raw)
-    setManualCode(code)   // Hiển thị mã vừa quét
+    setManualCode(code)
 
-    const amt  = parseInt(amount)
-    const orderId = `POS${Date.now()}`
+    const amt = parseInt(amount)
+    
+    // Giữ orderId cũ nếu đang retry, nếu không thì tạo mới
+    const orderId = currentOrderId || `POS${Date.now()}`
 
     try {
-      const res  = await fetch('/api/momo/pos', {
+      const res = await fetch('/api/momo/pos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, amount: amt, orderInfo, paymentCode: code }),
       })
       const data = await res.json()
-      setResult({ success: data.resultCode === 0, data, amount: amt })
+      setResult({ success: data.resultCode === 0, data, amount: amt, orderId })
     } catch {
-      setResult({ success: false, data: { message: 'Lỗi kết nối server' }, amount: amt })
+      setResult({ success: false, data: { message: 'Lỗi kết nối server' }, amount: amt, orderId })
     }
   }
 
@@ -144,6 +147,7 @@ export default function ScanPage() {
     setResult(null)
     setAmount('')
     setOrderInfo('')
+    setCurrentOrderId(null)
     setStep('amount')
     submitting.current = false
     setManualCode('')
@@ -254,12 +258,12 @@ useEffect(() => {
               )}
 
               <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:32 }}>
-                {/* Nút Thử lại - Ưu tiên khi thất bại */}
                 {!isSuccess && (
                   <button 
                     onClick={() => {
                       setResult(null);
                       setManualCode('');
+                      setManualErr('');
                       submitting.current = false;
                       // Giữ nguyên amount và orderInfo để thử lại
                     }}
