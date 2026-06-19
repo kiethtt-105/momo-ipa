@@ -11,7 +11,8 @@ import crypto from 'crypto'
 // MoMo docs: dùng endpoint test khi chưa go-live, đổi sang production khi đã duyệt merchant
 // Cố tình KHÔNG phụ thuộc biến môi trường ở đây để loại trừ khả năng URL bị undefined.
 // Nếu bạn cần đổi sang production, sửa trực tiếp dòng dưới (hoặc thêm lại env sau khi đã xác nhận chạy ổn).
-const MOMO_ENDPOINT = process.env.MOMO_ENDPOINT
+const MOMO_ENDPOINT = process.env.MOMO_QUERY_ENDPOINT
+
 
 
 // ⚠️ Đổi tên các biến env này để KHỚP với những gì bạn đã dùng ở
@@ -89,6 +90,12 @@ export default async function handler(req, res) {
     console.error('[momo/query] MOMO_ENDPOINT không hợp lệ:', MOMO_ENDPOINT)
     return res.status(500).json({ message: 'Lỗi cấu hình: MOMO_ENDPOINT không hợp lệ' })
   }
+  console.log('[momo/query] boot check ->', {
+  hasPartnerCode: !!PARTNER_CODE,
+  hasAccessKey: !!ACCESS_KEY,
+  hasSecretKey: !!SECRET_KEY,
+  queryEndpoint: MOMO_ENDPOINT,   // đổi tên key cho dễ phân biệt
+})
 
   try {
     console.log('[momo/query] Gọi MoMo:', MOMO_ENDPOINT, 'orderId=', orderId, 'requestId=', requestId)
