@@ -9,7 +9,7 @@ const redis = new Redis({
 const PARTNER_CODE = process.env.MOMO_PARTNER_CODE
 const ACCESS_KEY   = process.env.MOMO_ACCESS_KEY
 const SECRET_KEY   = process.env.MOMO_SECRET_KEY
-const PUBLIC_KEY   = process.env.MOMO_PUBLIC_KEY
+const PUBLIC_KEY   = process.env.MOMO_POS_PUBLIC_KEY
 const POS_ENDPOINT = process.env.MOMO_POS_ENDPOINT ||
   (process.env.MOMO_ENDPOINT || '').replace(/\/create$/, '/pos')
 
