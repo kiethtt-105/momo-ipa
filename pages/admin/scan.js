@@ -150,6 +150,15 @@ export default function ScanPage() {
     setManualErr('')
   }
 
+  // Bắt Enter ở input số tiền và mã đơn hàng
+  const handleEnterKey = (e) => {
+    if (e.key === 'Enter') {
+      if (amount && parseInt(amount) >= 1000) {
+        setStep('scan')
+      }
+    }
+  }
+
   async function submitManualCode() {
     const code = cleanCode(manualCode)
     if (!/^(MM)?\d{18}$/.test(code)) {
@@ -287,6 +296,7 @@ export default function ScanPage() {
               <input
                 type="number" placeholder="Nhập số tiền..."
                 value={amount} onChange={e => setAmount(e.target.value)}
+                onKeyDown={handleEnterKey}
                 style={S.input} min={1000} max={5000000} autoFocus 
                 step={1000}
                 
@@ -297,6 +307,7 @@ export default function ScanPage() {
                 <input
                   placeholder="Nhập mã đơn hàng "
                   value={orderInfo} onChange={e => setOrderInfo(e.target.value)}
+                  onKeyDown={handleEnterKey}
                   style={S.input}
                 />
               </div>
