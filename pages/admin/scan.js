@@ -75,9 +75,22 @@ export default function ScanPage() {
     if (urlOrderInfo) {
       setOrderInfo(urlOrderInfo)
     }
-    if (quick === 'true' && urlAmount) {
-      setStep('scan')
-    }
+    if (quick === 'true' && urlAmount && !currentOrderId && !submitting.current) {
+          const generatedId = `POS${Date.now()}`;
+          setCurrentOrderId(generatedId);
+          setStep('scan');
+
+          // Tự động gọi API tạo log PENDING ngầm luôn
+          fetch('/api/momo/save-pending', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              orderId: generatedId, 
+              amount: parseInt(urlAmount), 
+              orderInfo: urlOrderInfo || generatedId
+            }),
+          }).catch(e => console.error("Lỗi đơn quét nhanh:", e));
+        }
   }, [urlAmount, urlOrderInfo, quick])
 
   function setVideoRef(el) {
@@ -486,7 +499,20 @@ export default function ScanPage() {
                   disabled={submitting.current}
                 />
                 {manualErr && <p style={{ fontSize:12, color:'#dc2626', marginBottom:8 }}>⚠ {manualErr}</p>}
-                
+                {/* Chỉ hiện khi server bị đơ hoặc lỗi kết nối mạng */}
+                {isServerErr && !submitting.current && (
+                  <button
+                    onClick={submitManualCode}
+                    style={{
+                      background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 8,
+                      padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                      width: '100%', marginTop: 8, transition: 'background .15s',
+                      boxShadow: '0 4px 12px rgba(245,158,11,0.2)'
+                    }}
+                  >
+                    ⚡ Gửi lại dữ liệu (Kiểm tra giao dịch)
+                  </button>
+                )}
                 {/* Nút xác nhận thanh toán nhỏ, gọn gàng đặt ngay dưới chân ô input */}
                 <button
                   onClick={submitManualCode}
