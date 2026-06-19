@@ -92,6 +92,14 @@ export default function AdminPage() {
   const [queryResult,     setQueryResult]     = useState(null)
   const [queryError,      setQueryError]      = useState(null)
 
+  // Confirm modal state
+  const [confirmModal,   setConfirmModal]   = useState(false)
+  const [confirmOrderId, setConfirmOrderId] = useState('')
+  const [confirmAmount,  setConfirmAmount]  = useState(0)
+  const [confirmLoading, setConfirmLoading] = useState(false)
+  const [confirmResult,  setConfirmResult]  = useState(null)
+  const [confirmError,   setConfirmError]   = useState(null)
+
   const ordersRef   = useRef([])
   const fetchingRef = useRef(false)
   const selectedRef = useRef(new Set())
@@ -180,6 +188,35 @@ export default function AdminPage() {
       setQueryError(err.message || 'Lỗi không xác định')
     } finally {
       setQueryLoading(false)
+    }
+  }
+
+  const openConfirmForOrder = (orderId, amount) => {
+  setConfirmOrderId(orderId)
+  setConfirmAmount(amount)
+  setConfirmResult(null)
+  setConfirmError(null)
+  setConfirmModal(true)
+}
+
+  const doMomoConfirm = async (requestType) => {
+    setConfirmLoading(true)
+    setConfirmResult(null)
+    setConfirmError(null)
+    try {
+      const res = await fetch('/api/momo/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: confirmOrderId, amount: confirmAmount, requestType }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`)
+      setConfirmResult({ ...data, requestType })
+      await fetchOrders({ force: true })
+    } catch (err) {
+      setConfirmError(err.message || 'Lỗi không xác định')
+    } finally {
+      setConfirmLoading(false)
     }
   }
 
@@ -333,6 +370,11 @@ export default function AdminPage() {
             onClose={() => setDetail(null)}
             onDelete={id => doDelete([id])}
             onQuery={id => { setDetail(null); openQueryForOrder(id) }}
+            order={detailOrder}
+            onClose={() => setDetail(null)}
+            onDelete={id => doDelete([id])}
+            onQuery={id => { setDetail(null); openQueryForOrder(id) }}
+            onConfirm={(id, amount) => { setDetail(null); openConfirmForOrder(id, amount) }}  
           />
         )}
 
@@ -348,6 +390,20 @@ export default function AdminPage() {
             onClose={() => { setQueryModal(false); setQueryResult(null); setQueryError(null) }}
           />
         )}
+        {/* ── CONFIRM MODAL ── */}
+        {confirmModal && (
+          <ConfirmModal
+            orderId={confirmOrderId}
+            amount={confirmAmount}
+            loading={confirmLoading}
+            result={confirmResult}
+            error={confirmError}
+            onConfirm={() => doMomoConfirm('capture')}
+            onCancel={() => doMomoConfirm('cancel')}
+            onClose={() => { setConfirmModal(false); setConfirmResult(null); setConfirmError(null) }}
+          />
+        )}
+
 
         <div className="dashboard">
           {/* ── HEADER ── */}
@@ -528,6 +584,18 @@ export default function AdminPage() {
                                     <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
                                   </svg>
                                 </button>
+                                {/* Confirm — chỉ hiện khi resultCode 9000 */}
+                                {o.resultCode === 9000 && (
+                                  <button
+                                    className="btn-action-row btn-confirm-row"
+                                    onClick={() => openConfirmForOrder(o.orderId, o.amount)}
+                                    title="Xác nhận / Huỷ giao dịch (9000)"
+                                  >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <polyline points="20 6 9 17 4 12"/>
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -656,6 +724,17 @@ function DetailModal({ order, onClose, onDelete, onQuery }) {
               </svg>
               Tra cứu MoMo
             </button>
+            {order.resultCode === 9000 && (
+            <button
+              className="btn-confirm-modal"
+              onClick={() => { onClose(); onConfirm(order.orderId, order.amount) }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              Xác nhận (9000)
+            </button>
+          )}
           </div>
           <button className="btn-close-modal" onClick={onClose}>Đóng</button>
         </div>
@@ -775,6 +854,94 @@ function QueryModal({ orderId, setOrderId, loading, result, error, onQuery, onCl
           <div style={{ fontSize: 12, color: '#9ca3af' }}>
             Timeout tối thiểu: <strong>30s</strong> · MoMo API v2
           </div>
+          <button className="btn-close-modal" onClick={onClose}>Đóng</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ConfirmModal({ orderId, amount, loading, result, error, onConfirm, onCancel, onClose }) {
+  const rc   = result?.resultCode
+  const isOk = rc === 0
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal modal-query" onClick={e => e.stopPropagation()}>
+        <div className="modal-hd">
+          <div>
+            <div className="modal-hd-label">Xác nhận / Huỷ giao dịch</div>
+            <div className="modal-hd-id" style={{ color: '#6b7280', fontSize: 12 }}>
+              POST /v2/gateway/api/confirm · {orderId}
+            </div>
+          </div>
+          <button className="modal-x" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="qinput-wrap">
+          <div style={{ fontSize: 13, color: '#374151', marginBottom: 12 }}>
+            Giao dịch <strong style={{ fontFamily: 'monospace' }}>{orderId}</strong> đang ở trạng thái <strong style={{ color: '#d97706' }}>9000 — Authorized</strong>.
+            <br />Số tiền: <strong>{parseInt(amount || 0).toLocaleString('vi-VN')} ₫</strong>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn-do-query"
+              style={{ background: '#16a34a' }}
+              onClick={onConfirm}
+              disabled={loading || !!result}
+            >
+              {loading
+                ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="spin"><path d="M3 12a9 9 0 0 1 9-9"/></svg>
+                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              }
+              Capture (xác nhận)
+            </button>
+            <button
+              className="btn-do-query"
+              style={{ background: '#dc2626' }}
+              onClick={onCancel}
+              disabled={loading || !!result}
+            >
+              {loading
+                ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="spin"><path d="M3 12a9 9 0 0 1 9-9"/></svg>
+                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              }
+              Cancel (huỷ)
+            </button>
+          </div>
+          <div className="qinput-hint">
+            Capture → chuyển tiền về ví đối tác. Cancel → hoàn tiền về người dùng.
+          </div>
+        </div>
+
+        {error && (
+          <div className="qerror">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+            {error}
+          </div>
+        )}
+
+        {result && (
+          <div className="modal-body">
+            <div className="qresult-hero" style={{ background: isOk ? '#dcfce7' : '#fee2e2' }}>
+              <div className="qresult-rc" style={{ color: isOk ? '#16a34a' : '#dc2626' }}>
+                {isOk ? '✓' : '✗'} {rc}
+              </div>
+              <div className="qresult-desc">
+                {result.requestType === 'capture' ? 'Capture' : 'Cancel'} — {getResultDesc(rc)}
+              </div>
+              {result.message && <div className="qresult-msg">{result.message}</div>}
+            </div>
+            <Section title="Raw Response">
+              <div className="extra-block" style={{ maxHeight: 180, overflowY: 'auto' }}>
+                {JSON.stringify(result, null, 2)}
+              </div>
+            </Section>
+          </div>
+        )}
+
+        <div className="modal-ft">
+          <div style={{ fontSize: 12, color: '#9ca3af' }}>Chỉ áp dụng cho giao dịch resultCode = 9000</div>
           <button className="btn-close-modal" onClick={onClose}>Đóng</button>
         </div>
       </div>
@@ -1188,4 +1355,19 @@ const CSS = `
     .main { padding: 16px; }
     .stat-grid { grid-template-columns: repeat(2,1fr); gap: 12px; }
   }
+
+  .btn-confirm-row {
+  color: #16a34a; border-color: rgba(22,163,74,0.3); background: #f0fdf4;
+}
+.btn-confirm-row:hover { background: #16a34a; color: #fff; border-color: #16a34a; }
+
+.btn-confirm-modal {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px; border-radius: 9px;
+  border: 1px solid rgba(22,163,74,0.3); background: #f0fdf4;
+  color: #16a34a; font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: var(--font); transition: all 0.15s;
+}
+.btn-confirm-modal:hover { background: #16a34a; color: #fff; border-color: #16a34a; }
+
 `
