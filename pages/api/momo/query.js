@@ -11,7 +11,8 @@ import crypto from 'crypto'
 // MoMo docs: dùng endpoint test khi chưa go-live, đổi sang production khi đã duyệt merchant
 // Cố tình KHÔNG phụ thuộc biến môi trường ở đây để loại trừ khả năng URL bị undefined.
 // Nếu bạn cần đổi sang production, sửa trực tiếp dòng dưới (hoặc thêm lại env sau khi đã xác nhận chạy ổn).
-const MOMO_ENDPOINT = 'https://test-payment.momo.vn/v2/gateway/api/query'
+const MOMO_ENDPOINT = process.env.MOMO_ENDPOINT
+
 
 // ⚠️ Đổi tên các biến env này để KHỚP với những gì bạn đã dùng ở
 // các route MoMo khác (create order, ipn...). Đây chỉ là tên gợi ý.
