@@ -169,6 +169,21 @@ export default function ScanPage() {
     await onDetected(manualCode)
   }
 
+  // ← THÊM HÀM MỚI NGAY ĐÂY
+const handleManualCodeKey = (e) => {
+  if (e.key === 'Enter') {
+    submitManualCode()
+  }
+}
+
+// Auto submit khi nhập đủ 18 ký tự
+useEffect(() => {
+  const code = cleanCode(manualCode)
+  if (code.length === 18 && !submitting.current && /^(\d{18}|MM\d{16})$/.test(code)) {
+    submitManualCode()
+  }
+}, [manualCode])
+
   if (authed === null) {
     return (
       <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#fff8fb' }}>
@@ -335,6 +350,7 @@ export default function ScanPage() {
                 <input
                   value={manualCode}
                   onChange={e => { setManualCode(e.target.value); setManualErr('') }}
+                  onKeyDown={handleManualCodeKey}
                   style={{ ...S.input, marginBottom: manualErr ? 4 : 8, background: '#fff' }}
                   disabled={submitting.current}
                 />
