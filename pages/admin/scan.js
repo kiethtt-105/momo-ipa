@@ -506,15 +506,14 @@ export default function ScanPage() {
                     style={{
                       background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 8,
                       padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                      width: '100%', marginTop: 8, transition: 'background .15s',
+                      width: '100%', marginTop: 6, transition: 'background .15s',
                       boxShadow: '0 4px 12px rgba(245,158,11,0.2)'
                     }}
                   >
                     ⚡ Gửi lại dữ liệu (Kiểm tra giao dịch)
                   </button>
                 )}
-                {/* Nút xác nhận thanh toán nhỏ, gọn gàng đặt ngay dưới chân ô input */}
-                <button
+                                <button
                   onClick={submitManualCode}
                   disabled={!manualCode.trim() || submitting.current}
                   style={{
@@ -530,29 +529,13 @@ export default function ScanPage() {
               {/* Camera chạy ngầm không gây vỡ/xấu giao diện */}
               {!submitting.current && (
                 <>
-                  {scanning ? (
+                  {/* Giữ camera chạy ngầm ẩn hoàn toàn, không hiển thị bất kỳ nút/chữ gì ra giao diện */}
+                  {scanning && (
                     <div style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden', pointerEvents: 'none' }}>
                       <video ref={setVideoRef} playsInline muted style={{ width: '100%' }} />
                       <canvas ref={canvasRef} />
                     </div>
-                  ) : null}
-
-                  <div style={{ textAlign: 'center', padding: '4px 0', marginBottom: 12 }}>
-                    {scanning ? (
-                      <div style={{ fontSize: 12, color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 500 }}>
-                        <span style={{ width: 6, height: 6, background: '#22c55e', borderRadius: '50%', display: 'inline-block', animation: 'p .8s infinite' }} />
-                        Hệ thống nhận diện tự động đang chạy ngầm...
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={() => { setCamError(''); setScanning(true) }}
-                        style={{ ...S.btnSecondary, width: 'auto', padding: '6px 14px', fontSize: 12, borderColor: 'rgba(174,0,112,0.2)', color: '#ae0070' }} 
-                        disabled={!ready}
-                      >
-                        📷 Kích hoạt quét Camera dự phòng
-                      </button>
-                    )}
-                  </div>
+                  )}
                 </>
               )}
 
