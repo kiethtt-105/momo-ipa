@@ -7,12 +7,7 @@ const QUICK_AMOUNTS = [10000, 20000, 50000, 100000, 200000, 500000]
 
 function cleanCode(raw) {
   if (!raw) return ''
-  const s = raw.trim()
-  const m1 = s.match(/^[Mm]{2}(\d{18})$/)
-  if (m1) return m1[1]
-  const m2 = s.match(/(\d{18})/)
-  if (m2) return m2[1]
-  return s
+  return raw.trim()
 }
 
 export default function ScanPage() {
