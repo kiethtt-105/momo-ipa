@@ -9,11 +9,23 @@ const redis = new Redis({
 const PARTNER_CODE = process.env.MOMO_PARTNER_CODE
 const ACCESS_KEY   = process.env.MOMO_ACCESS_KEY
 const SECRET_KEY   = process.env.MOMO_SECRET_KEY
+const PUBLIC_KEY   = process.env.MOMO_PUBLIC_KEY
 const POS_ENDPOINT = process.env.MOMO_POS_ENDPOINT ||
   (process.env.MOMO_ENDPOINT || '').replace(/\/create$/, '/pos')
 
 function sign(raw) {
   return crypto.createHmac('sha256', SECRET_KEY).update(raw).digest('hex')
+}
+
+function encryptPaymentCode(code) {
+  // MoMo yêu cầu RSA encrypt paymentCode bằng public key
+  const pubKey = PUBLIC_KEY.includes('-----BEGIN')
+    ? PUBLIC_KEY
+    : `-----BEGIN PUBLIC KEY-----\n${PUBLIC_KEY}\n-----END PUBLIC KEY-----`
+  return crypto.publicEncrypt(
+    { key: pubKey, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING },
+    Buffer.from(code)
+  ).toString('base64')
 }
 
 export default async function handler(req, res) {
@@ -34,14 +46,23 @@ export default async function handler(req, res) {
   }
 
   const amt = parseInt(amount)
-  if (isNaN(amt) || amt < 1000 || amt > 50_000_000) {
-    return res.status(400).json({ error: 'Số tiền không hợp lệ' })
+  if (isNaN(amt) || amt < 1000 || amt > 5_000_000) {
+    return res.status(400).json({ error: 'Số tiền không hợp lệ (1,000–5,000,000 ₫)' })
   }
 
   const requestId = `${orderId}_${Date.now()}`
   const extraData = ''
 
-  // Signature đúng theo /v2/gateway/api/pos — 8 field theo alphabet, KHÔNG có orderType
+  // Encrypt paymentCode bằng RSA public key trước khi ký và gửi
+  let encryptedCode
+  try {
+    encryptedCode = encryptPaymentCode(paymentCode)
+  } catch (err) {
+    console.error('[POS] RSA encrypt error:', err)
+    return res.status(500).json({ error: 'Lỗi mã hóa paymentCode' })
+  }
+
+  // Signature dùng paymentCode đã encrypt (đúng theo docs)
   const rawSignature = [
     `accessKey=${ACCESS_KEY}`,
     `amount=${amt}`,
@@ -49,7 +70,7 @@ export default async function handler(req, res) {
     `orderId=${orderId}`,
     `orderInfo=${orderInfo}`,
     `partnerCode=${PARTNER_CODE}`,
-    `paymentCode=${paymentCode}`,
+    `paymentCode=${encryptedCode}`,
     `requestId=${requestId}`,
   ].join('&')
 
@@ -59,7 +80,7 @@ export default async function handler(req, res) {
     requestId,
     amount: amt,
     orderInfo,
-    paymentCode,
+    paymentCode: encryptedCode,
     extraData,
     autoCapture: true,
     lang: 'vi',
@@ -79,7 +100,7 @@ export default async function handler(req, res) {
     })
 
     console.log('[POS] endpoint:', POS_ENDPOINT)
-    console.log('[POS] body:', JSON.stringify(body))
+    console.log('[POS] body:', JSON.stringify({ ...body, paymentCode: '[ENCRYPTED]' }))
 
     const momoRes = await fetch(POS_ENDPOINT, {
       method: 'POST',
