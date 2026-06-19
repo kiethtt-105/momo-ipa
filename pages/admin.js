@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Head from 'next/head'
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const REFRESH_INTERVAL = 3000 // 3s thay vì 1s — đủ realtime, không spam
+const REFRESH_INTERVAL = 1000 
 // ĐÃ XOÁ: ADMIN_KEY / ADMIN_PASSWORD lấy từ NEXT_PUBLIC_* — biến NEXT_PUBLIC_
 // bị Next.js nhúng thẳng vào bundle JS, ai mở DevTools cũng đọc được.
 // Auth giờ xử lý hoàn toàn ở server qua /api/admin/login + cookie httpOnly.
