@@ -40,7 +40,6 @@ export default function ScanPage() {
   const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
   const [showCancelModal, setShowCancelModal] = useState(false);
 
-
   // Load jsQR
   useEffect(() => {
     if (window.jsQR) { setReady(true); return }
@@ -144,8 +143,6 @@ export default function ScanPage() {
     setManualCode(code)
 
     const amt = parseInt(amount)
-    
-    // Giữ orderId cũ nếu đang retry, nếu không thì tạo mới
     const orderId = currentOrderId || `POS${Date.now()}`
 
     try {
@@ -172,7 +169,6 @@ export default function ScanPage() {
     setManualErr('')
   }
 
-  // Bắt Enter ở input số tiền và mã đơn hàng
   const handleEnterKey = (e) => {
     if (e.key === 'Enter') {
       if (amount && parseInt(amount) >= 1000) {
@@ -191,20 +187,46 @@ export default function ScanPage() {
     await onDetected(manualCode)
   }
 
-  // ← THÊM HÀM MỚI NGAY ĐÂY
-const handleManualCodeKey = (e) => {
-  if (e.key === 'Enter') {
-    submitManualCode()
+  const handleManualCodeKey = (e) => {
+    if (e.key === 'Enter') {
+      submitManualCode()
+    }
   }
-}
 
-// Auto submit khi nhập đủ 18 ký tự
-useEffect(() => {
-  const code = cleanCode(manualCode)
-  if (code.length === 18 && !submitting.current && /^(\d{18}|MM\d{16})$/.test(code)) {
-    submitManualCode()
+  // Auto submit khi nhập đủ 18 ký tự
+  useEffect(() => {
+    const code = cleanCode(manualCode)
+    if (code.length === 18 && !submitting.current && /^(\d{18}|MM\d{16})$/.test(code)) {
+      submitManualCode()
+    }
+  }, [manualCode])
+
+  // Hàm ép đơn hàng PENDING thành FAILED khi thực hiện hủy giao dịch
+  async function triggerCancelOrderBackend() {
+    submitting.current = true;
+    try {
+      await fetch('/api/momo/pos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: currentOrderId,
+          amount: parseInt(amount),
+          orderInfo: orderInfo || currentOrderId,
+          paymentCode: '000000000000000000' // Bắn mã ảo để API pos.js cập nhật trạng thái FAILED
+        }),
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      submitting.current = false;
+      setAmount('');
+      setOrderInfo('');
+      setCurrentOrderId(null);
+      setManualCode('');
+      setManualErr('');
+      setStep('amount');
+    }
   }
-}, [manualCode])
 
   if (authed === null) {
     return (
@@ -216,7 +238,6 @@ useEffect(() => {
   }
 
   if (!authed) {
-    // ... (phần login giữ nguyên)
     async function login() {
       setPwError(false)
       const res = await fetch('/api/admin/login', {
@@ -283,7 +304,6 @@ useEffect(() => {
                       setManualCode('');
                       setManualErr('');
                       submitting.current = false;
-                      // Giữ nguyên amount và orderInfo để thử lại
                     }}
                     style={{ ...S.btnPrimary, background: '#f59e0b' }}
                   >
@@ -291,17 +311,11 @@ useEffect(() => {
                   </button>
                 )}
 
-                <button 
-                  onClick={resetAll} 
-                  style={S.btnPrimary}
-                >
+                <button onClick={resetAll} style={S.btnPrimary}>
                   {isSuccess ? 'Giao Dịch Mới' : 'Nhập số tiền mới'}
                 </button>
 
-                <button 
-                  onClick={() => router.push('/admin')} 
-                  style={S.btnSecondary}
-                >
+                <button onClick={() => router.push('/admin')} style={S.btnSecondary}>
                   ← Về Admin
                 </button>
               </div>
@@ -328,7 +342,14 @@ useEffect(() => {
         {/* Header */}
         <div style={S.header}>
           <button
-            onClick={() => step === 'amount' ? router.push('/admin') : (stopCamera(), setStep('amount'))}
+            onClick={() => {
+              // Nếu đang ở màn hình scan, chặn lại để hiện popup hủy giao dịch
+              if (step === 'scan') {
+                setShowCancelModal(true);
+              } else {
+                router.push('/admin');
+              }
+            }}
             style={S.backBtn}
           >←</button>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -372,7 +393,6 @@ useEffect(() => {
                 style={S.input} min={1000} max={5000000} autoFocus 
                 step={1000}
                 disabled={quick === 'true'}
-                
               />
 
               <div style={{ paddingTop:12, borderTop:'1px solid #f3f4f6', marginBottom:14 }}>
@@ -389,11 +409,8 @@ useEffect(() => {
                 onClick={async () => {
                   const generatedId = `POS${Date.now()}`;
                   setCurrentOrderId(generatedId);
-                  
                   submitting.current = true; 
-
                   try {
-                    // Gọi API vừa tạo để lưu đơn trạng thái PENDING chuẩn chỉnh
                     await fetch('/api/momo/save-pending', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
@@ -407,7 +424,7 @@ useEffect(() => {
                     console.error("Lỗi tạo log đơn hàng nháp:", e);
                   } finally {
                     submitting.current = false;
-                    setStep('scan'); // Chuyển sang màn hình chờ súng quét mã
+                    setStep('scan');
                   }
                 }}
                 disabled={!amount || parseInt(amount) < 1000 || submitting.current}
@@ -417,26 +434,19 @@ useEffect(() => {
               </button>
             </div>
           )}
+
+          {/* STEP 2: SCAN */}
           {step === 'scan' && (
             <div style={S.card}>
-              <h3 style={{ ...S.sectionTitle, marginBottom:12 }}>📷 Scan mã thanh toán từ app MoMo</h3>
+              <h3 style={{ ...S.sectionTitle, marginBottom:12 }}>📷 Quy trình nhận mã thanh toán MoMo</h3>
 
-              {/* === TÓM TẮT ĐƠN HÀNG ĐẦY ĐỦ === */}
+              {/* TÓM TẮT ĐƠN HÀNG ĐẦY ĐỦ */}
               {(amount || orderInfo || currentOrderId) && (
-                <div
-                  style={{
-                    background:'#f8fafc',
-                    border:'1px solid #e2e8f0',
-                    borderRadius:12,
-                    padding:'16px',
-                    marginBottom:20
-                  }}
-                >
+                <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:12, padding:'16px', marginBottom:20 }}>
                   <div style={{ fontSize:12, fontWeight:700, color:'#64748b', marginBottom:12, textTransform:'uppercase' }}>
                     THÔNG TIN ĐƠN HÀNG TẠI QUẦY
                   </div>
 
-                  {/* 🌟 THÊM ĐOẠN HIỂN THỊ MÃ ĐƠN HÀNG DƯỚI ĐÂY 🌟 */}
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 10 }}>
                     <span style={{ color:'#475569', fontSize: 13 }}>Mã đơn hàng (Log ID):</span>
                     <span style={{ fontWeight:700, fontFamily:'monospace', color:'#111827', background:'#e2e8f0', padding:'2px 6px', borderRadius:4 }}>
@@ -444,72 +454,31 @@ useEffect(() => {
                     </span>
                   </div>
 
-                  <div
-                    style={{
-                      display:'flex',
-                      justifyContent:'space-between',
-                      alignItems:'center'
-                    }}
-                  >
-                    <span style={{color:'#475569'}}>
-                      Số tiền thanh toán
-                    </span>
-
-                    <span
-                      style={{
-                        fontSize:28,
-                        fontWeight:800,
-                        color:'#ae0070'
-                      }}
-                    >
-                      {fmt(amount)} ₫
-                    </span>
+                  <div style={{ display:'flex', justifyBounding:'space-between', justifyContent:'space-between', alignItems:'center' }}>
+                    <span style={{color:'#475569'}}>Số tiền thanh toán</span>
+                    <span style={{ fontSize:28, fontWeight:800, color:'#ae0070' }}>{fmt(amount)} ₫</span>
                   </div>
 
                   {orderInfo && (
                     <>
-                      <div
-                        style={{
-                          height:1,
-                          background:'#e2e8f0',
-                          margin:'12px 0'
-                        }}
-                      />
-
+                      <div style={{ height:1, background:'#e2e8f0', margin:'12px 0' }} />
                       <div>
-                        <div
-                          style={{
-                            fontSize:12,
-                            color:'#64748b',
-                            marginBottom:4
-                          }}
-                        >
-                          Nội dung thanh toán
-                        </div>
-
-                        <div
-                          style={{
-                            fontSize:15,
-                            color:'#111827',
-                            fontWeight:500
-                          }}
-                        >
-                          {orderInfo}
-                        </div>
+                        <div style={{ fontSize:12, color:'#64748b', marginBottom:4 }}>Nội dung thanh toán</div>
+                        <div style={{ fontSize:15, color:'#111827', fontWeight:500 }}>{orderInfo}</div>
                       </div>
                     </>
                   )}
                 </div>
               )}
 
-              {/* Input mã thủ công */}
-              <div style={{ marginBottom: 20, padding:'14px', background:'#f9f0f5', borderRadius:10, border:'1px solid rgba(174,0,112,0.15)' }}>
+              {/* Input mã thủ công & Súng Quét */}
+              <div style={{ marginBottom: 16, padding:'14px', background:'#f9f0f5', borderRadius:10, border:'1px solid rgba(174,0,112,0.15)' }}>
                 <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>
-                  MÃ THANH TOÁN MOMO
+                  MÃ THANH TOÁN MOMO (DÙNG SÚNG QUÉT / NHẬP TAY)
                 </p>
                 <input
                   autoFocus
-                  placeholder="Code QR hoặc mã thanh toán MoMo "
+                  placeholder="Bắn mã QR hoặc điền 18 số vào đây..."
                   value={manualCode}
                   onChange={e => { setManualCode(e.target.value); setManualErr('') }}
                   onKeyDown={handleManualCodeKey}
@@ -517,114 +486,119 @@ useEffect(() => {
                   disabled={submitting.current}
                 />
                 {manualErr && <p style={{ fontSize:12, color:'#dc2626', marginBottom:8 }}>⚠ {manualErr}</p>}
+                
+                {/* Nút xác nhận thanh toán nhỏ, gọn gàng đặt ngay dưới chân ô input */}
+                <button
+                  onClick={submitManualCode}
+                  disabled={!manualCode.trim() || submitting.current}
+                  style={{
+                    background: '#ae0070', color: '#fff', border: 'none', borderRadius: 8,
+                    padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    width: '100%', marginTop: 4, transition: 'background .15s'
+                  }}
+                >
+                  {submitting.current ? 'Đang xử lý...' : '✓ Xác nhận thanh toán'}
+                </button>
               </div>
-              
-  
-              {/* 👉 THAY THẾ TOÀN BỘ CỤM NÚT QUAY VỀ / NHẬP LẠI THÀNH ĐOẠN NÀY: */}
+
+              {/* Camera chạy ngầm không gây vỡ/xấu giao diện */}
               {!submitting.current && (
-                <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+                <>
+                  {scanning ? (
+                    <div style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+                      <video ref={setVideoRef} playsInline muted style={{ width: '100%' }} />
+                      <canvas ref={canvasRef} />
+                    </div>
+                  ) : null}
+
+                  <div style={{ textAlign: 'center', padding: '4px 0', marginBottom: 12 }}>
+                    {scanning ? (
+                      <div style={{ fontSize: 12, color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 500 }}>
+                        <span style={{ width: 6, height: 6, background: '#22c55e', borderRadius: '50%', display: 'inline-block', animation: 'p .8s infinite' }} />
+                        Hệ thống nhận diện tự động đang chạy ngầm...
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => { setCamError(''); setScanning(true) }}
+                        style={{ ...S.btnSecondary, width: 'auto', padding: '6px 14px', fontSize: 12, borderColor: 'rgba(174,0,112,0.2)', color: '#ae0070' }} 
+                        disabled={!ready}
+                      >
+                        📷 Kích hoạt quét Camera dự phòng
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* CỤM NÚT DIỀU HƯỚNG DƯỚI ĐÁY ĐƯỢC THU NHỎ GỌN GÀNG HÀNG NGANG */}
+              {!submitting.current && (
+                <div style={{ display: 'flex', gap: 12, marginTop: 12, borderTop: '1px solid #f3f4f6', paddingTop: 14 }}>
                   <button
-                    onClick={() => setShowCancelModal(true)} // Bật popup xác nhận hủy thay vì quay về luôn
+                    onClick={() => setShowCancelModal(true)}
                     style={{
-                      background: '#fff',
-                      color: '#64748b',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: 8,
-                      padding: '10px 16px',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      flex: 1
+                      background: '#fff', color: '#64748b', border: '1px solid #cbd5e1',
+                      borderRadius: 8, padding: '9px 14px', fontSize: 13, fontWeight: 600,
+                      cursor: 'pointer', flex: 1
                     }}
                   >
                     ← Hủy & Quay lại
                   </button>
 
+                  <button
+                    onClick={() => { setManualCode(''); setManualErr(''); }}
+                    style={{
+                      background: '#fff', color: '#ae0070', border: '1px solid rgba(174,0,112,0.25)',
+                      borderRadius: 8, padding: '9px 14px', fontSize: 13, fontWeight: 600,
+                      cursor: 'pointer', flex: 1
+                    }}
+                  >
+                    🔄 Xóa nhập lại
+                  </button>
                 </div>
               )}
 
-{/* ─── POPUP XÁC NHẬN HỦY GIAO DỊCH ─── */}
-{showCancelModal && (
-  <div style={{
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16
-  }}>
-    <div style={{
-      background: '#fff', borderRadius: 16, width: '100%', maxWidth: 360,
-      padding: 24, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
-    }}>
-      <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', marginBottom: 8, textAlign: 'center' }}>
-        Xác nhận hủy giao dịch?
-      </div>
-      <p style={{ fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 20, lineHeight: 1.5 }}>
-        Hành động này sẽ hủy bỏ đơn hàng số <span style={{fontFamily:'monospace', fontWeight:600}}>{currentOrderId}</span> trên hệ thống.
-      </p>
-      
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button
-          onClick={() => setShowCancelModal(false)}
-          style={{
-            flex: 1, padding: '10px', background: '#f1f5f9', color: '#475569',
-            border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer'
-          }}
-        >
-          Không, tiếp tục
-        </button>
-        
-        <button
-          onClick={async () => {
-            setShowCancelModal(false);
-            submitting.current = true;
-            try {
-              // Gọi API pos.js gửi mã lỗi giả định hoặc thiết kế riêng endpoint để hủy đơn nháp
-              // Ở đây dùng API pos gửi mã 'CANCELLED' để MoMo/Hệ thống đẩy về trạng thái FAILED luôn
-              await fetch('/api/momo/pos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  orderId: currentOrderId,
-                  amount: parseInt(amount),
-                  orderInfo: orderInfo || currentOrderId,
-                  paymentCode: '000000000000000000' // Gửi mã này sang để ép trạng thái FAILED lập tức
-                }),
-              });
-            } catch (e) {
-              console.error(e);
-            } finally {
-              submitting.current = false;
-              // Xóa sạch thông tin cũ và quay về màn nhập tiền ban đầu
-              setAmount('');
-              setOrderInfo('');
-              setCurrentOrderId('');
-              setManualCode('');
-              setStep('amount');
-            }
-          }}
-          style={{
-            flex: 1, padding: '10px', background: '#dc2626', color: '#fff',
-            border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer'
-          }}
-        >
-          Đồng ý hủy đơn
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
-
+              {/* POPUP MODAL XÁC NHẬN HỦY GIAO DỊCH CHẶN TREO ĐƠN */}
+              {showCancelModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16 }}>
+                  <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 350, padding: 22, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 6, textAlign: 'center' }}>
+                      Xác nhận hủy giao dịch?
+                    </div>
+                    <p style={{ fontSize: 13, color: '#64748b', textAlign: 'center', marginBottom: 18, lineHeight: 1.5 }}>
+                      Hành động này sẽ hủy bỏ và đánh dấu thất bại cho đơn hàng <span style={{fontFamily:'monospace', fontWeight:600}}>{currentOrderId}</span>.
+                    </p>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button
+                        onClick={() => setShowCancelModal(false)}
+                        style={{ flex: 1, padding: '9px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        Tiếp tục chờ
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setShowCancelModal(false);
+                          stopCamera();
+                          await triggerCancelOrderBackend();
+                        }}
+                        style={{ flex: 1, padding: '9px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        Đồng ý hủy đơn
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Trạng thái đang xử lý thanh toán */}
               {submitting.current && (
-                <div style={{ padding: '40px 20px', textAlign: 'center', background: '#f9f0f5', borderRadius: 12, marginBottom: 16 }}>
-                  <div className="spinner" style={{ width:48, height:48, borderWidth:5, margin:'0 auto 16px' }} />
-                  <p style={{ fontSize:16, fontWeight:700, color:'#ae0070' }}>Đang xử lý thanh toán...</p>
-                  <p style={{ fontSize:14, color:'#6b7280' }}>Vui lòng không đóng trang</p>
+                <div style={{ padding: '30px 20px', textAlign: 'center', background: '#f9f0f5', borderRadius: 12, marginTop: 12 }}>
+                  <div className="spinner" style={{ width:36, height:36, borderWidth:4, margin:'0 auto 12px' }} />
+                  <p style={{ fontSize:15, fontWeight:700, color:'#ae0070' }}>Đang xử lý thanh toán...</p>
+                  <p style={{ fontSize:13, color:'#6b7280' }}>Vui lòng không đóng trang</p>
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-                {/* Nút Thử lại (hiện khi có lỗi) */}
+              <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
                 {result && !result.success && (
                   <button 
                     onClick={() => {
@@ -632,13 +606,9 @@ useEffect(() => {
                       setManualCode('');
                       setManualErr('');
                       submitting.current = false;
- sc                   }}
-                    style={{
-                      ...S.btnSecondary,
-                      background: '#f59e0b',
-                      color: 'white',
-                      border: 'none'
+                      setScanning(true);
                     }}
+                    style={{ ...S.btnSecondary, background: '#f59e0b', color: 'white', border: 'none', borderRadius: 10, padding: '10px' }}
                   >
                     🔄 Thử lại
                   </button>
@@ -652,7 +622,6 @@ useEffect(() => {
     </>
   )
 }
-
 
 const S = {
   bg:        { minHeight:'100vh', background:'linear-gradient(135deg,#fff0f7 0%,#fce4f0 50%,#f5edf2 100%)', fontFamily:"'Inter',sans-serif" },
@@ -674,7 +643,5 @@ const CSS = `
   button { transition:opacity .15s; }
   button:active { opacity:.8; }
   @keyframes spin { to { transform:rotate(360deg); } }
-  @keyframes scan-line { 0%,100%{top:4%} 50%{top:88%} }
   .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
-  .scan-line { height:2px; background:linear-gradient(90deg,transparent,#ae0070,transparent); animation:scan-line 1.8s ease-in-out infinite; }
 `
