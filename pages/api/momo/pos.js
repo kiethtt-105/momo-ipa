@@ -10,8 +10,7 @@ const PARTNER_CODE = process.env.MOMO_PARTNER_CODE
 const ACCESS_KEY   = process.env.MOMO_ACCESS_KEY
 const SECRET_KEY   = process.env.MOMO_SECRET_KEY
 const PUBLIC_KEY   = process.env.MOMO_POS_PUBLIC_KEY || ''
-const POS_ENDPOINT = process.env.MOMO_POS_ENDPOINT ||
-  (process.env.MOMO_ENDPOINT || '').replace(/\/create$/, '/pos')
+const POS_ENDPOINT = 'https://payment.momo.vn/v2/gateway/api/pos'
 
 function sign(raw) {
   return crypto.createHmac('sha256', SECRET_KEY).update(raw).digest('hex')
@@ -51,7 +50,7 @@ export default async function handler(req, res) {
   }
 
   const requestId = `${orderId}_${Date.now()}`
-  const extraData = ''
+  const extraData = 'e30='
 
   // Encrypt paymentCode cho body
   let encryptedCode
