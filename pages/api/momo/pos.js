@@ -62,11 +62,23 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Lỗi kiểm tra phiên đăng nhập' })
   }
 
-  // ====================== VALIDATION ======================
-  const { orderId, amount, orderInfo, paymentCode: rawPaymentCode } = req.body
+  // ====================== VALIDATION & PROCESSING ======================
+  let { orderId: rawOrderId, amount, orderInfo: rawOrderInfo, paymentCode: rawPaymentCode } = req.body
 
-  if (!orderId || !amount || !orderInfo || !rawPaymentCode) {
-    return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' })
+  if (!rawOrderId || !amount || !rawPaymentCode) {
+    return res.status(400).json({ error: 'Thiếu thông tin bắt buộc: orderId, amount, paymentCode' })
+  }
+
+  // Chuẩn hóa orderId → luôn có tiền tố POS
+  let orderId = String(rawOrderId).trim()
+  if (!orderId.startsWith('POS')) {
+    orderId = `POS${orderId}`
+  }
+
+  // Xử lý orderInfo - dùng luôn orderId đầy đủ (POS...)
+  let orderInfo = String(rawOrderInfo || '').trim()
+  if (!orderInfo) {
+    orderInfo = orderId  // Hiển thị POS178... trên MoMo
   }
 
   const paymentCode = String(rawPaymentCode).trim()
