@@ -398,11 +398,15 @@ useEffect(() => {
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
                 <button
                   onClick={submitManualCode}
                   disabled={!manualCode.trim() || submitting.current}
-                  style={{ ...S.btnPrimary, flex: 1 }}
+                  style={{ 
+                    ...S.btnPrimary, 
+                    flex: 1,
+                    background: submitting.current ? '#9f1e6e' : '#ae0070'
+                  }}
                 >
                   {submitting.current ? 'Đang xử lý...' : '✓ Xác nhận thanh toán'}
                 </button>
@@ -414,6 +418,26 @@ useEffect(() => {
                 >
                   ← Quay lại
                 </button>
+
+                {/* Nút Thử lại (hiện khi có lỗi) */}
+                {result && !result.success && (
+                  <button 
+                    onClick={() => {
+                      setResult(null);
+                      setManualCode('');
+                      setManualErr('');
+                      submitting.current = false;
+                    }}
+                    style={{
+                      ...S.btnSecondary,
+                      background: '#f59e0b',
+                      color: 'white',
+                      border: 'none'
+                    }}
+                  >
+                    🔄 Thử lại
+                  </button>
+                )}
               </div>
             </div>
           )}
