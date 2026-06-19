@@ -104,7 +104,8 @@ export default async function handler(req, res) {
     console.log('[POS] encryptedCode:', encryptedCode)
     console.log('[POS] rawSignature:', rawSignature.replace(ACCESS_KEY, '***'))
     console.log('[POS] body:', JSON.stringify({ ...body, paymentCode: '[ENCRYPTED]' }))
-
+    console.log('[POS] sig_plain:', sign([...].join('&') với paymentCode plain))
+    console.log('[POS] sig_encrypted:', sign([...].join('&') với encryptedCode))
     const momoRes = await fetch(POS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=UTF-8' },
