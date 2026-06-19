@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter } from 'next/router'
 import Head from 'next/head'
 
 // ─── CONSTANTS ───────────────────────────────────────────────
@@ -35,7 +36,6 @@ const normalizeStatus = (order) => {
   }
   return { ...order, status }
 }
-
 // ─── MAIN COMPONENT ──────────────────────────────────────────
 export default function AdminPage() {
   // authed: null = đang kiểm tra session với server, true/false = đã biết
@@ -190,6 +190,7 @@ export default function AdminPage() {
     }
   }
 
+  const router = useRouter()
   // ── ĐANG KIỂM TRA SESSION VỚI SERVER ────────────────────────
   if (checkingSession) return (
     <div className="bg-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
@@ -322,7 +323,9 @@ export default function AdminPage() {
                     🗑 Xóa ({selected.size})
                   </button>
                 )}
-
+                <button className="btn-scan" onClick={() => router.push('/admin/scan')}>
+                  📷 Scan QR
+                </button>
                 <button className="btn-refresh" onClick={() => fetchOrders({ force: true })} disabled={fetching}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={fetching ? 'spin' : ''}>
                     <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
@@ -917,4 +920,13 @@ const CSS = `
     .main { padding: 16px; }
     .stat-grid { grid-template-columns: repeat(2,1fr); gap: 12px; }
   }
+  .btn-scan {
+    padding: 7px 14px; border-radius: 9px;
+    border: 1px solid rgba(174,0,112,0.3);
+    background: #fff0f7; color: #ae0070;
+    font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: var(--font);
+    transition: all 0.15s;
+  }
+  .btn-scan:hover { background: #ae0070; color: #fff; }
 `
