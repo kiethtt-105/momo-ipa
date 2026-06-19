@@ -38,6 +38,9 @@ export default function ScanPage() {
   const [currentOrderId, setCurrentOrderId] = useState(null)
 
   const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
+  const [showCancelModal, setShowCancelModal] = useState(false);
+
+
   // Load jsQR
   useEffect(() => {
     if (window.jsQR) { setReady(true); return }
@@ -517,35 +520,116 @@ useEffect(() => {
               </div>
               
   
+              {/* 👉 THAY THẾ TOÀN BỘ CỤM NÚT QUAY VỀ / NHẬP LẠI THÀNH ĐOẠN NÀY: */}
               {!submitting.current && (
-                <>
-                  {scanning ? (
-                    /* Ẩn hoàn toàn thẻ video và canvas bằng CSS để không gây mất thẩm mỹ */
-                    <div style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-                      <video ref={setVideoRef} playsInline muted style={{ width: '100%' }} />
-                      <canvas ref={canvasRef} />
-                    </div>
-                  ) : null}
+                <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+                  <button
+                    onClick={() => setShowCancelModal(true)} // Bật popup xác nhận hủy thay vì quay về luôn
+                    style={{
+                      background: '#fff',
+                      color: '#64748b',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: 8,
+                      padding: '10px 16px',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flex: 1
+                    }}
+                  >
+                    ← Hủy & Quay lại
+                  </button>
 
-                  {/* Trạng thái thông báo camera chạy ngầm hoặc nút bấm thủ công tùy chọn */}
-                  <div style={{ textAlign: 'center', padding: '10px 0', marginBottom: 16 }}>
-                    {scanning ? (
-                      <div style={{ fontSize: 13, color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 500 }}>
-                        <span style={{ width: 8, height: 8, background: '#22c55e', borderRadius: '50%', display: 'inline-block', animation: 'p .8s infinite' }} />
-                        Thực hiện scan mã trên máy khách
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={() => { setCamError(''); setScanning(true) }}
-                        style={{ ...S.btnSecondary, width: 'auto', padding: '8px 16px', fontSize: 13, borderColor: 'rgba(174,0,112,0.2)', color: '#ae0070' }} 
-                        disabled={!ready}
-                      >
-                        📷 Bật quét bằng Camera (Nếu không dùng súng)
-                      </button>
-                    )}
-                  </div>
-                </>
+                  <button
+                    onClick={() => {
+                      setManualCode('');
+                      setManualErr('');
+                    }}
+                    style={{
+                      background: '#fff',
+                      color: '#ae0070',
+                      border: '1px solid rgba(174,0,112,0.3)',
+                      borderRadius: 8,
+                      padding: '10px 16px',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flex: 1
+                    }}
+                  >
+                    🔄 Xóa nhập lại
+                  </button>
+                </div>
               )}
+
+{/* ─── POPUP XÁC NHẬN HỦY GIAO DỊCH ─── */}
+{showCancelModal && (
+  <div style={{
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16
+  }}>
+    <div style={{
+      background: '#fff', borderRadius: 16, width: '100%', maxWidth: 360,
+      padding: 24, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+    }}>
+      <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', marginBottom: 8, textAlign: 'center' }}>
+        Xác nhận hủy giao dịch?
+      </div>
+      <p style={{ fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 20, lineHeight: 1.5 }}>
+        Hành động này sẽ hủy bỏ đơn hàng số <span style={{fontFamily:'monospace', fontWeight:600}}>{currentOrderId}</span> trên hệ thống.
+      </p>
+      
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button
+          onClick={() => setShowCancelModal(false)}
+          style={{
+            flex: 1, padding: '10px', background: '#f1f5f9', color: '#475569',
+            border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer'
+          }}
+        >
+          Không, tiếp tục
+        </button>
+        
+        <button
+          onClick={async () => {
+            setShowCancelModal(false);
+            submitting.current = true;
+            try {
+              // Gọi API pos.js gửi mã lỗi giả định hoặc thiết kế riêng endpoint để hủy đơn nháp
+              // Ở đây dùng API pos gửi mã 'CANCELLED' để MoMo/Hệ thống đẩy về trạng thái FAILED luôn
+              await fetch('/api/momo/pos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  orderId: currentOrderId,
+                  amount: parseInt(amount),
+                  orderInfo: orderInfo || currentOrderId,
+                  paymentCode: '000000000000000000' // Gửi mã này sang để ép trạng thái FAILED lập tức
+                }),
+              });
+            } catch (e) {
+              console.error(e);
+            } finally {
+              submitting.current = false;
+              // Xóa sạch thông tin cũ và quay về màn nhập tiền ban đầu
+              setAmount('');
+              setOrderInfo('');
+              setCurrentOrderId('');
+              setManualCode('');
+              setStep('amount');
+            }
+          }}
+          style={{
+            flex: 1, padding: '10px', background: '#dc2626', color: '#fff',
+            border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer'
+          }}
+        >
+          Đồng ý hủy đơn
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
 
 
