@@ -383,7 +383,10 @@ useEffect(() => {
                 />
               </div>
               <button
-                onClick={() => setStep('scan')}
+                onClick={() => {
+                  setCurrentOrderId(`POS${Date.now()}`)
+                  setStep('scan')
+                }}
                 disabled={!amount || parseInt(amount) < 1000}
                 style={{ ...S.btnPrimary, opacity: (!amount || parseInt(amount) < 1000) ? 0.4 : 1 }}
               >
