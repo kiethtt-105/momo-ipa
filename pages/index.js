@@ -1,77 +1,67 @@
 import { useState, useRef, useEffect } from 'react'
 import Head from 'next/head'
 
-// ─── Gợi ý nhanh mặc định ────────────────────────────────────
+// ─── CONSTANTS ───────────────────────────────────────────────
 const DEFAULT_SUGGESTIONS = [10000, 50000, 100000, 200000]
 const MAX_AMOUNT = 50_000_000
 const MIN_AMOUNT = 1_000
 
-// ─── Format hiển thị (không có dấu thập phân) ─────────────────
 const fmtDisplay = n => n ? parseInt(n).toLocaleString('vi-VN') : ''
 
 export default function Home() {
-  const [rawAmount, setRawAmount] = useState('') // số thô, không format
-  const [loading,   setLoading]   = useState(false)
+  const [rawAmount, setRawAmount] = useState('')
+  const [loading, setLoading] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
-  const [autoLoading, setAutoLoading] = useState(false) // ẩn form khi auto-pay từ URL
-  const [error,     setError]     = useState('')
-  const inputRef  = useRef(null)
-  const autoPayRef = useRef(null) // lưu amount từ URL để auto-pay
+  const [autoLoading, setAutoLoading] = useState(false)
+  const [error, setError] = useState('')
+  const inputRef = useRef(null)
+  const autoPayRef = useRef(null)
 
   const numVal = parseInt(rawAmount) || 0
   const display = fmtDisplay(rawAmount)
 
-  // Dynamic suggestions: nếu chưa nhập → mặc định, đã nhập → x1000, x10000, x100000
   const suggestions = numVal === 0
     ? DEFAULT_SUGGESTIONS
     : [1000, 10000, 100000]
         .map(m => numVal * m)
         .filter(v => v >= MIN_AMOUNT && v <= MAX_AMOUNT)
 
-  // ── Xử lý input: chỉ lấy số, bỏ dấu phẩy/chấm format ───────
   const handleChange = e => {
     setError('')
-    // strip mọi thứ không phải số
     const digits = e.target.value.replace(/\D/g, '')
-    // giới hạn 8 chữ số (max 99,999,999 — đủ cho 50tr)
     if (digits.length > 8) return
     setRawAmount(digits)
   }
 
-  // ── Đọc ?amount= từ URL (iPhone Shortcut) ────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const amt = parseInt(params.get('amount'))
     if (amt >= MIN_AMOUNT && amt <= MAX_AMOUNT) {
       autoPayRef.current = amt
-      setAutoLoading(true) // ẩn form ngay lập tức
+      setAutoLoading(true)
       setRawAmount(String(amt))
     }
   }, [])
 
-  // ── Auto-pay khi rawAmount đã set từ URL param ────────────────
   useEffect(() => {
     if (autoPayRef.current && rawAmount === String(autoPayRef.current)) {
-      autoPayRef.current = null // chỉ chạy 1 lần
+      autoPayRef.current = null
       handlePay()
     }
   }, [rawAmount])
 
-  // ── Giữ cursor cuối sau khi format ───────────────────────────
   const handleKeyDown = e => {
     if (e.key === 'Enter' && numVal >= MIN_AMOUNT && !loading) handlePay()
   }
 
-  // ── Chọn gợi ý ───────────────────────────────────────────────
   const pickSuggestion = v => {
     setError('')
     setRawAmount(String(v))
     inputRef.current?.focus()
   }
 
-  // ── Thanh toán ───────────────────────────────────────────────
   const handlePay = async () => {
-    if (loading) return // chặn double-click trước khi React re-render disabled kịp
+    if (loading) return
     if (numVal < MIN_AMOUNT) return setError('Tối thiểu 1.000 ₫')
     if (numVal > MAX_AMOUNT) return setError('Tối đa 50.000.000 ₫')
 
@@ -79,8 +69,6 @@ export default function Home() {
     setError('')
 
     try {
-      // Thêm hậu tố ngẫu nhiên: Date.now() có thể trùng nếu 2 request tạo đơn
-      // rơi đúng cùng 1 millisecond (vd: auto-pay từ URL + người dùng bấm tay)
       const orderId = `${Date.now()}${Math.random().toString(36).slice(2, 6)}`
       const res = await fetch('/api/momo/create', {
         method: 'POST',
@@ -93,8 +81,6 @@ export default function Home() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Lỗi không xác định')
-
-      // ← ẩn form NGAY, hiện màn chờ redirect
       setRedirecting(true)
       window.location.href = data.payUrl
     } catch (e) {
@@ -112,23 +98,32 @@ export default function Home() {
           <link rel="icon" type="image/png" href="/Main.png" />
           <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
         </Head>
-        <style>{BASE_CSS + REDIRECT_CSS}</style>
-        <div className="wrapper">
-          <Orbs />
-          <div className="redirect-card">
-            <div className="rdr-logo">
-              <img src="/Main.png" alt="MoMo" width={40} height={40} style={{ borderRadius: 10, objectFit: 'contain' }} />
+        <Orbs />
+        <div className="relative z-10 flex min-h-dvh w-full items-center justify-center bg-[#f3e9ed] px-4">
+          <div
+            className="w-full max-w-[340px] rounded-3xl border border-white/80 bg-white/90 p-11 text-center shadow-[0_24px_60px_rgba(174,0,112,0.1)]"
+            style={{ backdropFilter: 'blur(25px)', WebkitBackdropFilter: 'blur(25px)', animation: 'pop 0.25s ease' }}
+          >
+            <div className="mb-6 flex justify-center">
+              <img src="/Main.png" alt="MoMo" width={40} height={40} className="rounded-[10px] object-contain" />
             </div>
-            <div className="rdr-spinner">
-              <svg className="rdr-circle" viewBox="0 0 50 50">
-                <circle cx="25" cy="25" r="20" fill="none" strokeWidth="4" />
+            <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center">
+              <svg className="h-[52px] w-[52px]" viewBox="0 0 50 50" style={{ animation: 'rot 1s linear infinite' }}>
+                <circle cx="25" cy="25" r="20" fill="none" stroke="#ae0070" strokeWidth="4"
+                  strokeLinecap="round" strokeDasharray="90" strokeDashoffset="30" />
               </svg>
             </div>
-            <div className="rdr-title">Đang mở MoMo…</div>
-            <div className="rdr-sub">Vui lòng đợi, đang chuyển hướng</div>
-            <div className="rdr-amount">{fmtDisplay(rawAmount)} ₫</div>
+            <div className="mb-1.5 text-xl font-extrabold text-[#1a0413]">Đang mở MoMo…</div>
+            <div className="mb-5 text-sm text-[#614655]">Vui lòng đợi, đang chuyển hướng</div>
+            <div className="inline-block rounded-xl bg-[#fff0f7] px-5 py-2.5 text-2xl font-black text-[#ae0070]">
+              {fmtDisplay(rawAmount)} ₫
+            </div>
           </div>
         </div>
+        <style>{`
+          @keyframes pop { from{transform:scale(0.94);opacity:0} to{transform:scale(1);opacity:1} }
+          @keyframes rot  { to { transform: rotate(360deg) } }
+        `}</style>
       </>
     )
   }
@@ -142,46 +137,58 @@ export default function Home() {
         <link rel="icon" type="image/png" href="/Main.png" />
         <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
       </Head>
-      <style>{BASE_CSS + FORM_CSS}</style>
 
-      <div className="wrapper">
+      {/* Background */}
+      <div className="relative flex min-h-dvh w-full flex-col items-center justify-center overflow-hidden bg-[#f3e9ed] px-4 py-5"
+        style={{ fontFamily: "'Be Vietnam Pro', sans-serif" }}>
         <Orbs />
 
-        <div className="card">
+        {/* Card */}
+        <div
+          className="relative z-10 w-full max-w-[400px] rounded-3xl border border-white/70 bg-white/88 p-8 shadow-[0_25px_50px_rgba(174,0,112,0.05)]"
+          style={{ backdropFilter: 'blur(25px)', WebkitBackdropFilter: 'blur(25px)' }}
+        >
           {/* Logo */}
-          <div className="logo-row">
-            <div className="logo-mark">
-              <img src="/Main.png" alt="Logo" style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'contain' }} />
+          <div className="mb-7 flex items-center gap-3.5 border-b border-dashed border-[rgba(174,0,112,0.1)] pb-5">
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-[rgba(174,0,112,0.1)] bg-white">
+              <img src="/Main.png" alt="Logo" className="h-9 w-9 rounded-lg object-contain" />
             </div>
             <div>
-              <div className="logo-name">MOMO</div>
-              <div className="logo-sub">Thanh toán IPA</div>
+              <div className="text-lg font-extrabold text-[#1a0413]">MOMO</div>
+              <div className="mt-0.5 text-xs text-[#614655]">Thanh toán IPA</div>
             </div>
           </div>
 
           {/* Amount input */}
-          <div className="amt-wrap">
-            <div className="amt-label">Số tiền thanh toán</div>
-            <div className="amt-row">
+          <div
+            className="mb-4 rounded-2xl border-[1.5px] border-[rgba(174,0,112,0.1)] bg-[rgba(240,232,236,0.6)] px-5 pb-4 pt-5 transition-all focus-within:border-[#f0bcd4] focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgba(174,0,112,0.07)]"
+          >
+            <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[1.2px] text-[#614655]">
+              Số tiền thanh toán
+            </div>
+            <div className="flex items-baseline gap-1.5">
               <input
                 ref={inputRef}
-                className="amt-input"
                 type="text"
                 inputMode="numeric"
-                value={display}           // ← hiển thị formatted
+                value={display}
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
                 placeholder="0"
                 autoFocus
+                className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap bg-transparent text-[#1a0413] outline-none placeholder-[#c4b0bb] caret-[#ae0070]"
+                style={{
+                  fontFamily: "'Be Vietnam Pro', sans-serif",
+                  fontWeight: 900,
+                  fontSize: 'clamp(26px, 9vw, 42px)',
+                }}
               />
-              <span className="amt-unit">₫</span>
+              <span className="flex-shrink-0 text-[22px] font-extrabold text-[#7a6070]">₫</span>
             </div>
-
-            {/* Range bar visual */}
             {numVal > 0 && (
-              <div className="amt-bar">
+              <div className="mt-3 h-[3px] overflow-hidden rounded-full bg-[rgba(174,0,112,0.08)]">
                 <div
-                  className="amt-bar-fill"
+                  className="h-full rounded-full bg-gradient-to-r from-[#ae0070] to-[#ff4fa3] transition-[width] duration-300 ease-out"
                   style={{ width: `${Math.min(numVal / MAX_AMOUNT * 100, 100)}%` }}
                 />
               </div>
@@ -189,25 +196,25 @@ export default function Home() {
           </div>
 
           {/* Quick suggestions */}
-          <div className="quick-grid">
+          <div className="mb-5 grid grid-cols-4 gap-2">
             {suggestions.map(v => (
               <button
                 key={v}
-                className={`qa ${numVal === v ? 'sel' : ''}`}
                 onClick={() => pickSuggestion(v)}
+                className={`rounded-xl border-[1.5px] px-1 py-2.5 text-[13px] font-bold transition-all duration-150 ${
+                  numVal === v
+                    ? 'border-[#ae0070] bg-[#ae0070] text-white shadow-[0_4px_12px_rgba(174,0,112,0.2)]'
+                    : 'border-[rgba(174,0,112,0.1)] bg-white/70 text-[#495057] hover:-translate-y-0.5 hover:border-[#ae0070] hover:bg-[#fff0f7] hover:text-[#ae0070]'
+                }`}
               >
-                {v >= 1_000_000
-                  ? `${v / 1_000_000}tr`
-                  : v >= 1_000
-                    ? `${v / 1_000}k`
-                    : v.toLocaleString('vi-VN')}
+                {v >= 1_000_000 ? `${v / 1_000_000}tr` : v >= 1_000 ? `${v / 1_000}k` : v.toLocaleString('vi-VN')}
               </button>
             ))}
           </div>
 
           {/* Error */}
           {error && (
-            <div className="err">
+            <div className="mb-4 flex items-center gap-1.5 rounded-[10px] border border-[#fecaca] bg-[#fff1f1] px-3.5 py-2.5 text-[13px] font-bold text-[#dc2626]">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
               </svg>
@@ -217,12 +224,16 @@ export default function Home() {
 
           {/* Pay button */}
           <button
-            className="btn"
             onClick={handlePay}
             disabled={loading || !rawAmount || numVal < MIN_AMOUNT}
+            className="flex w-full items-center justify-center gap-2 rounded-[14px] border-0 bg-[#ae0070] py-4 text-base font-bold text-white shadow-[0_8px_24px_rgba(174,0,112,0.2)] transition-all duration-200 hover:not-disabled:-translate-y-0.5 hover:not-disabled:bg-[#91005d] hover:not-disabled:shadow-[0_12px_28px_rgba(174,0,112,0.3)] disabled:cursor-not-allowed disabled:bg-[#e2d7dc] disabled:text-[#a89099] disabled:shadow-none"
+            style={{ fontFamily: "'Be Vietnam Pro', sans-serif" }}
           >
             {loading ? (
-              <><div className="spin" /> Đang tạo đơn hàng…</>
+              <>
+                <span className="h-[17px] w-[17px] animate-spin rounded-full border-[2.5px] border-white/30 border-t-white" />
+                Đang tạo đơn hàng…
+              </>
             ) : (
               <>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -235,13 +246,19 @@ export default function Home() {
         </div>
 
         {/* Security footer */}
-        <div className="sec-footer">
-          <div className="sec-divider">Bảo mật cổng thanh toán</div>
-          <div className="sec-grid">
+        <div className="relative z-10 mt-7 w-full max-w-[400px]">
+          <div className="mb-4 flex items-center justify-center gap-2.5 text-[10px] font-extrabold uppercase tracking-[1.5px] text-[#8c7381]">
+            <span className="w-9 border-b border-dashed border-[rgba(174,0,112,0.25)]" />
+            Bảo mật cổng thanh toán
+            <span className="w-9 border-b border-dashed border-[rgba(174,0,112,0.25)]" />
+          </div>
+          <div className="grid grid-cols-2 gap-y-2.5 gap-x-3.5">
             {SEC_BADGES.map(b => (
-              <div key={b.label} className="sec-item">
-                <svg className="sec-icon" viewBox="0 0 24 24"><path d={b.icon} /></svg>
-                <span className="sec-label">{b.label}</span>
+              <div key={b.label} className="flex items-center justify-center gap-1.5">
+                <svg className="h-[15px] w-[15px] flex-shrink-0 fill-[#ae0070] opacity-80" viewBox="0 0 24 24">
+                  <path d={b.icon} />
+                </svg>
+                <span className="text-xs font-bold text-[#4a3240]">{b.label}</span>
               </div>
             ))}
           </div>
@@ -252,177 +269,30 @@ export default function Home() {
 }
 
 function Orbs() {
-  return <>
-    <div className="orb orb-1" /><div className="orb orb-2" />
-    <div className="orb orb-3" /><div className="orb orb-4" />
-  </>
+  return (
+    <>
+      <style>{`
+        @keyframes om1 { 0%{transform:translate(0,0)scale(1)} 50%{transform:translate(8vw,4vh)scale(1.15)} 100%{transform:translate(-4vw,7vh)scale(0.9)} }
+        @keyframes om2 { 0%{transform:translate(0,0)scale(1.1)} 50%{transform:translate(-10vw,-6vh)scale(0.9)} 100%{transform:translate(6vw,4vh)scale(1.1)} }
+        @keyframes om3 { 0%{transform:translate(0,0)scale(0.9)} 50%{transform:translate(-5vw,7vh)scale(1.2)} 100%{transform:translate(7vw,-4vh)scale(1)} }
+      `}</style>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-[5%] -top-[5%] h-[50vw] w-[50vw] rounded-full bg-[#ff9cb7] opacity-65 blur-[55px]"
+          style={{ animation: 'om1 5s infinite alternate ease-in-out' }} />
+        <div className="absolute -bottom-[5%] -right-[5%] h-[60vw] w-[60vw] rounded-full bg-[#b0bec5] opacity-65 blur-[55px]"
+          style={{ animation: 'om2 7s infinite alternate ease-in-out' }} />
+        <div className="absolute -right-[5%] top-[25%] h-[45vw] w-[45vw] rounded-full bg-[#dfb2ea] opacity-65 blur-[55px]"
+          style={{ animation: 'om3 6s infinite alternate ease-in-out' }} />
+        <div className="absolute -bottom-[5%] left-[5%] h-[40vw] w-[40vw] rounded-full bg-[#80cbc4] opacity-65 blur-[55px]"
+          style={{ animation: 'om1 6.5s infinite alternate ease-in-out' }} />
+      </div>
+    </>
+  )
 }
 
 const SEC_BADGES = [
-  { label: 'PCI DSS',       icon: 'M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.4 0 2.5 1.1 2.5 2.5 0 .8-.4 1.5-1 1.9v2.6c0 .3-.2.5-.5.5h-2c-.3 0-.5-.2-.5-.5v-2.6c-.6-.4-1-1.1-1-1.9 0-1.4 1.1-2.5 2.5-2.5z' },
-  { label: 'Mã hóa P2P',    icon: 'M12.65 10C11.83 7.59 9.57 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.57 0 4.83-1.59 5.65-4H17v3h3v-3h3v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z' },
-  { label: 'SHA-256',        icon: 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z' },
-  { label: 'MoMo Verified',  icon: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z' },
+  { label: 'PCI DSS',      icon: 'M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.4 0 2.5 1.1 2.5 2.5 0 .8-.4 1.5-1 1.9v2.6c0 .3-.2.5-.5.5h-2c-.3 0-.5-.2-.5-.5v-2.6c-.6-.4-1-1.1-1-1.9 0-1.4 1.1-2.5 2.5-2.5z' },
+  { label: 'Mã hóa P2P',   icon: 'M12.65 10C11.83 7.59 9.57 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.57 0 4.83-1.59 5.65-4H17v3h3v-3h3v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z' },
+  { label: 'SHA-256',       icon: 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z' },
+  { label: 'MoMo Verified', icon: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z' },
 ]
-
-// ─── CSS ─────────────────────────────────────────────────────
-const BASE_CSS = `
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --mm: #ae0070;
-    --text: #1a0413;
-    --muted: #614655;
-    --surface: rgba(255,255,255,0.88);
-    --bg-input: rgba(240,232,236,0.6);
-    --border: rgba(174,0,112,0.1);
-    --font: 'Be Vietnam Pro', sans-serif;
-  }
-  html, body { height: 100%; width: 100%; font-family: var(--font); background: #f3e9ed; }
-  .wrapper {
-    position: relative; display: grid; place-content: center; justify-items: center;
-    min-height: 100dvh; width: 100vw; padding: 20px 16px;
-    overflow-y: auto; overflow-x: hidden;
-  }
-  .orb { position: absolute; border-radius: 50%; filter: blur(55px); opacity: 0.65; z-index: 0; pointer-events: none; }
-  .orb-1 { top:-5%;left:-5%;width:50vw;height:50vw;background:#ff9cb7;animation:om1 5s infinite alternate ease-in-out; }
-  .orb-2 { bottom:-5%;right:-5%;width:60vw;height:60vw;background:#b0bec5;animation:om2 7s infinite alternate ease-in-out; }
-  .orb-3 { top:25%;right:-5%;width:45vw;height:45vw;background:#dfb2ea;animation:om3 6s infinite alternate ease-in-out; }
-  .orb-4 { bottom:-5%;left:5%;width:40vw;height:40vw;background:#80cbc4;animation:om1 6.5s infinite alternate ease-in-out; }
-  @keyframes om1 { 0%{transform:translate(0,0)scale(1)} 50%{transform:translate(8vw,4vh)scale(1.15)} 100%{transform:translate(-4vw,7vh)scale(0.9)} }
-  @keyframes om2 { 0%{transform:translate(0,0)scale(1.1)} 50%{transform:translate(-10vw,-6vh)scale(0.9)} 100%{transform:translate(6vw,4vh)scale(1.1)} }
-  @keyframes om3 { 0%{transform:translate(0,0)scale(0.9)} 50%{transform:translate(-5vw,7vh)scale(1.2)} 100%{transform:translate(7vw,-4vh)scale(1)} }
-`
-
-const FORM_CSS = `
-  .card {
-    position: relative; z-index: 2; width: 100%; max-width: 400px;
-    background: var(--surface); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
-    border-radius: 24px; border: 1px solid rgba(255,255,255,0.7);
-    padding: 32px 28px;
-    box-shadow: 0 25px 50px rgba(174,0,112,0.05);
-  }
-  .logo-row {
-    display: flex; align-items: center; gap: 14px;
-    margin-bottom: 28px; padding-bottom: 20px;
-    border-bottom: 1px dashed var(--border);
-  }
-  .logo-mark {
-    width: 48px; height: 48px; border-radius: 12px; background: #fff;
-    border: 1px solid var(--border); display: flex; align-items: center;
-    justify-content: center; flex-shrink: 0;
-  }
-  .logo-name { font-size: 18px; font-weight: 800; color: var(--text); }
-  .logo-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
-
-  /* ── AMOUNT INPUT ── */
-  .amt-wrap {
-    background: var(--bg-input); border-radius: 16px;
-    padding: 20px 22px 16px; margin-bottom: 16px;
-    border: 1.5px solid var(--border); transition: all 0.2s;
-  }
-  .amt-wrap:focus-within { border-color: #f0bcd4; background: #fff; box-shadow: 0 0 0 4px rgba(174,0,112,0.07); }
-  .amt-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 10px; }
-  .amt-row { display: flex; align-items: baseline; gap: 6px; }
-  .amt-input {
-    flex: 1; min-width: 0; background: transparent; border: none; outline: none;
-    font-family: var(--font); font-weight: 900; color: var(--text);
-    caret-color: var(--mm);
-    /* ← font auto-shrink: clamp(28px, 8vw, 42px) */
-    font-size: clamp(26px, 9vw, 42px);
-    /* Không cho wrap, tự shrink */
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .amt-input::placeholder { color: #c4b0bb; font-weight: 700; }
-  .amt-unit { font-size: 22px; font-weight: 800; color: #7a6070; flex-shrink: 0; }
-
-  /* progress bar nhỏ */
-  .amt-bar { height: 3px; background: rgba(174,0,112,0.08); border-radius: 99px; margin-top: 12px; overflow: hidden; }
-  .amt-bar-fill { height: 100%; background: linear-gradient(90deg, #ae0070, #ff4fa3); border-radius: 99px; transition: width 0.3s ease; }
-
-  /* ── QUICK SUGGESTIONS ── */
-  .quick-grid {
-    display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 8px; margin-bottom: 20px;
-  }
-  .qa {
-    padding: 11px 4px; border-radius: 12px;
-    border: 1.5px solid var(--border);
-    background: rgba(255,255,255,0.7);
-    font-family: var(--font); font-size: 13px; font-weight: 700;
-    color: #495057; cursor: pointer; text-align: center;
-    transition: all 0.15s; white-space: nowrap;
-  }
-  .qa:hover { border-color: var(--mm); color: var(--mm); background: #fff0f7; transform: translateY(-1px); }
-  .qa.sel { background: var(--mm); border-color: var(--mm); color: #fff; box-shadow: 0 4px 12px rgba(174,0,112,0.2); }
-
-  /* ── ERROR ── */
-  .err {
-    display: flex; align-items: center; gap: 7px;
-    font-size: 13px; font-weight: 700; color: #dc2626;
-    background: #fff1f1; border: 1px solid #fecaca;
-    padding: 10px 14px; border-radius: 10px; margin-bottom: 16px;
-  }
-
-  /* ── PAY BUTTON ── */
-  .btn {
-    width: 100%; padding: 16px; border-radius: 14px; border: none;
-    background: var(--mm); color: #fff;
-    font-family: var(--font); font-size: 16px; font-weight: 700;
-    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 9px;
-    box-shadow: 0 8px 24px rgba(174,0,112,0.2); transition: all 0.2s;
-  }
-  .btn:hover:not(:disabled) { background: #91005d; transform: translateY(-2px); box-shadow: 0 12px 28px rgba(174,0,112,0.3); }
-  .btn:disabled { background: #e2d7dc; color: #a89099; box-shadow: none; cursor: not-allowed; }
-  .spin { width: 17px; height: 17px; border: 2.5px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: rot 0.6s linear infinite; }
-  @keyframes rot { to { transform: rotate(360deg) } }
-
-  /* ── SECURITY FOOTER ── */
-  .sec-footer { position: relative; z-index: 2; margin-top: 28px; width: 100%; max-width: 400px; }
-  .sec-divider {
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 1.5px; color: #8c7381; margin-bottom: 16px;
-  }
-  .sec-divider::before, .sec-divider::after { content: ''; width: 36px; border-bottom: 1px dashed rgba(174,0,112,0.25); margin: 0 10px; }
-  .sec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
-  .sec-item { display: flex; align-items: center; justify-content: center; gap: 7px; }
-  .sec-icon { width: 15px; height: 15px; fill: var(--mm); opacity: 0.8; flex-shrink: 0; }
-  .sec-label { font-size: 12px; font-weight: 700; color: #4a3240; }
-
-  @media(max-width:480px) {
-    .card { padding: 24px 18px; }
-    .quick-grid { grid-template-columns: repeat(4,1fr); gap: 6px; }
-    .qa { font-size: 12px; padding: 10px 2px; }
-  }
-`
-
-const REDIRECT_CSS = `
-  .redirect-card {
-    position: relative; z-index: 2;
-    background: rgba(255,255,255,0.9);
-    backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
-    border-radius: 24px; padding: 44px 36px;
-    width: 100%; max-width: 340px;
-    text-align: center;
-    box-shadow: 0 24px 60px rgba(174,0,112,0.1);
-    border: 1px solid rgba(255,255,255,0.8);
-    animation: pop 0.25s ease;
-  }
-  @keyframes pop { from{transform:scale(0.94);opacity:0} to{transform:scale(1);opacity:1} }
-  .rdr-logo { margin-bottom: 24px; }
-  .rdr-spinner { margin: 0 auto 20px; width: 52px; height: 52px; }
-  .rdr-circle {
-    width: 52px; height: 52px;
-    animation: rot 1s linear infinite;
-    stroke: var(--mm); stroke-linecap: round;
-    stroke-dasharray: 90; stroke-dashoffset: 30;
-  }
-  .rdr-title { font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
-  .rdr-sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
-  .rdr-amount {
-    display: inline-block; padding: 10px 20px;
-    background: #fff0f7; border-radius: 12px;
-    font-size: 22px; font-weight: 900; color: var(--mm);
-  }
-  @keyframes rot { to { transform: rotate(360deg) } }
-`
