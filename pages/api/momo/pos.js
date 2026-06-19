@@ -50,6 +50,7 @@ export default async function handler(req, res) {
     `extraData=${extraData}`,
     `orderId=${orderId}`,
     `orderInfo=${orderInfo}`,
+    `orderType=${orderType}`,
     `partnerCode=${PARTNER_CODE}`,
     `paymentCode=${paymentCode}`,
     `requestId=${requestId}`,
