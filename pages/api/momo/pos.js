@@ -62,7 +62,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message })
   }
 
-  // Signature dùng paymentCode PLAIN TEXT (trước khi encrypt) theo docs MoMo
+  // MoMo verify signature bằng encrypted code (raw base64, không encode)
   const rawSignature = [
     `accessKey=${ACCESS_KEY}`,
     `amount=${amt}`,
@@ -70,7 +70,7 @@ export default async function handler(req, res) {
     `orderId=${orderId}`,
     `orderInfo=${orderInfo}`,
     `partnerCode=${PARTNER_CODE}`,
-    `paymentCode=${paymentCode}`,
+    `paymentCode=${encryptedCode}`,
     `requestId=${requestId}`,
   ].join('&')
 
@@ -101,10 +101,10 @@ export default async function handler(req, res) {
 
     console.log('[POS] endpoint:', POS_ENDPOINT)
     console.log('[POS] paymentCode plain:', paymentCode)
+    console.log('[POS] encryptedCode:', encryptedCode)
     console.log('[POS] rawSignature:', rawSignature.replace(ACCESS_KEY, '***'))
     console.log('[POS] body:', JSON.stringify({ ...body, paymentCode: '[ENCRYPTED]' }))
-    console.log('[POS] sig_plain:', sign([...].join('&') với paymentCode plain))
-    console.log('[POS] sig_encrypted:', sign([...].join('&') với encryptedCode))
+
     const momoRes = await fetch(POS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=UTF-8' },
