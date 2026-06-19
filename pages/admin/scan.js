@@ -501,7 +501,7 @@ export default function ScanPage() {
                 </p>
                 <input
                   autoFocus
-                  placeholder="Scan mã QR Trên MoMo hoặc bắn mã thanh toán 18 số"
+                  placeholder="Scan mã QR Trên MoMo "
                   value={manualCode}
                   onChange={e => { setManualCode(e.target.value); setManualErr('') }}
                   onKeyDown={handleManualCodeKey}
