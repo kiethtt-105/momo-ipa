@@ -759,9 +759,7 @@ function QueryModal({ orderId, setOrderId, loading, result, error, onQuery, onCl
         <div className="modal-hd">
           <div>
             <div className="modal-hd-label">Tra cứu giao dịch MoMo</div>
-            <div className="modal-hd-id" style={{ color: '#6b7280', fontSize: 12 }}>
-              POST /v2/gateway/api/query
-            </div>
+            <div className="modal-hd-id">Nhập Order ID để tra cứu</div>
           </div>
           <button className="modal-x" onClick={onClose}>✕</button>
         </div>
@@ -852,7 +850,7 @@ function QueryModal({ orderId, setOrderId, loading, result, error, onQuery, onCl
         {/* Footer */}
         <div className="modal-ft">
           <div style={{ fontSize: 12, color: '#9ca3af' }}>
-            Timeout tối thiểu: <strong>30s</strong> · MoMo API v2
+             · MoMo API v2
           </div>
           <button className="btn-close-modal" onClick={onClose}>Đóng</button>
         </div>
