@@ -3,7 +3,6 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 
 const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
-const QUICK_AMOUNTS = [10000, 20000, 50000, 100000, 200000, 500000]
 
 function cleanCode(raw) {
   if (!raw) return ''
@@ -17,29 +16,26 @@ export default function ScanPage() {
   const [password, setPassword] = useState('')
   const [pwError,  setPwError]  = useState(false)
 
-  // step: 'amount' | 'scan'
   const [step, setStep] = useState('amount')
 
   const videoRef  = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
   const rafRef    = useRef(null)
-  const submitting = useRef(false) // chặn double-submit
+  const submitting = useRef(false)
 
   const [ready,    setReady]    = useState(false)
   const [scanning, setScanning] = useState(false)
   const [camError, setCamError] = useState('')
 
   const [amount,    setAmount]    = useState('')
-  const [orderInfo, setOrderInfo] = useState('Thanh toan tai quay')
-  const [result,    setResult]    = useState(null) // { success, data, amount }
+  const [orderInfo, setOrderInfo] = useState('')
+  const [result,    setResult]    = useState(null)
 
-  // ── Nhập mã thủ công (khi không quét được) ──────────────────
-  const [manualMode, setManualMode] = useState(false)
   const [manualCode, setManualCode] = useState('')
   const [manualErr,  setManualErr]  = useState('')
 
-  // ── Load jsQR ──────────────────────────────────────────────
+  // Load jsQR
   useEffect(() => {
     if (window.jsQR) { setReady(true); return }
     const s = document.createElement('script')
@@ -49,7 +45,7 @@ export default function ScanPage() {
     document.head.appendChild(s)
   }, [])
 
-  // ── Auth ───────────────────────────────────────────────────
+  // Auth
   useEffect(() => {
     fetch('/api/admin/session')
       .then(r => r.json())
@@ -57,7 +53,7 @@ export default function ScanPage() {
       .catch(() => setAuthed(false))
   }, [])
 
-  // ── Tự mở camera khi vào step scan ────────────────────────
+  // Tự mở camera khi vào scan
   useEffect(() => {
     if (step === 'scan' && ready) {
       setCamError('')
@@ -66,7 +62,6 @@ export default function ScanPage() {
     }
   }, [step, ready])
 
-  // ── Callback ref — chạy sau khi <video> mount ──────────────
   function setVideoRef(el) {
     videoRef.current = el
     if (el && !streamRef.current) initStream(el)
@@ -120,7 +115,6 @@ export default function ScanPage() {
 
   useEffect(() => () => stopCamera(), [])
 
-  // ── Quét xong → submit ngay ────────────────────────────────
   async function onDetected(raw) {
     if (submitting.current) return
     submitting.current = true
@@ -128,7 +122,8 @@ export default function ScanPage() {
 
     const code = cleanCode(raw)
     console.log('[SCAN] raw QR data:', raw)
-    console.log('[SCAN] cleanCode result:', code)
+    setManualCode(code)   // Hiển thị mã vừa quét
+
     const amt  = parseInt(amount)
     const orderId = `POS${Date.now()}`
 
@@ -148,14 +143,13 @@ export default function ScanPage() {
   function resetAll() {
     setResult(null)
     setAmount('')
+    setOrderInfo('')
     setStep('amount')
     submitting.current = false
-    setManualMode(false)
     setManualCode('')
     setManualErr('')
   }
 
-  // ── Submit mã nhập tay (dùng chung logic với onDetected) ────
   async function submitManualCode() {
     const code = cleanCode(manualCode)
     if (!/^(MM)?\d{18}$/.test(code)) {
@@ -166,16 +160,17 @@ export default function ScanPage() {
     await onDetected(manualCode)
   }
 
-  // ── Loading auth ───────────────────────────────────────────
-  if (authed === null) return (
-    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#fff8fb' }}>
-      <style>{`@keyframes p{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
-      <div style={{ width:10, height:10, borderRadius:'50%', background:'#ae0070', animation:'p .8s infinite' }} />
-    </div>
-  )
+  if (authed === null) {
+    return (
+      <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#fff8fb' }}>
+        <style>{`@keyframes p{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
+        <div style={{ width:10, height:10, borderRadius:'50%', background:'#ae0070', animation:'p .8s infinite' }} />
+      </div>
+    )
+  }
 
-  // ── Login ──────────────────────────────────────────────────
   if (!authed) {
+    // ... (phần login giữ nguyên)
     async function login() {
       setPwError(false)
       const res = await fetch('/api/admin/login', {
@@ -207,44 +202,42 @@ export default function ScanPage() {
     )
   }
 
-  // ── Result ─────────────────────────────────────────────────
-  if (result) return (
-    <>
-      <Head><title>Kết quả thanh toán</title></Head>
-      <style>{CSS}</style>
-      <div style={S.bg}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:20 }}>
-          <div style={{ ...S.card, maxWidth:400, width:'100%', textAlign:'center', padding:'36px 24px' }}>
-            <div style={{ fontSize:56, marginBottom:12 }}>{result.success ? '✅' : '❌'}</div>
-            <h2 style={{ fontSize:22, fontWeight:800, color: result.success ? '#16a34a' : '#dc2626', marginBottom:8 }}>
-              {result.success ? 'Thanh toán thành công' : 'Thanh toán thất bại'}
-            </h2>
-            <div style={{ fontSize:28, fontWeight:800, color:'#ae0070', marginBottom:8 }}>{fmt(result.amount)} ₫</div>
-            <p style={{ fontSize:13, color:'#6b7280', marginBottom:4 }}>{result.data.message}</p>
-            {result.data.transId && (
-              <p style={{ fontSize:12, fontFamily:'monospace', color:'#374151', marginTop:4 }}>Mã GD: {result.data.transId}</p>
-            )}
-            {!result.success && result.data.resultCode !== undefined && (
-              <p style={{ fontSize:12, color:'#dc2626', marginTop:4 }}>Result code: {result.data.resultCode}</p>
-            )}
-            <div style={{ display:'flex', gap:10, marginTop:28 }}>
-              <button onClick={resetAll} style={S.btnPrimary}>Thu tiếp</button>
-              <button onClick={() => router.push('/admin')} style={S.btnSecondary}>Về Admin</button>
+  if (result) {
+    // ... (phần result giữ nguyên)
+    return (
+      <>
+        <Head><title>Kết quả thanh toán</title></Head>
+        <style>{CSS}</style>
+        <div style={S.bg}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:20 }}>
+            <div style={{ ...S.card, maxWidth:400, width:'100%', textAlign:'center', padding:'36px 24px' }}>
+              <div style={{ fontSize:56, marginBottom:12 }}>{result.success ? '✅' : '❌'}</div>
+              <h2 style={{ fontSize:22, fontWeight:800, color: result.success ? '#16a34a' : '#dc2626', marginBottom:8 }}>
+                {result.success ? 'Thanh toán thành công' : 'Thanh toán thất bại'}
+              </h2>
+              <div style={{ fontSize:28, fontWeight:800, color:'#ae0070', marginBottom:8 }}>{fmt(result.amount)} ₫</div>
+              <p style={{ fontSize:13, color:'#6b7280', marginBottom:4 }}>{result.data.message}</p>
+              {result.data.transId && (
+                <p style={{ fontSize:12, fontFamily:'monospace', color:'#374151', marginTop:4 }}>Mã GD: {result.data.transId}</p>
+              )}
+              <div style={{ display:'flex', gap:10, marginTop:28 }}>
+                <button onClick={resetAll} style={S.btnPrimary}>Thu tiếp</button>
+                <button onClick={() => router.push('/admin')} style={S.btnSecondary}>Về Admin</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </>
-  )
+      </>
+    )
+  }
 
-  // ── Step indicators ────────────────────────────────────────
   const stepIdx = step === 'amount' ? 0 : 1
   const STEPS   = ['Số tiền', 'Quét & Thu']
 
   return (
     <>
       <Head>
-        <title>POS · MoMo IPA </title>
+        <title>POS · MoMo IPA</title>
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
@@ -287,34 +280,35 @@ export default function ScanPage() {
 
         <div style={S.content}>
 
-          {/* ── STEP 1: AMOUNT ── */}
+          {/* STEP 1: AMOUNT */}
           {step === 'amount' && (
             <div style={S.card}>
               <h3 style={S.sectionTitle}>💰 Nhập số tiền cần thu</h3>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:14 }}>
-                {QUICK_AMOUNTS.map(a => (
-                  <button key={a} onClick={() => setAmount(String(a))} style={{
-                    padding:'10px 4px', borderRadius:10, border:'none',
-                    fontSize:13, fontWeight:700, cursor:'pointer',
-                    background: amount === String(a) ? '#ae0070' : '#f9f0f5',
-                    color:      amount === String(a) ? '#fff'    : '#ae0070',
-                  }}>{fmt(a)}</button>
-                ))}
-              </div>
               <input
-                type="number" placeholder="Hoặc nhập số tiền khác..."
+                type="number" placeholder="Nhập số tiền..."
                 value={amount} onChange={e => setAmount(e.target.value)}
                 style={S.input} min={1000} max={5000000} autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const orderInput = document.querySelector('input[placeholder*="mã đơn hàng"]');
+                    if (orderInput) orderInput.focus();
+                  }
+                }}
               />
               {amount && parseInt(amount) >= 1000 && (
                 <p style={{ fontSize:15, color:'#ae0070', fontWeight:800, marginBottom:12 }}>= {fmt(amount)} ₫</p>
               )}
               <div style={{ paddingTop:12, borderTop:'1px solid #f3f4f6', marginBottom:14 }}>
-                <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>Nội dung</p>
+                <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>Nội dung đơn hàng</p>
                 <input
-                  placeholder="Nội dung đơn hàng"
+                  placeholder="Nhập mã đơn hàng (tùy chọn)"
                   value={orderInfo} onChange={e => setOrderInfo(e.target.value)}
                   style={S.input}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      if (amount && parseInt(amount) >= 1000) setStep('scan');
+                    }
+                  }}
                 />
               </div>
               <button
@@ -327,10 +321,9 @@ export default function ScanPage() {
             </div>
           )}
 
-          {/* ── STEP 2: SCAN & AUTO-PAY ── */}
+          {/* STEP 2: SCAN */}
           {step === 'scan' && (
             <div style={S.card}>
-              {/* Amount badge */}
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
                 <h3 style={{ ...S.sectionTitle, marginBottom:0 }}>📷 Quét mã MoMo của khách</h3>
                 <span style={{ background:'#ae0070', color:'#fff', borderRadius:20, padding:'4px 12px', fontSize:13, fontWeight:800 }}>
@@ -343,13 +336,27 @@ export default function ScanPage() {
                 Hướng camera vào màn hình khách — <b>sẽ tự động thu tiền khi quét được</b>
               </p>
 
+              {/* Mã thanh toán luôn hiển thị */}
+              <div style={{ marginTop:10, padding:'14px', background:'#f9f0f5', borderRadius:10, border:'1px solid rgba(174,0,112,0.15)' }}>
+                <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>
+                  Mã thanh toán MoMo
+                </p>
+                <input
+                  placeholder="Mã sẽ hiển thị tự động khi quét được..."
+                  value={manualCode}
+                  onChange={e => { setManualCode(e.target.value); setManualErr('') }}
+                  style={{ ...S.input, marginBottom: manualErr ? 4 : 8, background: '#fff' }}
+                  disabled={submitting.current}
+                />
+                {manualErr && <p style={{ fontSize:12, color:'#dc2626', marginBottom:8 }}>⚠ {manualErr}</p>}
+              </div>
+
               {scanning ? (
                 <>
-                  <div style={{ position:'relative', borderRadius:14, overflow:'hidden', background:'#000', marginBottom:10 }}>
+                  <div style={{ position:'relative', borderRadius:14, overflow:'hidden', background:'#000', marginBottom:10, marginTop:16 }}>
                     <video ref={setVideoRef} playsInline muted
                       style={{ width:'100%', display:'block', maxHeight:320, objectFit:'cover' }} />
                     <canvas ref={canvasRef} style={{ display:'none' }} />
-                    {/* Overlay */}
                     <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
                       <div style={{ position:'relative', width:'60%', aspectRatio:'1' }}>
                         {[
@@ -361,7 +368,6 @@ export default function ScanPage() {
                         <div className="scan-line" style={{ position:'absolute', left:0, right:0 }} />
                       </div>
                     </div>
-                    {/* Processing overlay */}
                     {submitting.current && (
                       <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12 }}>
                         <span className="spinner" style={{ width:32, height:32, borderWidth:3 }} />
@@ -384,56 +390,19 @@ export default function ScanPage() {
                 </div>
               )}
 
-              {/* ── Nhập mã thủ công ── */}
-              {!manualMode ? (
+              <div style={{ marginTop: 8 }}>
                 <button
-                  onClick={() => { setManualMode(true); setManualErr('') }}
-                  style={{
-                    width:'100%', marginTop:10, padding:'11px 14px',
-                    background:'transparent', border:'1.5px dashed rgba(174,0,112,0.3)',
-                    borderRadius:10, color:'#ae0070', fontSize:13, fontWeight:700, cursor:'pointer',
-                  }}
+                  onClick={submitManualCode}
+                  disabled={!manualCode.trim() || submitting.current}
+                  style={{ ...S.btnPrimary, opacity: (!manualCode.trim() || submitting.current) ? 0.4 : 1, marginBottom: 12 }}
                 >
-                  ⌨️ Không quét được? Nhập mã thủ công
+                  {submitting.current ? 'Đang xử lý...' : '✓ Xác nhận thu tiền'}
                 </button>
-              ) : (
-                <div style={{ marginTop:10, padding:'14px', background:'#f9f0f5', borderRadius:10, border:'1px solid rgba(174,0,112,0.15)' }}>
-                  <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>
-                    Nhập mã thanh toán MoMo
-                  </p>
-                  <input
-                    placeholder="VD: MM123456789012345678 hoặc 18 chữ số"
-                    value={manualCode}
-                    onChange={e => { setManualCode(e.target.value); setManualErr('') }}
-                    onKeyDown={e => e.key === 'Enter' && !submitting.current && submitManualCode()}
-                    style={{ ...S.input, marginBottom: manualErr ? 4 : 8 }}
-                    autoFocus
-                    disabled={submitting.current}
-                  />
-                  {manualErr && <p style={{ fontSize:12, color:'#dc2626', marginBottom:8 }}>⚠ {manualErr}</p>}
-                  <div style={{ display:'flex', gap:8 }}>
-                    <button
-                      onClick={submitManualCode}
-                      disabled={!manualCode.trim() || submitting.current}
-                      style={{ ...S.btnPrimary, opacity: (!manualCode.trim() || submitting.current) ? 0.4 : 1 }}
-                    >
-                      {submitting.current ? 'Đang xử lý...' : '✓ Xác nhận thu tiền'}
-                    </button>
-                    <button
-                      onClick={() => { setManualMode(false); setManualCode(''); setManualErr('') }}
-                      disabled={submitting.current}
-                      style={{ ...S.btnSecondary, width:'auto', padding:'13px 18px' }}
-                    >
-                      Hủy
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <button onClick={() => { stopCamera(); setStep('amount') }}
-                style={{ ...S.btnSecondary, marginTop:12 }}>
-                ← Quay lại
-              </button>
+                <button onClick={() => { stopCamera(); setStep('amount') }}
+                  style={S.btnSecondary}>
+                  ← Quay lại
+                </button>
+              </div>
             </div>
           )}
 
@@ -442,6 +411,7 @@ export default function ScanPage() {
     </>
   )
 }
+
 
 const S = {
   bg:        { minHeight:'100vh', background:'linear-gradient(135deg,#fff0f7 0%,#fce4f0 50%,#f5edf2 100%)', fontFamily:"'Inter',sans-serif" },
