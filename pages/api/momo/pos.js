@@ -42,6 +42,7 @@ export default async function handler(req, res) {
 
   const requestId = `${orderId}_${Date.now()}`
   const extraData = ''
+  const orderType = 'pos'
 
   const rawSignature = [
     `accessKey=${ACCESS_KEY}`,
@@ -49,6 +50,7 @@ export default async function handler(req, res) {
     `extraData=${extraData}`,
     `orderId=${orderId}`,
     `orderInfo=${orderInfo}`,
+    `orderType=${orderType}`,
     `partnerCode=${PARTNER_CODE}`,
     `paymentCode=${paymentCode}`,
     `requestId=${requestId}`,
@@ -60,6 +62,7 @@ export default async function handler(req, res) {
     requestId,
     amount: amt,
     orderInfo,
+    orderType,
     paymentCode,
     extraData,
     autoCapture: true,
