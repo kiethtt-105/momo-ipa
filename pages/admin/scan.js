@@ -532,7 +532,7 @@ useEffect(() => {
                     {scanning ? (
                       <div style={{ fontSize: 13, color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 500 }}>
                         <span style={{ width: 8, height: 8, background: '#22c55e', borderRadius: '50%', display: 'inline-block', animation: 'p .8s infinite' }} />
-                        Hệ thống quét mã tự động 
+                        Thực hiện scan mã trên máy khách
                       </div>
                     ) : (
                       <button 
