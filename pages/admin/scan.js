@@ -415,3 +415,11 @@ const CSS = `
   .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
   .scan-line { height:2px; background:linear-gradient(90deg,transparent,#ae0070,transparent); animation:scan-line 1.8s ease-in-out infinite; }
 `
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
+}
