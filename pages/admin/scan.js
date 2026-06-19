@@ -559,17 +559,6 @@ export default function ScanPage() {
                   >
                     ← Hủy & Quay lại
                   </button>
-
-                  <button
-                    onClick={() => { setManualCode(''); setManualErr(''); }}
-                    style={{
-                      background: '#fff', color: '#ae0070', border: '1px solid rgba(174,0,112,0.25)',
-                      borderRadius: 8, padding: '9px 14px', fontSize: 13, fontWeight: 600,
-                      cursor: 'pointer', flex: 1
-                    }}
-                  >
-                    🔄 Xóa nhập lại
-                  </button>
                 </div>
               )}
 
