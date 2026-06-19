@@ -370,7 +370,7 @@ export default function ScanPage() {
 
               <button onClick={() => { stopCamera(); setStep('amount') }}
                 style={{ ...S.btnSecondary, marginTop:12 }}>
-                ← Quay lại đổi số tiền
+                ← Quay lại
               </button>
             </div>
           )}
