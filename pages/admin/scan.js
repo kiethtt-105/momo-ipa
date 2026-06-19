@@ -153,7 +153,7 @@ export default function ScanPage() {
   async function submitManualCode() {
     const code = cleanCode(manualCode)
     if (!/^(MM)?\d{18}$/.test(code)) {
-      setManualErr('Mã không hợp lệ. Vui lòng kiểm tra lại (18 chữ số).')
+      setManualErr('Mã không hợp lệ. Vui lòng kiểm tra lại.')
       return
     }
     setManualErr('')
@@ -297,7 +297,7 @@ export default function ScanPage() {
               />
 
               <div style={{ paddingTop:12, borderTop:'1px solid #f3f4f6', marginBottom:14 }}>
-                <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>Nội dung đơn hàng</p>
+                <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>Nội dung thanh toán</p>
                 <input
                   placeholder="Nhập mã đơn hàng "
                   value={orderInfo} onChange={e => setOrderInfo(e.target.value)}
@@ -322,20 +322,15 @@ export default function ScanPage() {
           {/* STEP 2: SCAN */}
           {step === 'scan' && (
             <div style={S.card}>
-              <h3 style={{ ...S.sectionTitle, marginBottom:16 }}>📷 Quét mã MoMo của khách</h3>
+              <h3 style={{ ...S.sectionTitle, marginBottom:16 }}>📷 Scan mã thanh toán từ app MoMo</h3>
 
-              <p style={{ fontSize:12, color:'#6b7280', marginBottom:12, lineHeight:1.6 }}>
-                Khách mở app MoMo → <b>Mã thanh toán</b><br/>
-                Hướng camera vào màn hình khách — <b>sẽ tự động thu tiền khi quét được</b>
-              </p>
-
+             
               {/* Mã thanh toán luôn hiển thị */}
               <div style={{ marginTop:10, padding:'14px', background:'#f9f0f5', borderRadius:10, border:'1px solid rgba(174,0,112,0.15)' }}>
                 <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>
                   Mã thanh toán MoMo
                 </p>
                 <input
-                  placeholder="Mã sẽ hiển thị tự động khi quét được..."
                   value={manualCode}
                   onChange={e => { setManualCode(e.target.value); setManualErr('') }}
                   style={{ ...S.input, marginBottom: manualErr ? 4 : 8, background: '#fff' }}
@@ -389,7 +384,7 @@ export default function ScanPage() {
                   disabled={!manualCode.trim() || submitting.current}
                   style={{ ...S.btnPrimary, opacity: (!manualCode.trim() || submitting.current) ? 0.4 : 1, marginBottom: 12 }}
                 >
-                  {submitting.current ? 'Đang xử lý...' : '✓ Xác nhận thu tiền'}
+                  {submitting.current ? 'Đang xử lý...' : '✓ Xác nhận thanh toán'}
                 </button>
                 <button onClick={() => { stopCamera(); setStep('amount') }}
                   style={S.btnSecondary}>
