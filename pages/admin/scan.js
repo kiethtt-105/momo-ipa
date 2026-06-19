@@ -383,14 +383,37 @@ useEffect(() => {
                 />
               </div>
               <button
-                onClick={() => {
-                  setCurrentOrderId(`POS${Date.now()}`)
-                  setStep('scan')
+                onClick={async () => {
+                  const generatedId = `POS${Date.now()}`;
+                  setCurrentOrderId(generatedId);
+                  
+                  // Đánh dấu hệ thống đang xử lý/gửi dữ liệu nháp
+                  submitting.current = true; 
+
+                  try {
+                    // Gửi request tạo Log PENDING lên Redis thông qua API pos.js có sẵn của bạn
+                    // Truyền chuỗi trống hoặc paymentCode nháp để API không bị lỗi validate đầu vào
+                    await fetch('/api/momo/pos', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ 
+                        orderId: generatedId, 
+                        amount: parseInt(amount), 
+                        orderInfo: orderInfo || generatedId, 
+                        paymentCode: '000000000000000000' // Chuỗi nháp để khởi tạo log
+                      }),
+                    });
+                  } catch (e) {
+                    console.error("Lỗi tạo log đơn hàng nháp:", e);
+                  } finally {
+                    submitting.current = false;
+                    setStep('scan'); // Chuyển sang màn hình quét mã công khai thông tin
+                  }
                 }}
-                disabled={!amount || parseInt(amount) < 1000}
+                disabled={!amount || parseInt(amount) < 1000 || submitting.current}
                 style={{ ...S.btnPrimary, opacity: (!amount || parseInt(amount) < 1000) ? 0.4 : 1 }}
               >
-                Xác nhận  →
+                {submitting.current ? 'Đang tạo đơn...' : 'Xác nhận  →'}
               </button>
             </div>
           )}
@@ -399,7 +422,7 @@ useEffect(() => {
               <h3 style={{ ...S.sectionTitle, marginBottom:12 }}>📷 Scan mã thanh toán từ app MoMo</h3>
 
               {/* === TÓM TẮT ĐƠN HÀNG ĐẦY ĐỦ === */}
-              {(amount || orderInfo) && (
+              {(amount || orderInfo || currentOrderId) && (
                 <div
                   style={{
                     background:'#f8fafc',
@@ -409,16 +432,16 @@ useEffect(() => {
                     marginBottom:20
                   }}
                 >
-                  <div
-                    style={{
-                      fontSize:12,
-                      fontWeight:700,
-                      color:'#64748b',
-                      marginBottom:12,
-                      textTransform:'uppercase'
-                    }}
-                  >
-                    THÔNG TIN ĐƠN HÀNG
+                  <div style={{ fontSize:12, fontWeight:700, color:'#64748b', marginBottom:12, textTransform:'uppercase' }}>
+                    THÔNG TIN ĐƠN HÀNG TẠI QUẦY
+                  </div>
+
+                  {/* 🌟 THÊM ĐOẠN HIỂN THỊ MÃ ĐƠN HÀNG DƯỚI ĐÂY 🌟 */}
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 10 }}>
+                    <span style={{ color:'#475569', fontSize: 13 }}>Mã đơn hàng (Log ID):</span>
+                    <span style={{ fontWeight:700, fontFamily:'monospace', color:'#111827', background:'#e2e8f0', padding:'2px 6px', borderRadius:4 }}>
+                      {currentOrderId || 'Chưa khởi tạo'}
+                    </span>
                   </div>
 
                   <div
@@ -478,7 +501,7 @@ useEffect(() => {
                   )}
                 </div>
               )}
-              
+
               {/* Input mã thủ công */}
               <div style={{ marginBottom: 20, padding:'14px', background:'#f9f0f5', borderRadius:10, border:'1px solid rgba(174,0,112,0.15)' }}>
                 <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>
