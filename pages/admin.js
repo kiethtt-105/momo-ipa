@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 
-// ─── CONSTANTS ───────────────────────────────────────────────
+// ─── CONSTANTS ─────────────────────────────────────────────
 const REFRESH_INTERVAL = 1000
 const EXPIRE_MINUTES   = 10
 
@@ -13,7 +13,7 @@ const STATUS_META = {
   EXPIRED: { label: 'Hết hạn',    color: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af' },
 }
 
-// ─── UTILS ───────────────────────────────────────────────────
+// ─── UTILS ─────────────────────────────────────────────────
 const fmt      = n  => parseInt(n || 0).toLocaleString('vi-VN')
 const fmtDate  = s  => s ? new Date(s).toLocaleString('vi-VN', { hour12: false }) : '—'
 const fmtMs    = ms => ms ? new Date(parseInt(ms)).toLocaleString('vi-VN', { hour12: false }) : '—'
@@ -22,6 +22,7 @@ const decodeExtra = b64 => {
   try { return JSON.parse(atob(b64)) } catch { return b64 }
 }
 
+// ─── NORMALIZE STATUS ─────────────────────────────────────
 const normalizeStatus = (order) => {
   let status = order.status || 'PENDING'
   if (status === 'Chờ xử lý') status = 'PENDING'
@@ -34,7 +35,7 @@ const normalizeStatus = (order) => {
   return { ...order, status }
 }
 
-// ─── RESULT CODE DESCRIPTIONS (MoMo docs) ────────────────────
+// ─── RESULT CODE MAP ──────────────────────────────────────
 const RESULT_CODE_MAP = {
   0:    'Thành công',
   10:   'Hệ thống đang bảo trì',
@@ -68,6 +69,7 @@ const RESULT_CODE_MAP = {
   9000: 'Giao dịch đã được xác nhận thành công',
 }
 
+// ─── GET RESULT DESCRIPTION ───────────────────────────────
 const getResultDesc = code =>
   RESULT_CODE_MAP[code] !== undefined ? RESULT_CODE_MAP[code] : `Mã lỗi không xác định`
 
@@ -99,7 +101,8 @@ export default function AdminPage() {
   const [confirmLoading, setConfirmLoading] = useState(false)
   const [confirmResult,  setConfirmResult]  = useState(null)
   const [confirmError,   setConfirmError]   = useState(null)
-
+  
+  // Refs to hold the latest state values for use in async callbacks
   const ordersRef   = useRef([])
   const fetchingRef = useRef(false)
   const selectedRef = useRef(new Set())
@@ -109,7 +112,7 @@ export default function AdminPage() {
   useEffect(() => { selectedRef.current = selected }, [selected])
   useEffect(() => { detailRef.current   = detail   }, [detail])
 
-  // ── Kiểm tra session ──────────────────────────────────────
+  // ── CHECK SESSION ─────────────────────────────────────────
   useEffect(() => {
     fetch('/api/admin/session')
       .then(r => r.json())
@@ -124,9 +127,11 @@ export default function AdminPage() {
     fetchingRef.current = true
     setFetching(true)
     try {
+      // Fetch orders from the API
       const res = await fetch('/api/momo/orders')
       if (res.status === 401) { setAuthed(false); return }
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      // Parse the response and update state
       const data = await res.json()
       const raw  = data.orders || []
       setOrders(raw)
@@ -135,6 +140,7 @@ export default function AdminPage() {
         const fresh = raw.find(o => o.orderId === detailRef.current)
         if (fresh) setDetail(fresh.orderId)
       }
+      // Clean up selected orders that no longer exist
       if (selectedRef.current.size > 0) {
         const ids     = new Set(raw.map(o => o.orderId))
         const cleaned = new Set([...selectedRef.current].filter(id => ids.has(id)))
@@ -164,6 +170,7 @@ export default function AdminPage() {
         setQueryModal(false)
       }
     }
+    
     window.addEventListener('keydown', fn)
     return () => window.removeEventListener('keydown', fn)
   }, [])
@@ -190,15 +197,16 @@ export default function AdminPage() {
       setQueryLoading(false)
     }
   }
-
+  // ── MOMO CONFIRM API ────────────────────────────────────────
   const openConfirmForOrder = (orderId, amount) => {
   setConfirmOrderId(orderId)
   setConfirmAmount(amount)
   setConfirmResult(null)
   setConfirmError(null)
   setConfirmModal(true)
-}
+  }
 
+  // ── MOMO CONFIRM API ────────────────────────────────────────
   const doMomoConfirm = async (requestType) => {
     setConfirmLoading(true)
     setConfirmResult(null)
@@ -219,7 +227,7 @@ export default function AdminPage() {
       setConfirmLoading(false)
     }
   }
-
+  // ── OPEN QUERY MODAL FOR ORDER ─────────────────────────────
   const openQueryForOrder = (orderId) => {
     setQueryOrderId(orderId)
     setQueryResult(null)
@@ -236,10 +244,12 @@ export default function AdminPage() {
     PENDING: displayed.filter(o => o.status === 'PENDING').length,
     EXPIRED: displayed.filter(o => o.status === 'EXPIRED').length,
   }
+  // Calculate total revenue from paid orders
   const totalRevenue = displayed
     .filter(o => o.status === 'PAID')
     .reduce((s, o) => s + parseInt(o.amount || 0), 0)
 
+    // Apply filter and search
   const filtered = displayed
     .filter(o => filter === 'ALL' || o.status === filter)
     .filter(o => {
@@ -252,7 +262,7 @@ export default function AdminPage() {
         o.message?.toLowerCase().includes(q)
       )
     })
-
+  // Get the order details for the currently selected order
   const detailOrder = detail ? displayed.find(o => o.orderId === detail) : null
 
   // ── SELECT ────────────────────────────────────────────────
