@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis'
+import { requireAdmin } from '../../../lib/requireAdmin'
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL,
@@ -10,12 +11,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { key } = req.query
-  const secret = process.env.ADMIN_SECRET_KEY
-
-  if (!secret || !key || key !== secret) {
-    return res.status(401).json({ error: 'Unauthorized' })
-  }
+  // Xác thực qua cookie session httpOnly — không còn dùng ?key=...
+  if (!requireAdmin(req, res)) return
 
   const { orderId } = req.body
   if (!orderId) {

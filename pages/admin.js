@@ -3,7 +3,9 @@ import Head from 'next/head'
 
 // ─── CONSTANTS ───────────────────────────────────────────────
 const REFRESH_INTERVAL = 3000 // 3s thay vì 1s — đủ realtime, không spam
-const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY || 'admin-secret123'
+// ĐÃ XOÁ: ADMIN_KEY / ADMIN_PASSWORD lấy từ NEXT_PUBLIC_* — biến NEXT_PUBLIC_
+// bị Next.js nhúng thẳng vào bundle JS, ai mở DevTools cũng đọc được.
+// Auth giờ xử lý hoàn toàn ở server qua /api/admin/login + cookie httpOnly.
 const EXPIRE_MINUTES = 10
 
 const STATUS_META = {
@@ -36,9 +38,9 @@ const normalizeStatus = (order) => {
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────
 export default function AdminPage() {
-  const [authed, setAuthed] = useState(() =>
-    typeof window !== 'undefined' && sessionStorage.getItem('momo_admin_authed') === '1'
-  )
+  // authed: null = đang kiểm tra session với server, true/false = đã biết
+  const [authed, setAuthed] = useState(null)
+  const [checkingSession, setCheckingSession] = useState(true)
   const [password,  setPassword]  = useState('')
   const [pwError,   setPwError]   = useState(false)
   const [orders,    setOrders]    = useState([])
@@ -60,6 +62,15 @@ export default function AdminPage() {
   useEffect(() => { selectedRef.current = selected }, [selected])
   useEffect(() => { detailRef.current   = detail   }, [detail])
 
+  // ── Kiểm tra session với SERVER khi vào trang (thay sessionStorage) ──
+  useEffect(() => {
+    fetch('/api/admin/session')
+      .then(r => r.json())
+      .then(d => setAuthed(!!d.authed))
+      .catch(() => setAuthed(false))
+      .finally(() => setCheckingSession(false))
+  }, [])
+
   // ── FETCH LOGIC (dùng ref, không phụ thuộc state) ──────────
   const fetchOrders = useCallback(async ({ force = false } = {}) => {
     // Guard: không fetch nếu đang fetch, trừ force
@@ -69,7 +80,13 @@ export default function AdminPage() {
     setFetching(true)
 
     try {
-      const res  = await fetch(`/api/momo/orders?key=${ADMIN_KEY}`)
+      // Cookie httpOnly tự được gửi kèm request — không cần truyền key qua URL nữa
+      const res  = await fetch('/api/momo/orders')
+      if (res.status === 401) {
+        // Session hết hạn / bị xoá ở nơi khác → đẩy về màn login
+        setAuthed(false)
+        return
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       const raw  = data.orders || []
@@ -99,7 +116,7 @@ export default function AdminPage() {
 
   // ── INTERVAL — chỉ mount/unmount 1 lần ─────────────────────
   useEffect(() => {
-    if (!authed) return
+    if (authed !== true) return
     fetchOrders({ force: true })
     const iv = setInterval(() => fetchOrders(), REFRESH_INTERVAL)
     return () => clearInterval(iv)
@@ -158,7 +175,7 @@ export default function AdminPage() {
     if (!confirm(`Xóa ${ids.length} đơn?\nKhông thể hoàn tác!`)) return
     try {
       await Promise.all(ids.map(id =>
-        fetch(`/api/momo/delete?key=${ADMIN_KEY}`, {
+        fetch('/api/momo/delete', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderId: id }),
@@ -172,6 +189,14 @@ export default function AdminPage() {
       alert('Lỗi khi xóa')
     }
   }
+
+  // ── ĐANG KIỂM TRA SESSION VỚI SERVER ────────────────────────
+  if (checkingSession) return (
+    <div className="bg-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <Orbs /><style>{CSS}</style>
+      <div className="sync-dot syncing" style={{ position: 'relative', zIndex: 10 }} />
+    </div>
+  )
 
   // ── LOGIN SCREEN ────────────────────────────────────────────
   if (!authed) return (
@@ -206,11 +231,24 @@ export default function AdminPage() {
     </>
   )
 
-  function login() {
-    if (password === (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'momo@admin')) {
-      sessionStorage.setItem('momo_admin_authed', '1')
-      setAuthed(true); setPwError(false)
-    } else { setPwError(true); setPassword('') }
+  async function login() {
+    setPwError(false)
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      })
+      if (res.ok) {
+        setAuthed(true)
+        setPassword('')
+      } else {
+        setPwError(true)
+        setPassword('')
+      }
+    } catch {
+      setPwError(true) // lỗi mạng cũng hiện lại form, không leak chi tiết
+    }
   }
 
   // ── DASHBOARD ───────────────────────────────────────────────
@@ -293,7 +331,9 @@ export default function AdminPage() {
                   </svg>
                 </button>
 
-                <button className="btn-logout" onClick={() => { sessionStorage.removeItem('momo_admin_authed'); setAuthed(false) }}>
+                <button className="btn-logout" onClick={() => {
+                  fetch('/api/admin/session', { method: 'DELETE' }).finally(() => setAuthed(false))
+                }}>
                   Đăng xuất
                 </button>
               </div>

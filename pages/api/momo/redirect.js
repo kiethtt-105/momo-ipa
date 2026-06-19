@@ -13,7 +13,7 @@ export default async function handler(req, res) {
     return res.status(400).send('Số tiền không hợp lệ (1.000 – 50.000.000 ₫)')
   }
 
-  const orderId = `${Date.now()}`
+  const orderId = `${Date.now()}${Math.random().toString(36).slice(2, 6)}`
   const orderInfo = `Thanh toán ${orderId}`
   const now = new Date().toISOString()
 

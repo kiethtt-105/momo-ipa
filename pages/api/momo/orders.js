@@ -1,5 +1,6 @@
 // pages/api/momo/orders.js
 import { Redis } from '@upstash/redis'
+import { requireAdmin } from '../../../lib/requireAdmin'
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL,
@@ -9,12 +10,10 @@ const redis = new Redis({
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
 
-  // FIX BUG 4: guard undefined — nếu env chưa set thì từ chối hết
-  const { key } = req.query
-  const secret = process.env.ADMIN_SECRET_KEY
-  if (!secret || !key || key !== secret) {
-    return res.status(401).json({ error: 'Unauthorized' })
-  }
+  // Xác thực qua cookie session httpOnly (xem lib/requireAdmin.js + /api/admin/login)
+  // — KHÔNG còn dùng ?key=... vì key truyền qua query string sẽ lưu vào access log,
+  // lịch sử trình duyệt, và phải để public (NEXT_PUBLIC_) ở phía client mới gọi được.
+  if (!requireAdmin(req, res)) return
 
   const raw = await redis.hgetall('momo:orders')
   if (!raw) return res.status(200).json({ orders: [], total: 0 })

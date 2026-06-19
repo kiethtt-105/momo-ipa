@@ -71,6 +71,7 @@ export default function Home() {
 
   // ── Thanh toán ───────────────────────────────────────────────
   const handlePay = async () => {
+    if (loading) return // chặn double-click trước khi React re-render disabled kịp
     if (numVal < MIN_AMOUNT) return setError('Tối thiểu 1.000 ₫')
     if (numVal > MAX_AMOUNT) return setError('Tối đa 50.000.000 ₫')
 
@@ -78,7 +79,9 @@ export default function Home() {
     setError('')
 
     try {
-      const orderId = `${Date.now()}`
+      // Thêm hậu tố ngẫu nhiên: Date.now() có thể trùng nếu 2 request tạo đơn
+      // rơi đúng cùng 1 millisecond (vd: auto-pay từ URL + người dùng bấm tay)
+      const orderId = `${Date.now()}${Math.random().toString(36).slice(2, 6)}`
       const res = await fetch('/api/momo/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

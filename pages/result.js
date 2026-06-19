@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import Link from 'next/link'
@@ -7,12 +7,18 @@ export default function ResultPage() {
   const router = useRouter()
   const [status, setStatus] = useState('loading')
   const [info, setInfo] = useState(null)
+  // Đánh dấu đã có kết quả cuối (success/failed) — để effect không xử lý lại
+  // khi cleanUrlBar() đổi router.query và làm effect tự chạy lại lần nữa.
+  const resolvedRef = useRef(false)
 
 useEffect(() => {
     if (!router.isReady) return
-    
-    // 1. Đọc thông tin từ URL bắn về
-    let { orderId, resultCode, transId, amount, payType, message, orderInfo } = router.query
+    if (resolvedRef.current) return // đã có kết quả cuối — bỏ qua lần effect chạy lại do cleanUrlBar
+
+    // 1. Đọc thông tin từ URL bắn về — lấy TOÀN BỘ query (không chỉ vài field)
+    //    vì save.js cần đủ field (kể cả signature) để xác minh chữ ký MoMo.
+    const fullQuery = { ...router.query }
+    let { orderId, resultCode, transId, amount, payType, message, orderInfo } = fullQuery
     const code = parseInt(resultCode)
 
     // 2. MẸO CHỐNG F5: Nếu URL trống, lục tìm đơn hàng trong bộ nhớ đệm trình duyệt
@@ -21,7 +27,7 @@ useEffect(() => {
     }
 
     // Nếu cả URL và bộ nhớ đều trống thì mới báo lỗi thực sự
-    if (!orderId) { setStatus('error'); return }
+    if (!orderId) { setStatus('error'); resolvedRef.current = true; return }
 
     // Hàm phụ để dọn dẹp thanh địa chỉ URL sau 500ms cho sạch đẹp
     const cleanUrlBar = () => {
@@ -38,21 +44,23 @@ useEffect(() => {
 
       if (code === 0) {
         setStatus('success')
+        resolvedRef.current = true
         setInfo({ orderId, transId, amount: parseInt(amount), payType, message })
         fetch('/api/momo/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, transId, amount, payType, orderInfo, resultCode: 0 }),
+          body: JSON.stringify({ ...fullQuery, resultCode: 0 }),
         })
         .then(() => cleanUrlBar())
         .catch(() => cleanUrlBar())
       } else {
         setStatus('failed')
+        resolvedRef.current = true
         setInfo({ orderId, message, resultCode: code })
         fetch('/api/momo/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, transId, amount, payType, orderInfo, resultCode: code }),
+          body: JSON.stringify({ ...fullQuery, resultCode: code }),
         })
         .then(() => cleanUrlBar())
         .catch(() => cleanUrlBar())
@@ -66,22 +74,26 @@ useEffect(() => {
           const data = await res.json()
           if (data.status === 'PAID') { 
             setStatus('success')
+            resolvedRef.current = true
             setInfo(data)
             clearInterval(poll)
             cleanUrlBar()
           }
           else if (data.status === 'FAILED') { 
             setStatus('failed')
+            resolvedRef.current = true
             setInfo(data)
             clearInterval(poll)
             cleanUrlBar()
           }
           else if (++attempts >= 10) { 
             setStatus('pending')
+            resolvedRef.current = true
             clearInterval(poll)
             cleanUrlBar()
           }
         } catch { 
+          resolvedRef.current = true
           clearInterval(poll) 
           cleanUrlBar()
         }
