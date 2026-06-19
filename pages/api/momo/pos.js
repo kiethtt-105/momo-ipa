@@ -55,19 +55,7 @@ export default async function handler(req, res) {
   const requestId = `${orderId}_${Date.now()}`
   const extraData = ''
 
-  // Signature dùng paymentCode PLAIN TEXT (theo docs Image 3)
-  const rawSignature = [
-    `accessKey=${ACCESS_KEY}`,
-    `amount=${amt}`,
-    `extraData=${extraData}`,
-    `orderId=${orderId}`,
-    `orderInfo=${orderInfo}`,
-    `partnerCode=${PARTNER_CODE}`,
-    `paymentCode=${paymentCode}`,
-    `requestId=${requestId}`,
-  ].join('&')
-
-  // Body gửi đi dùng paymentCode đã RSA encrypt
+  // 1. Encrypt trước
   let encryptedCode
   try {
     encryptedCode = encryptPaymentCode(paymentCode)
@@ -75,6 +63,18 @@ export default async function handler(req, res) {
     console.error('[POS] RSA encrypt error:', err.message)
     return res.status(500).json({ error: err.message })
   }
+
+  // 2. Signature dùng encryptedCode (MoMo verify bằng encrypted)
+  const rawSignature = [
+    `accessKey=${ACCESS_KEY}`,
+    `amount=${amt}`,
+    `extraData=${extraData}`,
+    `orderId=${orderId}`,
+    `orderInfo=${orderInfo}`,
+    `partnerCode=${PARTNER_CODE}`,
+    `paymentCode=${encryptedCode}`,
+    `requestId=${requestId}`,
+  ].join('&')
 
   const body = {
     partnerCode: PARTNER_CODE,
