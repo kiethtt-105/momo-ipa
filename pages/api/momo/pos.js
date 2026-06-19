@@ -26,7 +26,7 @@ function encryptPaymentCode(code) {
 
 
   return crypto.publicEncrypt(
-    { key: pubKey, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING },
+    { key: pubKey, padding: crypto.constants.RSA_PKCS1_PADDING },
     Buffer.from(code)
   ).toString('base64')
 }
