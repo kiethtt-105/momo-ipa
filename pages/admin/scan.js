@@ -387,27 +387,24 @@ useEffect(() => {
                   const generatedId = `POS${Date.now()}`;
                   setCurrentOrderId(generatedId);
                   
-                  // Đánh dấu hệ thống đang xử lý/gửi dữ liệu nháp
                   submitting.current = true; 
 
                   try {
-                    // Gửi request tạo Log PENDING lên Redis thông qua API pos.js có sẵn của bạn
-                    // Truyền chuỗi trống hoặc paymentCode nháp để API không bị lỗi validate đầu vào
-                    await fetch('/api/momo/pos', {
+                    // Gọi API vừa tạo để lưu đơn trạng thái PENDING chuẩn chỉnh
+                    await fetch('/api/momo/save-pending', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ 
                         orderId: generatedId, 
                         amount: parseInt(amount), 
-                        orderInfo: orderInfo || generatedId, 
-                        paymentCode: '000000000000000000' // Chuỗi nháp để khởi tạo log
+                        orderInfo: orderInfo || generatedId
                       }),
                     });
                   } catch (e) {
                     console.error("Lỗi tạo log đơn hàng nháp:", e);
                   } finally {
                     submitting.current = false;
-                    setStep('scan'); // Chuyển sang màn hình quét mã công khai thông tin
+                    setStep('scan'); // Chuyển sang màn hình chờ súng quét mã
                   }
                 }}
                 disabled={!amount || parseInt(amount) < 1000 || submitting.current}
