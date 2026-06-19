@@ -287,7 +287,8 @@ export default function ScanPage() {
               <input
                 type="number" placeholder="Nhập số tiền..."
                 value={amount} onChange={e => setAmount(e.target.value)}
-                style={S.input} min={1000} max={5000000} autoFocus
+                style={S.input} min={1000} max={5000000} autoFocus 
+                step={1000}
                 
               />
 
