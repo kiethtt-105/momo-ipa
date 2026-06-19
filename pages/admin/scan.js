@@ -341,13 +341,13 @@ useEffect(() => {
             <div style={S.card}>
               <h3 style={{ ...S.sectionTitle, marginBottom:16 }}>📷 Scan mã thanh toán từ app MoMo</h3>
 
-             
-              {/* Mã thanh toán luôn hiển thị */}
-              <div style={{ marginTop:10, padding:'14px', background:'#f9f0f5', borderRadius:10, border:'1px solid rgba(174,0,112,0.15)' }}>
+              {/* Input mã thủ công */}
+              <div style={{ marginBottom: 20, padding:'14px', background:'#f9f0f5', borderRadius:10, border:'1px solid rgba(174,0,112,0.15)' }}>
                 <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>
-                  Mã thanh toán MoMo
+                  MÃ THANH TOÁN MOMO
                 </p>
                 <input
+                  placeholder="Nhập 18 số hoặc quét QR"
                   value={manualCode}
                   onChange={e => { setManualCode(e.target.value); setManualErr('') }}
                   onKeyDown={handleManualCodeKey}
@@ -357,55 +357,61 @@ useEffect(() => {
                 {manualErr && <p style={{ fontSize:12, color:'#dc2626', marginBottom:8 }}>⚠ {manualErr}</p>}
               </div>
 
-              {scanning ? (
+              {/* === PHẦN MỚI: ẨN CAMERA KHI ĐANG XỬ LÝ === */}
+              {!submitting.current && (
                 <>
-                  <div style={{ position:'relative', borderRadius:14, overflow:'hidden', background:'#000', marginBottom:10, marginTop:16 }}>
-                    <video ref={setVideoRef} playsInline muted
-                      style={{ width:'100%', display:'block', maxHeight:320, objectFit:'cover' }} />
-                    <canvas ref={canvasRef} style={{ display:'none' }} />
-                    <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
-                      <div style={{ position:'relative', width:'60%', aspectRatio:'1' }}>
-                        {[
-                          { top:0, left:0, borderTop:'3px solid #ae0070', borderLeft:'3px solid #ae0070', borderRadius:'4px 0 0 0' },
-                          { top:0, right:0, borderTop:'3px solid #ae0070', borderRight:'3px solid #ae0070', borderRadius:'0 4px 0 0' },
-                          { bottom:0, left:0, borderBottom:'3px solid #ae0070', borderLeft:'3px solid #ae0070', borderRadius:'0 0 0 4px' },
-                          { bottom:0, right:0, borderBottom:'3px solid #ae0070', borderRight:'3px solid #ae0070', borderRadius:'0 0 4px 0' },
-                        ].map((st, i) => <div key={i} style={{ position:'absolute', width:24, height:24, ...st }} />)}
-                        <div className="scan-line" style={{ position:'absolute', left:0, right:0 }} />
+                  {scanning ? (
+                    <div style={{ position:'relative', borderRadius:14, overflow:'hidden', background:'#000', marginBottom:16 }}>
+                      <video ref={setVideoRef} playsInline muted
+                        style={{ width:'100%', display:'block', maxHeight:320, objectFit:'cover' }} />
+                      <canvas ref={canvasRef} style={{ display:'none' }} />
+                      {/* Overlay QR giữ nguyên */}
+                      <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
+                        <div style={{ position:'relative', width:'60%', aspectRatio:'1' }}>
+                          {[
+                            { top:0, left:0, borderTop:'3px solid #ae0070', borderLeft:'3px solid #ae0070', borderRadius:'4px 0 0 0' },
+                            { top:0, right:0, borderTop:'3px solid #ae0070', borderRight:'3px solid #ae0070', borderRadius:'0 4px 0 0' },
+                            { bottom:0, left:0, borderBottom:'3px solid #ae0070', borderLeft:'3px solid #ae0070', borderRadius:'0 0 0 4px' },
+                            { bottom:0, right:0, borderBottom:'3px solid #ae0070', borderRight:'3px solid #ae0070', borderRadius:'0 0 4px 0' },
+                          ].map((st, i) => <div key={i} style={{ position:'absolute', width:24, height:24, ...st }} />)}
+                          <div className="scan-line" style={{ position:'absolute', left:0, right:0 }} />
+                        </div>
                       </div>
                     </div>
-                    {submitting.current && (
-                      <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12 }}>
-                        <span className="spinner" style={{ width:32, height:32, borderWidth:3 }} />
-                        <span style={{ color:'#fff', fontWeight:700, fontSize:14 }}>Đang xử lý...</span>
-                      </div>
-                    )}
-                  </div>
-                  {camError && <p style={{ fontSize:12, color:'#d97706', background:'#fef3c7', padding:'8px 12px', borderRadius:8, marginBottom:8 }}>⚠ {camError}</p>}
+                  ) : (
+                    <div style={{ textAlign:'center', padding:'20px 0' }}>
+                      <button onClick={() => { setCamError(''); setScanning(true) }}
+                        style={{ ...S.btnPrimary, width:'auto', padding:'12px 32px' }} disabled={!ready}>
+                        📷 Mở Camera
+                      </button>
+                    </div>
+                  )}
                 </>
-              ) : (
-                <div style={{ textAlign:'center', padding:'16px 0' }}>
-                  {camError
-                    ? <p style={{ fontSize:13, color:'#dc2626', background:'#fff5f5', padding:'12px', borderRadius:10, marginBottom:14 }}>⚠ {camError}</p>
-                    : <p style={{ fontSize:13, color:'#6b7280', marginBottom:14 }}>Đang khởi động camera...</p>
-                  }
-                  <button onClick={() => { setCamError(''); submitting.current = false; setScanning(true) }}
-                    style={{ ...S.btnPrimary, width:'auto', padding:'10px 24px' }} disabled={!ready}>
-                    📷 {camError ? 'Thử lại' : 'Mở camera'}
-                  </button>
+              )}
+
+              {/* Trạng thái đang xử lý thanh toán */}
+              {submitting.current && (
+                <div style={{ padding: '40px 20px', textAlign: 'center', background: '#f9f0f5', borderRadius: 12, marginBottom: 16 }}>
+                  <div className="spinner" style={{ width:48, height:48, borderWidth:5, margin:'0 auto 16px' }} />
+                  <p style={{ fontSize:16, fontWeight:700, color:'#ae0070' }}>Đang xử lý thanh toán...</p>
+                  <p style={{ fontSize:14, color:'#6b7280' }}>Vui lòng không đóng trang</p>
                 </div>
               )}
 
-              <div style={{ marginTop: 8 }}>
+              <div style={{ display: 'flex', gap: 12 }}>
                 <button
                   onClick={submitManualCode}
                   disabled={!manualCode.trim() || submitting.current}
-                  style={{ ...S.btnPrimary, opacity: (!manualCode.trim() || submitting.current) ? 0.4 : 1, marginBottom: 12 }}
+                  style={{ ...S.btnPrimary, flex: 1 }}
                 >
                   {submitting.current ? 'Đang xử lý...' : '✓ Xác nhận thanh toán'}
                 </button>
-                <button onClick={() => { stopCamera(); setStep('amount') }}
-                  style={S.btnSecondary}>
+
+                <button 
+                  onClick={() => { stopCamera(); setStep('amount'); setManualCode(''); }}
+                  style={S.btnSecondary}
+                  disabled={submitting.current}
+                >
                   ← Quay lại
                 </button>
               </div>
