@@ -23,19 +23,7 @@ function encryptPaymentCode(code) {
     ? normalized
     : `-----BEGIN PUBLIC KEY-----\n${normalized}\n-----END PUBLIC KEY-----`
 
-  // ─── DEBUG: soi key thật đang dùng tại runtime ───
-  console.log('[POS][DEBUG] PUBLIC_KEY env length:', PUBLIC_KEY.length)
-  console.log('[POS][DEBUG] BEGIN count:', (PUBLIC_KEY.match(/BEGIN PUBLIC KEY/g) || []).length)
-  console.log('[POS][DEBUG] literal \\n count:', (PUBLIC_KEY.match(/\\\\n/g) || []).length)
-  console.log('[POS][DEBUG] real newline count:', (PUBLIC_KEY.match(/\n/g) || []).length)
-  try {
-    const keyObj = crypto.createPublicKey(pubKey)
-    console.log('[POS][DEBUG] key type:', keyObj.asymmetricKeyType)
-    console.log('[POS][DEBUG] key size (bits):', keyObj.asymmetricKeyDetails?.modulusLength)
-  } catch (e) {
-    console.log('[POS][DEBUG] key parse error:', e.message)
-  }
-  // ───────────────────────────────────────────────────
+
 
   return crypto.publicEncrypt(
     { key: pubKey, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING },
@@ -70,8 +58,8 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Số tiền không hợp lệ (1,000–5,000,000 ₫)' })
   }
 
-  const requestId = `${orderId}_${Date.now()}`
-  const extraData = 'e30='
+  const requestId = `${PARTNER_CODE}_${Date.now()}`
+  const extraData = ''
 
   // Encrypt paymentCode cho body
   let encryptedCode
