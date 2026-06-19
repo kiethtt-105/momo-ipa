@@ -39,6 +39,11 @@ export default function ScanPage() {
   const [orderInfo, setOrderInfo] = useState('Thanh toán tại quầy')
   const [result,    setResult]    = useState(null) // { success, data, amount }
 
+  // ── Nhập mã thủ công (khi không quét được) ──────────────────
+  const [manualMode, setManualMode] = useState(false)
+  const [manualCode, setManualCode] = useState('')
+  const [manualErr,  setManualErr]  = useState('')
+
   // ── Load jsQR ──────────────────────────────────────────────
   useEffect(() => {
     if (window.jsQR) { setReady(true); return }
@@ -148,6 +153,20 @@ export default function ScanPage() {
     setAmount('')
     setStep('amount')
     submitting.current = false
+    setManualMode(false)
+    setManualCode('')
+    setManualErr('')
+  }
+
+  // ── Submit mã nhập tay (dùng chung logic với onDetected) ────
+  async function submitManualCode() {
+    const code = cleanCode(manualCode)
+    if (!/^(MM)?\d{18}$/.test(code)) {
+      setManualErr('Mã không hợp lệ. Vui lòng kiểm tra lại (18 chữ số).')
+      return
+    }
+    setManualErr('')
+    await onDetected(manualCode)
   }
 
   // ── Loading auth ───────────────────────────────────────────
@@ -365,6 +384,52 @@ export default function ScanPage() {
                     style={{ ...S.btnPrimary, width:'auto', padding:'10px 24px' }} disabled={!ready}>
                     📷 {camError ? 'Thử lại' : 'Mở camera'}
                   </button>
+                </div>
+              )}
+
+              {/* ── Nhập mã thủ công ── */}
+              {!manualMode ? (
+                <button
+                  onClick={() => { setManualMode(true); setManualErr('') }}
+                  style={{
+                    width:'100%', marginTop:10, padding:'11px 14px',
+                    background:'transparent', border:'1.5px dashed rgba(174,0,112,0.3)',
+                    borderRadius:10, color:'#ae0070', fontSize:13, fontWeight:700, cursor:'pointer',
+                  }}
+                >
+                  ⌨️ Không quét được? Nhập mã thủ công
+                </button>
+              ) : (
+                <div style={{ marginTop:10, padding:'14px', background:'#f9f0f5', borderRadius:10, border:'1px solid rgba(174,0,112,0.15)' }}>
+                  <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>
+                    Nhập mã thanh toán MoMo
+                  </p>
+                  <input
+                    placeholder="VD: MM123456789012345678 hoặc 18 chữ số"
+                    value={manualCode}
+                    onChange={e => { setManualCode(e.target.value); setManualErr('') }}
+                    onKeyDown={e => e.key === 'Enter' && !submitting.current && submitManualCode()}
+                    style={{ ...S.input, marginBottom: manualErr ? 4 : 8 }}
+                    autoFocus
+                    disabled={submitting.current}
+                  />
+                  {manualErr && <p style={{ fontSize:12, color:'#dc2626', marginBottom:8 }}>⚠ {manualErr}</p>}
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button
+                      onClick={submitManualCode}
+                      disabled={!manualCode.trim() || submitting.current}
+                      style={{ ...S.btnPrimary, opacity: (!manualCode.trim() || submitting.current) ? 0.4 : 1 }}
+                    >
+                      {submitting.current ? 'Đang xử lý...' : '✓ Xác nhận thu tiền'}
+                    </button>
+                    <button
+                      onClick={() => { setManualMode(false); setManualCode(''); setManualErr('') }}
+                      disabled={submitting.current}
+                      style={{ ...S.btnSecondary, width:'auto', padding:'13px 18px' }}
+                    >
+                      Hủy
+                    </button>
+                  </div>
                 </div>
               )}
 
