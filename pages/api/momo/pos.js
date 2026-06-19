@@ -18,7 +18,7 @@ function sign(raw) {
 }
 
 function encryptPaymentCode(code) {
-  if (!PUBLIC_KEY) throw new Error('MOMO_POS_PUBLIC_KEY chưa được set trong env')
+  if (!PUBLIC_KEY) throw new Error('MOMO_POS_PUBLIC_KEY chưa được set')
   const pubKey = PUBLIC_KEY.includes('-----BEGIN')
     ? PUBLIC_KEY.replace(/\\n/g, '\n')
     : `-----BEGIN PUBLIC KEY-----\n${PUBLIC_KEY}\n-----END PUBLIC KEY-----`
@@ -30,8 +30,6 @@ function encryptPaymentCode(code) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
-
-  console.log('[POS] PUBLIC_KEY set:', !!PUBLIC_KEY, '| length:', PUBLIC_KEY?.length)
 
   const cookie = req.headers.cookie || ''
   const sessionRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/admin/session`, {
@@ -55,7 +53,7 @@ export default async function handler(req, res) {
   const requestId = `${orderId}_${Date.now()}`
   const extraData = ''
 
-  // 1. Encrypt trước
+  // Encrypt paymentCode cho body
   let encryptedCode
   try {
     encryptedCode = encryptPaymentCode(paymentCode)
@@ -64,7 +62,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message })
   }
 
-  // 2. Signature dùng encryptedCode (MoMo verify bằng encrypted)
+  // Signature dùng paymentCode PLAIN TEXT theo docs
   const rawSignature = [
     `accessKey=${ACCESS_KEY}`,
     `amount=${amt}`,
@@ -72,7 +70,7 @@ export default async function handler(req, res) {
     `orderId=${orderId}`,
     `orderInfo=${orderInfo}`,
     `partnerCode=${PARTNER_CODE}`,
-    `paymentCode=${encryptedCode}`,
+    `paymentCode=${paymentCode}`,
     `requestId=${requestId}`,
   ].join('&')
 
@@ -80,13 +78,13 @@ export default async function handler(req, res) {
     partnerCode: PARTNER_CODE,
     orderId,
     requestId,
-    amount: amt,
+    amount:      amt,
     orderInfo,
     paymentCode: encryptedCode,
     extraData,
     autoCapture: true,
-    lang: 'vi',
-    signature: sign(rawSignature),
+    lang:        'vi',
+    signature:   sign(rawSignature),
   }
 
   const now = new Date().toISOString()
@@ -102,6 +100,7 @@ export default async function handler(req, res) {
     })
 
     console.log('[POS] endpoint:', POS_ENDPOINT)
+    console.log('[POS] rawSignature:', rawSignature.replace(ACCESS_KEY, '***'))
     console.log('[POS] body:', JSON.stringify({ ...body, paymentCode: '[ENCRYPTED]' }))
 
     const momoRes = await fetch(POS_ENDPOINT, {
@@ -117,15 +116,15 @@ export default async function handler(req, res) {
 
     const updated = {
       orderId, amount: amt, orderInfo,
-      status: data.resultCode === 0 ? 'PAID' : 'FAILED',
-      createdAt: now,
-      paidAt:    data.resultCode === 0 ? new Date().toISOString() : null,
-      transId:   data.transId?.toString() || '',
-      payType:   data.payType || 'pos',
-      resultCode: data.resultCode,
-      message:   data.message,
+      status:       data.resultCode === 0 ? 'PAID' : 'FAILED',
+      createdAt:    now,
+      paidAt:       data.resultCode === 0 ? new Date().toISOString() : null,
+      transId:      data.transId?.toString() || '',
+      payType:      data.payType || 'pos',
+      resultCode:   data.resultCode,
+      message:      data.message,
       responseTime: data.responseTime,
-      source: 'pos',
+      source:       'pos',
     }
     await redis.hset('momo:orders', { [orderId]: JSON.stringify(updated) })
 
