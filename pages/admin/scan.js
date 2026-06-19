@@ -368,6 +368,7 @@ useEffect(() => {
                 onKeyDown={handleEnterKey}
                 style={S.input} min={1000} max={5000000} autoFocus 
                 step={1000}
+                disabled={quick === 'true'}
                 
               />
 
@@ -378,6 +379,7 @@ useEffect(() => {
                   value={orderInfo} onChange={e => setOrderInfo(e.target.value)}
                   onKeyDown={handleEnterKey}
                   style={S.input}
+                  disabled={quick === 'true'}
                 />
               </div>
               <button
@@ -389,19 +391,45 @@ useEffect(() => {
               </button>
             </div>
           )}
-
-          {/* STEP 2: SCAN */}
           {step === 'scan' && (
             <div style={S.card}>
-              <h3 style={{ ...S.sectionTitle, marginBottom:16 }}>📷 Scan mã thanh toán từ app MoMo</h3>
+              <h3 style={{ ...S.sectionTitle, marginBottom:12 }}>📷 Scan mã thanh toán từ app MoMo</h3>
 
+              {/* === TÓM TẮT ĐƠN HÀNG === */}
+              {(amount || orderInfo) && (
+                <div style={{
+                  background: '#f0f9ff',
+                  border: '2px solid #bae6fd',
+                  borderRadius: 12,
+                  padding: '14px 16px',
+                  marginBottom: 20
+                }}>
+                  <p style={{ fontSize: 13, color: '#0369a1', fontWeight: 700, marginBottom: 8 }}>THÔNG TIN ĐƠN HÀNG</p>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ color: '#64748b' }}>Số tiền:</span>
+                    <span style={{ fontSize: 20, fontWeight: 800, color: '#ae0070' }}>
+                      {fmt(amount)} ₫
+                    </span>
+                  </div>
+
+                  {orderInfo && (
+                    <div style={{ marginTop: 8 }}>
+                      <span style={{ color: '#64748b', fontSize: 13 }}>Nội dung:</span>
+                      <p style={{ margin: 4, fontSize: 15, fontWeight: 500, color: '#1e2937' }}>
+                        {orderInfo}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
               {/* Input mã thủ công */}
               <div style={{ marginBottom: 20, padding:'14px', background:'#f9f0f5', borderRadius:10, border:'1px solid rgba(174,0,112,0.15)' }}>
                 <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>
                   MÃ THANH TOÁN MOMO
                 </p>
                 <input
-                  placeholder="Nhập 18 số hoặc quét QR"
+                  placeholder="Code QR hoặc mã thanh toán MoMo "
                   value={manualCode}
                   onChange={e => { setManualCode(e.target.value); setManualErr('') }}
                   onKeyDown={handleManualCodeKey}
