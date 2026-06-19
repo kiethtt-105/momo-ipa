@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
   const requestId = `${orderId}_${Date.now()}`
   const extraData = ''
-  const orderType = 'pos'
+  const orderType = 'momo_wallet'
 
   const rawSignature = [
     `accessKey=${ACCESS_KEY}`,
