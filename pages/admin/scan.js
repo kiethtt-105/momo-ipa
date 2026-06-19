@@ -127,6 +127,8 @@ export default function ScanPage() {
     stopCamera()
 
     const code = cleanCode(raw)
+    console.log('[SCAN] raw QR data:', raw)
+    console.log('[SCAN] cleanCode result:', code)
     const amt  = parseInt(amount)
     const orderId = `POS${Date.now()}`
 
