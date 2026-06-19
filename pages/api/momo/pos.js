@@ -38,25 +38,31 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Số tiền không hợp lệ' })
   }
 
-  // Quick Pay v1 /v2/gateway/api/pos dùng partnerRefId (không phải orderId)
-  // và KHÔNG có orderType, extraData, autoCapture
-  const partnerRefId = orderId
+  const requestId = `${orderId}_${Date.now()}`
+  const extraData = ''
 
+  // Signature đúng theo /v2/gateway/api/pos — 8 field theo alphabet, KHÔNG có orderType
   const rawSignature = [
     `accessKey=${ACCESS_KEY}`,
     `amount=${amt}`,
+    `extraData=${extraData}`,
+    `orderId=${orderId}`,
+    `orderInfo=${orderInfo}`,
     `partnerCode=${PARTNER_CODE}`,
-    `partnerRefId=${partnerRefId}`,
     `paymentCode=${paymentCode}`,
+    `requestId=${requestId}`,
   ].join('&')
 
   const body = {
     partnerCode: PARTNER_CODE,
-    partnerRefId,
+    orderId,
+    requestId,
     amount: amt,
+    orderInfo,
     paymentCode,
-    storeId:   '',
-    storeName: '',
+    extraData,
+    autoCapture: true,
+    lang: 'vi',
     signature: sign(rawSignature),
   }
 
@@ -86,31 +92,21 @@ export default async function handler(req, res) {
 
     const data = JSON.parse(rawText)
 
-    // v1 trả về { status, message: { transid, description, amount, ... } }
-    const success = data.status === 0
-
     const updated = {
       orderId, amount: amt, orderInfo,
-      status: success ? 'PAID' : 'FAILED',
+      status: data.resultCode === 0 ? 'PAID' : 'FAILED',
       createdAt: now,
-      paidAt:    success ? new Date().toISOString() : null,
-      transId:   data.message?.transid?.toString() || data.transId?.toString() || '',
-      payType:   'pos',
-      resultCode: data.status ?? data.resultCode,
-      message:   data.message?.description || data.message || '',
-      responseTime: Date.now(),
+      paidAt:    data.resultCode === 0 ? new Date().toISOString() : null,
+      transId:   data.transId?.toString() || '',
+      payType:   data.payType || 'pos',
+      resultCode: data.resultCode,
+      message:   data.message,
+      responseTime: data.responseTime,
       source: 'pos',
     }
     await redis.hset('momo:orders', { [orderId]: JSON.stringify(updated) })
 
-    // Chuẩn hoá response về dạng quen thuộc cho frontend
-    return res.status(200).json({
-      resultCode: data.status ?? data.resultCode ?? -1,
-      message:    data.message?.description || data.message || '',
-      transId:    updated.transId,
-      payType:    'pos',
-      raw:        data,
-    })
+    return res.status(200).json(data)
   } catch (err) {
     console.error('[POS] error:', err)
     return res.status(500).json({ error: 'Lỗi server' })
