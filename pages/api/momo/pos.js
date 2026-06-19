@@ -18,9 +18,10 @@ function sign(raw) {
 
 function encryptPaymentCode(code) {
   if (!PUBLIC_KEY) throw new Error('MOMO_POS_PUBLIC_KEY chưa được set')
-  const pubKey = PUBLIC_KEY.includes('-----BEGIN')
-    ? PUBLIC_KEY.replace(/\\n/g, '\n')
-    : `-----BEGIN PUBLIC KEY-----\n${PUBLIC_KEY}\n-----END PUBLIC KEY-----`
+  const normalized = PUBLIC_KEY.replace(/\\n/g, '\n').trim()
+  const pubKey = normalized.includes('-----BEGIN')
+    ? normalized
+    : `-----BEGIN PUBLIC KEY-----\n${normalized}\n-----END PUBLIC KEY-----`
   return crypto.publicEncrypt(
     { key: pubKey, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING },
     Buffer.from(code)
@@ -38,10 +39,15 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  const { orderId, amount, orderInfo, paymentCode } = req.body
+  const { orderId, amount, orderInfo, paymentCode: rawPaymentCode } = req.body
 
-  if (!orderId || !amount || !orderInfo || !paymentCode) {
+  if (!orderId || !amount || !orderInfo || !rawPaymentCode) {
     return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' })
+  }
+
+  const paymentCode = String(rawPaymentCode).trim()
+  if (!/^(MM|mm)?\d{18}$/.test(paymentCode)) {
+    return res.status(400).json({ error: 'Mã thanh toán không hợp lệ (cần 18 chữ số, có thể kèm tiền tố MM/mm)' })
   }
 
   const amt = parseInt(amount)
