@@ -40,7 +40,10 @@ export default function ScanPage() {
 
   const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
   const [showCancelModal, setShowCancelModal] = useState(false);
-
+  const [currentOrderId, setCurrentOrderId] = useState(null)[cite: 11]
+  const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query[cite: 11]
+  const [showCancelModal, setShowCancelModal] = useState(false);[cite: 11]
+  const [showConfirmAmountModal, setShowConfirmAmountModal] = useState(false);
   // Load jsQR
   useEffect(() => {
     if (window.jsQR) { setReady(true); return }
@@ -78,32 +81,12 @@ export default function ScanPage() {
     if (urlOrderInfo) {
       setOrderInfo(urlOrderInfo)
     }
-    
-    if (quick === 'true' && urlAmount && !currentOrderId && !submitting.current) {
-      const generatedId = `POS${Date.now()}`;
-      setCurrentOrderId(generatedId);
-      setStep('scan');
-
-      // Tự động gọi API tạo log PENDING ngầm luôn
-      fetch('/api/momo/save-pending', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          orderId: generatedId, 
-          amount: parseInt(urlAmount), 
-          orderInfo: urlOrderInfo || generatedId
-        }),
-      })
-      .then(() => {
-        // 🌟 DỌN SẠCH URL: Biến thanh địa chỉ về /admin/scan trơn, xóa bỏ hoàn toàn các param cũ
-        router.replace('/admin/scan', undefined, { shallow: true });
-      })
-      .catch(e => {
-        console.error("Lỗi đơn quét nhanh:", e);
-        router.replace('/admin/scan', undefined, { shallow: true });
-      });
-    }
-  }, [urlAmount, urlOrderInfo, quick, router.isReady])
+      
+    if (quick === 'true' && urlAmount && !currentOrderId && !submitting.current && !showConfirmAmountModal) {
+          // Chỉ bật Popup xác nhận thông tin từ link nhanh, chưa tạo đơn hàng vội
+          setShowConfirmAmountModal(true);
+        }
+      }, [urlAmount, urlOrderInfo, quick, router.isReady])
   // Thêm đoạn này ở khu vực các useEffect đầu file để tự focus khi nhấn thử lại
   useEffect(() => {
     if (!result && step === 'scan') {
@@ -426,31 +409,11 @@ export default function ScanPage() {
                 />
               </div>
               <button
-                onClick={async () => {
-                  const generatedId = `POS${Date.now()}`;
-                  setCurrentOrderId(generatedId);
-                  submitting.current = true; 
-                  try {
-                    await fetch('/api/momo/save-pending', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ 
-                        orderId: generatedId, 
-                        amount: parseInt(amount), 
-                        orderInfo: orderInfo || generatedId
-                      }),
-                    });
-                  } catch (e) {
-                    console.error("Lỗi tạo log đơn hàng nháp:", e);
-                  } finally {
-                    submitting.current = false;
-                    setStep('scan');
-                  }
-                }}
+                onClick={() => setShowConfirmAmountModal(true)}
                 disabled={!amount || parseInt(amount) < 1000 || submitting.current}
                 style={{ ...S.btnPrimary, opacity: (!amount || parseInt(amount) < 1000) ? 0.4 : 1 }}
               >
-                {submitting.current ? 'Đang tạo đơn...' : 'Xác nhận  →'}
+                Xác nhận  →
               </button>
             </div>
           )}
@@ -559,6 +522,82 @@ export default function ScanPage() {
                   >
                     ← Hủy & Quay lại
                   </button>
+                </div>
+              )}
+              {/* ─── POPUP XÁC NHẬN SỐ TIỀN & THÔNG TIN ĐƠN HÀNG ─── */}
+              {showConfirmAmountModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16 }}>
+                  <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 365, padding: 24, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', marginBottom: 14, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      🔎 Kiểm tra thông tin đơn hàng
+                    </div>
+                    
+                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: 16, marginBottom: 20, border: '1px solid #e2e8f0' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ color: '#64748b', fontSize: 13 }}>Số tiền cần thu:</span>
+                          <span style={{ fontSize: 24, fontWeight: 900, color: '#ae0070' }}>{fmt(amount)} ₫</span>
+                        </div>
+                        <div style={{ height: '1px', background: '#e2e8f0' }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <span style={{ color: '#64748b', fontSize: 13 }}>Nội dung thanh toán:</span>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827', wordBreak: 'break-all' }}>
+                            {orderInfo || 'Thanh toán tại quầy'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      <button
+                        onClick={() => {
+                          setShowConfirmAmountModal(false);
+                          // Nếu đi từ link nhanh bị hủy, trả URL về nguyên bản để thu ngân nhập tay tùy ý
+                          if (quick === 'true') {
+                            router.replace('/admin/scan', undefined, { shallow: true });
+                          }
+                        }}
+                        style={{ flex: 1, padding: '11px', background: '#fff', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        Trở lại
+                      </button>
+                      
+                      <button
+                        onClick={async () => {
+                          setShowConfirmAmountModal(false);
+                          const generatedId = `POS${Date.now()}`;
+                          setCurrentOrderId(generatedId);
+                          submitting.current = true;
+                          
+                          try {
+                            // Chính thức tạo Log đơn hàng nháp PENDING lên hệ thống
+                            await fetch('/api/momo/save-pending', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ 
+                                orderId: generatedId, 
+                                amount: parseInt(amount), 
+                                orderInfo: orderInfo || generatedId
+                              }),
+                            });
+                          } catch (e) {
+                            console.error("Lỗi lưu đơn hàng nháp:", e);
+                          } finally {
+                            submitting.current = false;
+                            setStep('scan'); // Chuyển sang màn hình Step 2 để bắn súng quét mã
+                            
+                            // Nếu có đuôi link nhanh, dọn sạch URL để không bị dính lặp lại logic
+                            if (quick === 'true') {
+                              router.replace('/admin/scan', undefined, { shallow: true });
+                            }
+                          }
+                        }}
+                        style={{ flex: 1, padding: '11px', background: '#ae0070', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(174,0,112,0.2)' }}
+                      >
+                        Xác nhận
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 
