@@ -232,7 +232,7 @@ export default function ScanPage() {
   }
 
   const stepIdx = step === 'amount' ? 0 : 1
-  const STEPS   = ['Số tiền', 'Quét & Thu']
+  const STEPS   = ['Thông tin ', 'Scan QR']
 
   return (
     <>
@@ -283,7 +283,7 @@ export default function ScanPage() {
           {/* STEP 1: AMOUNT */}
           {step === 'amount' && (
             <div style={S.card}>
-              <h3 style={S.sectionTitle}>💰 Nhập số tiền cần thu</h3>
+              <h3 style={S.sectionTitle}>💰 Nhập số tiền </h3>
               <input
                 type="number" placeholder="Nhập số tiền..."
                 value={amount} onChange={e => setAmount(e.target.value)}
@@ -295,13 +295,11 @@ export default function ScanPage() {
                   }
                 }}
               />
-              {amount && parseInt(amount) >= 1000 && (
-                <p style={{ fontSize:15, color:'#ae0070', fontWeight:800, marginBottom:12 }}>= {fmt(amount)} ₫</p>
-              )}
+
               <div style={{ paddingTop:12, borderTop:'1px solid #f3f4f6', marginBottom:14 }}>
                 <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>Nội dung đơn hàng</p>
                 <input
-                  placeholder="Nhập mã đơn hàng (tùy chọn)"
+                  placeholder="Nhập mã đơn hàng "
                   value={orderInfo} onChange={e => setOrderInfo(e.target.value)}
                   style={S.input}
                   onKeyDown={e => {
@@ -316,7 +314,7 @@ export default function ScanPage() {
                 disabled={!amount || parseInt(amount) < 1000}
                 style={{ ...S.btnPrimary, opacity: (!amount || parseInt(amount) < 1000) ? 0.4 : 1 }}
               >
-                Xác nhận · Mở camera quét →
+                Xác nhận  →
               </button>
             </div>
           )}
@@ -324,12 +322,7 @@ export default function ScanPage() {
           {/* STEP 2: SCAN */}
           {step === 'scan' && (
             <div style={S.card}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
-                <h3 style={{ ...S.sectionTitle, marginBottom:0 }}>📷 Quét mã MoMo của khách</h3>
-                <span style={{ background:'#ae0070', color:'#fff', borderRadius:20, padding:'4px 12px', fontSize:13, fontWeight:800 }}>
-                  {fmt(amount)} ₫
-                </span>
-              </div>
+              <h3 style={{ ...S.sectionTitle, marginBottom:16 }}>📷 Quét mã MoMo của khách</h3>
 
               <p style={{ fontSize:12, color:'#6b7280', marginBottom:12, lineHeight:1.6 }}>
                 Khách mở app MoMo → <b>Mã thanh toán</b><br/>
