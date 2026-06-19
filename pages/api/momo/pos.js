@@ -78,7 +78,8 @@ export default async function handler(req, res) {
         source: 'pos',
       }),
     })
-
+    console.log('[POS] endpoint:', POS_ENDPOINT)
+    console.log('[POS] body:', JSON.stringify(body))
     const momoRes = await fetch(POS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
