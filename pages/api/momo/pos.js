@@ -85,8 +85,10 @@ export default async function handler(req, res) {
       headers: { 'Content-Type': 'application/json; charset=UTF-8' },
       body: JSON.stringify(body),
     })
-
-    const data = await momoRes.json()
+    const rawText = await momoRes.text()
+    console.log('[POS] status:', momoRes.status)
+    console.log('[POS] raw response:', rawText)
+    const data = JSON.parse(rawText)
 
     // Update record with result
     const updated = {
