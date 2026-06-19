@@ -297,11 +297,6 @@ export default function ScanPage() {
                   placeholder="Nhập mã đơn hàng "
                   value={orderInfo} onChange={e => setOrderInfo(e.target.value)}
                   style={S.input}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      if (amount && parseInt(amount) >= 1000) setStep('scan');
-                    }
-                  }}
                 />
               </div>
               <button
