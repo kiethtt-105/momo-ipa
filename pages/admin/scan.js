@@ -36,6 +36,7 @@ export default function ScanPage() {
   const [manualErr,  setManualErr]  = useState('')
 
   const [currentOrderId, setCurrentOrderId] = useState(null)
+  const [isServerErr, setIsServerErr] = useState(false);
 
   const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -167,7 +168,9 @@ export default function ScanPage() {
       const data = await res.json()
       setResult({ success: data.resultCode === 0, data, amount: amt, orderId })
     } catch {
-      setResult({ success: false, data: { message: 'Lỗi kết nối server' }, amount: amt, orderId })
+      submitting.current = false;
+      setIsServerErr(true); // <--- Đổi state thành true để kích hoạt hiện nút bấm
+      setManualErr('Mất kết nối hoặc cổng thanh toán phản hồi chậm!');
     }
   }
 
@@ -316,6 +319,7 @@ export default function ScanPage() {
                       setResult(null);
                       setManualCode('');
                       setManualErr('');
+                      setIsServerErr(false); 
                       submitting.current = false;
                     }}
                     style={{ ...S.btnPrimary, background: '#f59e0b' }}
