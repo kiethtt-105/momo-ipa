@@ -466,7 +466,7 @@ useEffect(() => {
                       setManualCode('');
                       setManualErr('');
                       submitting.current = false;
-                    }}
+ sc                   }}
                     style={{
                       ...S.btnSecondary,
                       background: '#f59e0b',
