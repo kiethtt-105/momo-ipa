@@ -38,11 +38,10 @@ export default function ScanPage() {
   const [currentOrderId, setCurrentOrderId] = useState(null)
   const [isServerErr, setIsServerErr] = useState(false);
 
-  const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [currentOrderId, setCurrentOrderId] = useState(null)[cite: 11]
-  const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query[cite: 11]
-  const [showCancelModal, setShowCancelModal] = useState(false);[cite: 11]
+
+
+  const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query[cite: 12]
+  const [showCancelModal, setShowCancelModal] = useState(false);[cite: 12]
   const [showConfirmAmountModal, setShowConfirmAmountModal] = useState(false);
   // Load jsQR
   useEffect(() => {
@@ -85,6 +84,7 @@ export default function ScanPage() {
     if (quick === 'true' && urlAmount && !currentOrderId && !submitting.current && !showConfirmAmountModal) {
           // Chỉ bật Popup xác nhận thông tin từ link nhanh, chưa tạo đơn hàng vội
           setShowConfirmAmountModal(true);
+          router.replace('/admin/scan', undefined, { shallow: true });
         }
       }, [urlAmount, urlOrderInfo, quick, router.isReady])
   // Thêm đoạn này ở khu vực các useEffect đầu file để tự focus khi nhấn thử lại
@@ -585,11 +585,7 @@ export default function ScanPage() {
                           } finally {
                             submitting.current = false;
                             setStep('scan'); // Chuyển sang màn hình Step 2 để bắn súng quét mã
-                            
-                            // Nếu có đuôi link nhanh, dọn sạch URL để không bị dính lặp lại logic
-                            if (quick === 'true') {
-                              router.replace('/admin/scan', undefined, { shallow: true });
-                            }
+
                           }
                         }}
                         style={{ flex: 1, padding: '11px', background: '#ae0070', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(174,0,112,0.2)' }}
