@@ -643,26 +643,6 @@ useEffect(() => {
               )}
 
               <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-                <button
-                  onClick={submitManualCode}
-                  disabled={!manualCode.trim() || submitting.current}
-                  style={{ 
-                    ...S.btnPrimary, 
-                    flex: 1,
-                    background: submitting.current ? '#9f1e6e' : '#ae0070'
-                  }}
-                >
-                  {submitting.current ? 'Đang xử lý...' : '✓ Xác nhận thanh toán'}
-                </button>
-
-                <button 
-                  onClick={() => { stopCamera(); setStep('amount'); setManualCode(''); }}
-                  style={S.btnSecondary}
-                  disabled={submitting.current}
-                >
-                  ← Quay lại
-                </button>
-
                 {/* Nút Thử lại (hiện khi có lỗi) */}
                 {result && !result.success && (
                   <button 
