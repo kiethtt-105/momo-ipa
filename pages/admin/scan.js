@@ -244,7 +244,7 @@ export default function ScanPage() {
   return (
     <>
       <Head>
-        <title>Admin · MoMo POS</title>
+        <title>Admin · MoMo IPA </title>
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
