@@ -9,7 +9,6 @@ const redis = new Redis({
 const PARTNER_CODE = process.env.MOMO_PARTNER_CODE
 const ACCESS_KEY   = process.env.MOMO_ACCESS_KEY
 const SECRET_KEY   = process.env.MOMO_SECRET_KEY
-// POS endpoint: same domain as ENDPOINT but /pos instead of /create
 const POS_ENDPOINT = process.env.MOMO_POS_ENDPOINT ||
   (process.env.MOMO_ENDPOINT || '').replace(/\/create$/, '/pos')
 
@@ -20,7 +19,6 @@ function sign(raw) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  // Session guard — reuse same cookie auth as orders endpoint
   const cookie = req.headers.cookie || ''
   const sessionRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/admin/session`, {
     headers: { cookie },
@@ -36,43 +34,35 @@ export default async function handler(req, res) {
   }
 
   const amt = parseInt(amount)
-  if (isNaN(amt) || amt < 1000 || amt > 5_000_000) {
-    return res.status(400).json({ error: 'Số tiền không hợp lệ (1,000–5,000,000 ₫)' })
+  if (isNaN(amt) || amt < 1000 || amt > 50_000_000) {
+    return res.status(400).json({ error: 'Số tiền không hợp lệ' })
   }
 
-  const requestId = `${orderId}_${Date.now()}`
-  const extraData = ''
-  const orderType = 'momo_wallet'
+  // Quick Pay v1 /v2/gateway/api/pos dùng partnerRefId (không phải orderId)
+  // và KHÔNG có orderType, extraData, autoCapture
+  const partnerRefId = orderId
 
   const rawSignature = [
     `accessKey=${ACCESS_KEY}`,
     `amount=${amt}`,
-    `extraData=${extraData}`,
-    `orderId=${orderId}`,
-    `orderInfo=${orderInfo}`,
-    `orderType=${orderType}`,
     `partnerCode=${PARTNER_CODE}`,
+    `partnerRefId=${partnerRefId}`,
     `paymentCode=${paymentCode}`,
-    `requestId=${requestId}`,
   ].join('&')
 
   const body = {
     partnerCode: PARTNER_CODE,
-    orderId,
-    requestId,
+    partnerRefId,
     amount: amt,
-    orderInfo,
-    orderType,
     paymentCode,
-    extraData,
-    autoCapture: true,
-    lang: 'vi',
+    storeId:   '',
+    storeName: '',
     signature: sign(rawSignature),
   }
 
+  const now = new Date().toISOString()
+
   try {
-    // Save pending record
-    const now = new Date().toISOString()
     await redis.hset('momo:orders', {
       [orderId]: JSON.stringify({
         orderId, amount: amt, orderInfo,
@@ -81,8 +71,10 @@ export default async function handler(req, res) {
         source: 'pos',
       }),
     })
+
     console.log('[POS] endpoint:', POS_ENDPOINT)
     console.log('[POS] body:', JSON.stringify(body))
+
     const momoRes = await fetch(POS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=UTF-8' },
@@ -91,24 +83,34 @@ export default async function handler(req, res) {
     const rawText = await momoRes.text()
     console.log('[POS] status:', momoRes.status)
     console.log('[POS] raw response:', rawText)
+
     const data = JSON.parse(rawText)
 
-    // Update record with result
+    // v1 trả về { status, message: { transid, description, amount, ... } }
+    const success = data.status === 0
+
     const updated = {
       orderId, amount: amt, orderInfo,
-      status: data.resultCode === 0 ? 'PAID' : 'FAILED',
+      status: success ? 'PAID' : 'FAILED',
       createdAt: now,
-      paidAt: data.resultCode === 0 ? new Date().toISOString() : null,
-      transId: data.transId?.toString() || '',
-      payType: data.payType || 'pos',
-      resultCode: data.resultCode,
-      message: data.message,
-      responseTime: data.responseTime,
+      paidAt:    success ? new Date().toISOString() : null,
+      transId:   data.message?.transid?.toString() || data.transId?.toString() || '',
+      payType:   'pos',
+      resultCode: data.status ?? data.resultCode,
+      message:   data.message?.description || data.message || '',
+      responseTime: Date.now(),
       source: 'pos',
     }
     await redis.hset('momo:orders', { [orderId]: JSON.stringify(updated) })
 
-    return res.status(200).json(data)
+    // Chuẩn hoá response về dạng quen thuộc cho frontend
+    return res.status(200).json({
+      resultCode: data.status ?? data.resultCode ?? -1,
+      message:    data.message?.description || data.message || '',
+      transId:    updated.transId,
+      payType:    'pos',
+      raw:        data,
+    })
   } catch (err) {
     console.error('[POS] error:', err)
     return res.status(500).json({ error: 'Lỗi server' })
