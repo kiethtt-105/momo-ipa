@@ -395,32 +395,48 @@ useEffect(() => {
             <div style={S.card}>
               <h3 style={{ ...S.sectionTitle, marginBottom:12 }}>📷 Scan mã thanh toán từ app MoMo</h3>
 
-              {/* === TÓM TẮT ĐƠN HÀNG === */}
+              {/* === TÓM TẮT ĐƠN HÀNG ĐẦY ĐỦ === */}
               {(amount || orderInfo) && (
                 <div style={{
                   background: '#f0f9ff',
                   border: '2px solid #bae6fd',
                   borderRadius: 12,
-                  padding: '14px 16px',
-                  marginBottom: 20
+                  padding: '16px 18px',
+                  marginBottom: 24,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
                 }}>
-                  <p style={{ fontSize: 13, color: '#0369a1', fontWeight: 700, marginBottom: 8 }}>THÔNG TIN ĐƠN HÀNG</p>
+                  <p style={{ fontSize: 13, color: '#0369a1', fontWeight: 700, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    THÔNG TIN ĐƠN HÀNG
+                  </p>
                   
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ color: '#64748b' }}>Số tiền:</span>
-                    <span style={{ fontSize: 20, fontWeight: 800, color: '#ae0070' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <span style={{ color: '#475569', fontWeight: 500 }}>Số tiền thanh toán:</span>
+                    <span style={{ fontSize: 22, fontWeight: 800, color: '#ae0070' }}>
                       {fmt(amount)} ₫
                     </span>
                   </div>
 
                   {orderInfo && (
-                    <div style={{ marginTop: 8 }}>
-                      <span style={{ color: '#64748b', fontSize: 13 }}>Nội dung:</span>
-                      <p style={{ margin: 4, fontSize: 15, fontWeight: 500, color: '#1e2937' }}>
+                    <div>
+                      <span style={{ color: '#475569', fontWeight: 500, fontSize: 13 }}>Nội dung:</span>
+                      <p style={{ 
+                        margin: '6px 0 0 0', 
+                        fontSize: 15.5, 
+                        lineHeight: 1.5,
+                        color: '#1e2937',
+                        fontWeight: 500 
+                      }}>
                         {orderInfo}
                       </p>
                     </div>
                   )}
+
+                  {/* Có thể thêm thông tin khác sau này như Mã đơn */}
+                  {/* {currentOrderId && (
+                    <div style={{ marginTop: 8, fontSize: 13, color: '#64748b' }}>
+                      Mã đơn: <span style={{ fontFamily: 'monospace' }}>{currentOrderId}</span>
+                    </div>
+                  )} */}
                 </div>
               )}
               {/* Input mã thủ công */}
