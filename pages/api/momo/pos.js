@@ -82,7 +82,7 @@ export default async function handler(req, res) {
     console.log('[POS] body:', JSON.stringify(body))
     const momoRes = await fetch(POS_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json; charset=UTF-8' },
       body: JSON.stringify(body),
     })
 
