@@ -540,25 +540,6 @@ useEffect(() => {
                     ← Hủy & Quay lại
                   </button>
 
-                  <button
-                    onClick={() => {
-                      setManualCode('');
-                      setManualErr('');
-                    }}
-                    style={{
-                      background: '#fff',
-                      color: '#ae0070',
-                      border: '1px solid rgba(174,0,112,0.3)',
-                      borderRadius: 8,
-                      padding: '10px 16px',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      flex: 1
-                    }}
-                  >
-                    🔄 Xóa nhập lại
-                  </button>
                 </div>
               )}
 
