@@ -335,12 +335,9 @@ export default function ScanPage() {
 
 
                 <button onClick={resetAll} style={S.btnPrimary}>
-                  {isSuccess ? 'Giao Dịch Mới' : 'Nhập số tiền mới'}
+                  {isSuccess ? 'Giao Dịch Mới' : ' Tạo Giao Dịch Mới'}
                 </button>
 
-                <button onClick={() => router.push('/admin')} style={S.btnSecondary}>
-                  ← Về Admin
-                </button>
               </div>
             </div>
           </div>
