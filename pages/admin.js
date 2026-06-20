@@ -371,8 +371,7 @@ export default function AdminPage() {
             <div className="mx-auto mb-[18px] flex h-[60px] w-[60px] items-center justify-center rounded-2xl border border-[rgba(174,0,112,0.1)] bg-white shadow-[0_4px_12px_rgba(174,0,112,0.08)]">
               <img src="/Main.png" alt="Logo" className="h-11 w-11 object-contain" />
             </div>
-            <h1 className="text-[22px] font-extrabold tracking-[-0.5px] text-[var(--admin-text)]">Quản trị viên</h1>
-            <p className="mb-7 mt-[5px] text-[13px] text-[var(--admin-muted)]">Hệ thống quản lý giao dịch MoMo</p>
+            <h1 className="text-[22px] font-extrabold tracking-[-0.5px] text-[var(--admin-text)]">Hệ thống quản lý giao dịch MoMo</h1>
             <div className="text-left">
               <input
                 type="password" placeholder="Mật khẩu quản trị"
