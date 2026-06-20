@@ -426,7 +426,7 @@ export default function AdminPage() {
       <Head>
         <title>QUẢN TRỊ GIAO DỊCH - IPA  </title>
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <link rel="icon" type="image/png" href="/admin ipa.png" />
+        <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
       <div className="relative min-h-screen w-screen overflow-x-hidden bg-[#f5edf2] font-[var(--admin-font)] text-[var(--admin-text)]">
         <Orbs />
