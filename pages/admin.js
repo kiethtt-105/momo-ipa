@@ -685,18 +685,17 @@ export default function AdminPage() {
                   {/* ── Desktop table — chỉ hiện ở màn hình rộng (≥1024px) ── */}
                   {/* table-auto + min-width: cột co giãn theo nội dung thật, bảng tự cuộn ngang riêng khi không đủ chỗ, KHÔNG còn bị cắt/tràn ra ngoài trang */}
                   <div className="hidden max-h-[65vh] overflow-auto lg:block">
-                    <table className="w-full min-w-[1180px] table-auto border-collapse text-[13.5px]">
+                    <table className="w-full min-w-[980px] table-auto border-collapse text-[13.5px]">
                       <colgroup>
                         <col className="w-[36px]" />
+                        <col className="w-[100px]" />
+                        <col className="w-[85px]" />
+                        <col className="w-[24%]" />
                         <col className="w-[110px]" />
-                        <col className="w-[90px]" />
-                        <col className="w-[22%]" />
+                        <col className="w-[110px]" />
+                        <col className="w-[70px]" />
+                        <col className="w-[70px]" />
                         <col className="w-[130px]" />
-                        <col className="w-[130px]" />
-                        <col className="w-[80px]" />
-                        <col className="w-[80px]" />
-                        <col className="w-[120px]" />
-                        <col className="w-[120px]" />
                         <col className="w-[90px]" />
                       </colgroup>
                       <thead className="sticky top-0 z-10">
@@ -716,8 +715,7 @@ export default function AdminPage() {
                           <SortableTh label="Mã GD MoMo"   sortKey="transId"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                           <SortableTh label="Hình thức"    sortKey="payType"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                           <SortableTh label="Result"       sortKey="resultCode"  currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                          <SortableTh label="Tạo lúc"      sortKey="createdAt"   currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                          <SortableTh label="Hoàn tất"     sortKey="paidAt"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Thời gian"    sortKey="createdAt"   currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                           <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Thao tác</th>
                         </tr>
                       </thead>
@@ -756,8 +754,10 @@ export default function AdminPage() {
                                     </span>
                                   : <span className="text-[#9ca3af]">—</span>}
                               </td>
-                              <td className="whitespace-nowrap px-4 py-3.5 align-middle text-xs text-[var(--admin-muted)]">{fmtDate(o.createdAt)}</td>
-                              <td className="whitespace-nowrap px-4 py-3.5 align-middle text-xs text-[var(--admin-muted)]">{o.paidAt ? fmtDate(o.paidAt) : <span className="text-[#9ca3af]">—</span>}</td>
+                              <td className="whitespace-nowrap px-4 py-3.5 align-middle text-xs text-[var(--admin-muted)]">
+                                <div>{fmtDate(o.createdAt)}</div>
+                                {o.paidAt && <div className="mt-0.5 text-[#16a34a]">✓ {fmtDate(o.paidAt)}</div>}
+                              </td>
                               <td className="px-4 py-3.5 text-center align-middle" onClick={e => e.stopPropagation()}>
                                 <div className="flex justify-center gap-1">
                                   {/* Tra cứu MoMo */}
