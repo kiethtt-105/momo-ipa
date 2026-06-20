@@ -469,7 +469,7 @@ export default function ScanPage() {
   return (
     <>
       <Head>
-        <title>SCAN PAYMENT</title>
+        <title>CỔNG THANH TOÁN QR CÁ NHÂN</title>
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -520,7 +520,7 @@ export default function ScanPage() {
           {/* STEP 1: AMOUNT */}
           {step === 'amount' && (
             <div className={card}>
-              <h3 className="text-[13px] font-bold text-gray-700 mb-3.5">💰 Nhập số tiền </h3>
+              <h3 className="text-[13px] font-bold text-gray-700 mb-3.5">💰  Nhập số tiền cần thanh toán</h3>
               <input
                 type="text" inputMode="numeric" placeholder="Nhập số tiền..."
                 value={formatAmountDisplay(amount)}

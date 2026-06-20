@@ -132,6 +132,11 @@ export default function AdminPage() {
   const [search,          setSearch]          = useState('')
   const [dateFrom,        setDateFrom]        = useState(() => toDayStr(new Date()))
   const [dateTo,          setDateTo]          = useState(() => toDayStr(new Date()))
+  const [amountMin,       setAmountMin]       = useState('')
+  const [amountMax,       setAmountMax]       = useState('')
+  const [payTypeFilter,   setPayTypeFilter]   = useState(new Set()) // rỗng = tất cả hình thức
+  const [statusColFilter, setStatusColFilter] = useState(new Set()) // rỗng = tất cả trạng thái (lọc riêng tại header bảng, độc lập với tabs)
+  const [openColFilter,   setOpenColFilter]   = useState(null) // 'amount' | 'payType' | 'status' | null
   const [sortKey,         setSortKey]         = useState('createdAt')
   const [sortDir,         setSortDir]         = useState('desc') // 'asc' | 'desc'
   const [selected,        setSelected]        = useState(new Set())
@@ -322,6 +327,19 @@ export default function AdminPage() {
       if (dateTo && dayStr > dateTo) return false
       return true
     })
+    // Lọc theo khoảng số tiền (từ dropdown filter ở header cột "Số tiền")
+    .filter(o => {
+      const amt = parseInt(o.amount || 0)
+      const min = amountMin !== '' ? parseInt(amountMin) : null
+      const max = amountMax !== '' ? parseInt(amountMax) : null
+      if (min !== null && amt < min) return false
+      if (max !== null && amt > max) return false
+      return true
+    })
+    // Lọc theo Hình thức (từ dropdown filter ở header cột "Hình thức") — rỗng = tất cả
+    .filter(o => payTypeFilter.size === 0 || payTypeFilter.has(o.payType || '—'))
+    // Lọc theo Trạng thái (từ dropdown filter ở header cột "Trạng thái") — rỗng = tất cả, độc lập với tabs phía trên
+    .filter(o => statusColFilter.size === 0 || statusColFilter.has(o.status))
     // Sắp xếp theo cột đang chọn
     .sort((a, b) => {
       let av = a[sortKey]
@@ -350,6 +368,9 @@ export default function AdminPage() {
   // Get the order details for the currently selected order
   const detailOrder = detail ? displayed.find(o => o.orderId === detail) : null
 
+  // Danh sách Hình thức duy nhất có trong dữ liệu — dùng để render checkbox lọc ở header cột
+  const payTypeOptions = [...new Set(displayed.map(o => o.payType || '—'))].sort()
+
   // ── SELECT ────────────────────────────────────────────────
   const toggleOne = id => {
     const s = new Set(selected)
@@ -371,6 +392,15 @@ export default function AdminPage() {
       setSortDir('desc')
     }
   }
+
+  // ── COLUMN HEADER FILTERS (Hình thức / Trạng thái) ─────────
+  // Toggle 1 giá trị trong/ngoài Set filter (multi-select kiểu Excel)
+  const toggleSetValue = (setFn, currentSet, value) => {
+    const next = new Set(currentSet)
+    next.has(value) ? next.delete(value) : next.add(value)
+    setFn(next)
+  }
+  const hasActiveColFilter = openColFilter !== null || amountMin || amountMax || payTypeFilter.size > 0 || statusColFilter.size > 0
 
   // ── DELETE ────────────────────────────────────────────────
   const doDelete = async (ids) => {
@@ -629,17 +659,7 @@ export default function AdminPage() {
                     <span className="hidden max-md:inline">TRA CỨU</span>
                   </button>
 
-                  <button
-                    className="flex-1 whitespace-nowrap rounded-[9px] border border-[rgba(174,0,112,0.3)] bg-[#fff0f7] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-[var(--mm)] transition-all hover:bg-[var(--mm)] hover:text-white max-md:px-1.5 max-md:text-[11px] md:flex-none"
-                    onClick={() => window.open('/admin/scan', '_blank')}
-                    title="Mở Scan QR ở tab mới"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline-block align-[-2px]">
-                      <path d="M3 9V5a2 2 0 0 1 2-2h2M21 9V5a2 2 0 0 0-2-2h-2M3 15v4a2 2 0 0 0 2 2h2M21 15v4a2 2 0 0 1-2 2h-2" />
-                      <path d="M12 11v4M9 14h6" />
-                    </svg>
-                    SCAN
-                  </button>
+
                   <button
                     className="flex-1 whitespace-nowrap rounded-[9px] border border-[var(--border)] bg-white/70 px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-semibold text-[var(--admin-muted)] hover:border-[var(--admin-danger)] hover:bg-white hover:text-[var(--admin-danger)] max-md:px-1.5 max-md:text-[11px] md:flex-none"
                     onClick={() => {
