@@ -467,10 +467,10 @@ export default function AdminPage() {
           />
         )}
 
-        <div className="relative z-[1] pt-[60px] max-md:pt-[148px]">
+        <div className="relative z-[1]">
           {/* ── HEADER ── */}
-          <header className="fixed inset-x-0 top-0 z-[200] border-b border-[var(--border)] bg-white/88 shadow-[0_1px_16px_rgba(174,0,112,0.06)] backdrop-blur-[20px]">
-            <div className="mx-auto flex h-[60px] max-w-[1600px] items-center gap-5 px-6 max-md:h-auto max-md:flex-wrap max-md:gap-2.5 max-md:px-4 max-md:py-2.5">
+          <header className="sticky inset-x-0 top-0 z-[200] border-b border-[var(--border)] bg-white/88 shadow-[0_1px_16px_rgba(174,0,112,0.06)] backdrop-blur-[20px]">
+            <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-5 gap-y-2.5 px-6 py-2.5 max-md:gap-2.5 max-md:px-4">
               <div className="flex flex-shrink-0 items-center gap-[9px]">
                 <img src="/Main.png" alt="" className="h-[30px] w-[30px] rounded-lg object-contain" />
                 <span className="text-[17px] font-extrabold tracking-[-0.3px] text-[var(--mm)]">MoMo Admin</span>
@@ -482,7 +482,7 @@ export default function AdminPage() {
               </div>
 
               {/* Tabs ngang — desktop */}
-              <nav className="hidden flex-1 justify-center gap-0.5 md:flex">
+              <nav className="hidden flex-wrap justify-center gap-0.5 md:flex">
                 {FILTERS.map(f => (
                   <button
                     key={f.key}
@@ -523,15 +523,15 @@ export default function AdminPage() {
                 </svg>
               </div>
 
-              <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 max-md:w-full max-md:flex-col md:ml-auto">
-                {/* Hàng 1 (mobile): ô tìm kiếm + nút Tạo giao dịch */}
+              <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 max-md:w-full max-md:flex-col md:ml-auto md:w-auto">
+                {/* Hàng 1: ô tìm kiếm + nút Tạo giao dịch */}
                 <div className="flex w-full items-center gap-2 md:w-auto">
                   <div className="relative flex flex-1 items-center md:flex-none">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute left-[11px] text-[var(--admin-muted)]"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                     <input
                       type="text" placeholder="Tìm kiếm..."
                       value={search} onChange={e => setSearch(e.target.value)}
-                      className="w-full rounded-[10px] border border-[var(--border)] bg-white/70 py-[7px] pl-[34px] pr-8 font-[var(--admin-font)] text-[13px] text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.08)] md:w-[220px] md:focus:w-[260px]"
+                      className="w-full rounded-[10px] border border-[var(--border)] bg-white/70 py-[7px] pl-[34px] pr-8 font-[var(--admin-font)] text-[13px] text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.08)] md:w-[180px] md:focus:w-[230px] lg:w-[220px] lg:focus:w-[260px]"
                     />
                     {search && (
                       <button
@@ -566,7 +566,7 @@ export default function AdminPage() {
                   </button>
                 </div>
 
-                {/* Hàng 2 (mobile): Tra cứu / Scan / Đăng xuất chia đều 3 cột */}
+                {/* Hàng 2: Tra cứu / Scan / Đăng xuất */}
                 <div className="flex w-full items-center gap-2 md:w-auto">
                   {/* ── QUERY BUTTON ── */}
                   <button
@@ -579,7 +579,7 @@ export default function AdminPage() {
                       <path d="m21 21-4.35-4.35"/>
                       <path d="M11 8v3l2 2"/>
                     </svg>
-                    <span className="max-md:hidden">TRA CỨU GIAO DỊCH</span>
+                    <span className="max-md:hidden">TRA CỨU</span>
                     <span className="hidden max-md:inline">TRA CỨU</span>
                   </button>
 
@@ -592,8 +592,7 @@ export default function AdminPage() {
                       <path d="M3 9V5a2 2 0 0 1 2-2h2M21 9V5a2 2 0 0 0-2-2h-2M3 15v4a2 2 0 0 0 2 2h2M21 15v4a2 2 0 0 1-2 2h-2" />
                       <path d="M12 11v4M9 14h6" />
                     </svg>
-                    <span className="max-md:hidden">SCAN PAYMENT</span>
-                    <span className="hidden max-md:inline">SCAN</span>
+                    SCAN
                   </button>
                   <button
                     className="flex-1 whitespace-nowrap rounded-[9px] border border-[var(--border)] bg-white/70 px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-semibold text-[var(--admin-muted)] hover:border-[var(--admin-danger)] hover:bg-white hover:text-[var(--admin-danger)] max-md:px-1.5 max-md:text-[11px] md:flex-none"
@@ -609,7 +608,7 @@ export default function AdminPage() {
           </header>
 
           {/* ── TOOLBAR: lọc theo ngày + trạng thái danh sách (sticky ở desktop) ── */}
-          <div className="relative z-[150] border-b border-[var(--border)] bg-white/75 px-6 py-2.5 backdrop-blur-[12px] max-md:px-4 md:sticky md:top-[60px]">
+          <div className="relative z-[150] border-b border-[var(--border)] bg-white/75 px-6 py-2.5 backdrop-blur-[12px] max-md:px-4 md:sticky md:top-0">
             <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold text-[var(--admin-muted)]">
