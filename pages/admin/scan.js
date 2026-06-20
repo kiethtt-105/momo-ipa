@@ -332,7 +332,7 @@ export default function ScanPage() {
             <img src="/Main.png" alt="" className="w-12 h-12 rounded-xl mb-4" />
             <h1 className="text-xl font-extrabold text-gray-900 mb-1.5">Hệ thống quản lý giao dịch</h1>
             <input
-              type="password" placeholder="Mật khẩu" value={password} autoFocus
+              type="password" placeholder="Nhập mật khẩu để tiếp tục" value={password} autoFocus
               onChange={e => { setPassword(e.target.value); setPwError(false) }}
               onKeyDown={e => e.key === 'Enter' && login()}
               className={`${inputBase} ${pwError ? 'border-red-600' : ''}`}
