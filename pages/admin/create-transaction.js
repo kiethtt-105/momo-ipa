@@ -87,14 +87,13 @@ export default function CreateTransactionPage() {
           <div className="flex items-center gap-3 border-b border-[#f3f4f6] px-6 py-5">
             <img src="/Main.png" alt="" className="h-9 w-9 rounded-lg object-contain" />
             <div>
-              <div className="text-[17px] font-extrabold tracking-[-0.3px] text-[var(--mm)]">Tạo giao dịch</div>
-              <div className="text-xs text-[#6b7280]">P2P (khách quét) hoặc Scan (admin quét)</div>
+              <div className="text-[17px] font-extrabold tracking-[-0.3px] text-[var(--mm)]">CREATE TRANSACTION</div>
             </div>
           </div>
 
           <div className="px-6 py-5">
             {/* Method selector */}
-            <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Phương thức</label>
+            <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">CHOISE METHOD</label>
             <div className="mb-5 grid grid-cols-2 gap-2.5">
               <button
                 className={`flex flex-col items-start gap-1 rounded-[12px] border-[1.5px] px-4 py-3 text-left transition-all ${
@@ -130,11 +129,10 @@ export default function CreateTransactionPage() {
             </div>
 
             {/* Amount */}
-            <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Số tiền (₫)</label>
+            <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">AMOUNT</label>
             <input
               type="text"
               inputMode="numeric"
-              placeholder="VD: 50,000"
               value={formatAmount(amount)}
               onChange={e => setAmount(unformatAmount(e.target.value))}
               onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreate()}
@@ -166,13 +164,12 @@ export default function CreateTransactionPage() {
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/>
               </svg>
-              Mở giao dịch
+              CREATE TRANSACTION
             </button>
 
             {/* URL vừa gọi — để bạn copy dùng làm mẫu cho iPhone Shortcuts sau */}
             {lastUrl && (
               <div className="mt-4 rounded-[10px] border border-[var(--border)] bg-[#fafafa] p-3">
-                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">URL vừa gọi</div>
                 <div className="break-all font-mono text-[11px] text-[#374151]">{lastUrl}</div>
                 <button
                   className="mt-2 rounded-md bg-black/[0.06] px-2.5 py-1 text-[11px] font-semibold text-[#374151] transition-colors hover:bg-black/[0.1]"
