@@ -372,8 +372,24 @@ export default function ScanPage() {
               )}
 
               <div className="flex flex-col gap-3 mt-8">
+                {!isSuccess && (
+                  <button
+                    onClick={() => {
+                      setResult(null)
+                      setManualCode('')
+                      setManualErr('')
+                      setIsServerErr(false)
+                      submitting.current = false
+                      setScanning(true)
+                      setStep('scan')
+                    }}
+                    className="w-full bg-amber-500 text-white border-none rounded-xl py-[13px] px-6 text-sm font-bold cursor-pointer shadow-[0_4px_16px_rgba(245,158,11,0.25)] active:opacity-80"
+                  >
+                    🔄 Thử lại giao dịch
+                  </button>
+                )}
                 <button onClick={resetAll} className={btnPrimary}>
-                  {isSuccess ? 'Giao Dịch Mới' : ' Tạo Giao Dịch Mới'}
+                  {isSuccess ? 'Giao Dịch Mới' : 'Tạo Giao Dịch Mới'}
                 </button>
               </div>
             </div>
