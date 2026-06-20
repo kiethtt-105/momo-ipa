@@ -523,7 +523,7 @@ export default function AdminPage() {
                 </svg>
               </div>
 
-              <div className="flex flex-shrink-0 items-center gap-2 max-md:ml-auto">
+              <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 max-md:ml-auto max-md:w-full">
                 <div className="relative flex items-center">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute left-[11px] text-[var(--admin-muted)]"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                   <input

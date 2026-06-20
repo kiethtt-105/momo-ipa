@@ -284,6 +284,7 @@ export default function ScanPage() {
         orderInfo: baseOrderInfo,
       }).toString()
       window.open(`/result?${qs}`, '_blank')
+      window.focus() // Kéo focus quay lại tab scan này — không để trình duyệt tự nhảy sang tab /result mới mở
       submitting.current = false
     } catch {
       submitting.current = false
