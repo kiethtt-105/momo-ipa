@@ -74,7 +74,7 @@ export default function CreateTransactionPage() {
   return (
     <>
       <Head>
-        <title>Admin · Tạo giao dịch</title>
+        <title>Admin · CREATE TRANSACTION</title>
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />

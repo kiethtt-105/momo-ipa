@@ -116,13 +116,13 @@ export default function Home() {
         <div className="relative grid min-h-dvh w-screen place-content-center justify-items-center overflow-y-auto overflow-x-hidden bg-[#f3e9ed] px-4 py-5 font-[var(--font)]">
           <Orbs />
 
-          <div className="relative z-[2] w-full max-w-[340px] animate-[pop_0.25s_ease] rounded-3xl border border-white/80 bg-white/90 p-11 px-9 text-center shadow-[0_24px_60px_rgba(174,0,112,0.1)] backdrop-blur-[25px]">
+          <div className="relative z-[2] w-full max-w-[clamp(300px,90vw,340px)] animate-[pop_0.25s_ease] rounded-3xl border border-white/80 bg-white/90 p-11 px-9 text-center shadow-[0_24px_60px_rgba(174,0,112,0.1)] backdrop-blur-[25px]">
             <div className="mb-6">
               <img src="/Main.png" alt="MoMo" width={40} height={40} className="rounded-[10px] object-contain" />
             </div>
-            <div className="mx-auto mb-5 h-[52px] w-[52px]">
+            <div className="mx-auto mb-5 h-[clamp(44px,13vw,52px)] w-[clamp(44px,13vw,52px)]">
               <svg
-                className="h-[52px] w-[52px] animate-[rot_1s_linear_infinite] stroke-[var(--mm)]"
+                className="h-full w-full animate-[rot_1s_linear_infinite] stroke-[var(--mm)]"
                 viewBox="0 0 50 50"
               >
                 <circle cx="25" cy="25" r="20" fill="none" strokeWidth="4" strokeDasharray="90" strokeDashoffset="30" strokeLinecap="round" />
@@ -152,7 +152,7 @@ export default function Home() {
       <div className="relative grid min-h-dvh w-screen place-content-center justify-items-center overflow-y-auto overflow-x-hidden bg-[#f3e9ed] px-4 py-5 font-[var(--font)]">
         <Orbs />
 
-        <div className="relative z-[2] w-full max-w-[400px] rounded-3xl border border-white/70 bg-[var(--surface)] p-8 px-7 shadow-[0_25px_50px_rgba(174,0,112,0.05)] backdrop-blur-[25px]">
+        <div className="relative z-[2] w-full max-w-[clamp(340px,92vw,400px)] rounded-3xl border border-white/70 bg-[var(--surface)] p-8 px-7 shadow-[0_25px_50px_rgba(174,0,112,0.05)] backdrop-blur-[25px]">
           {/* Logo */}
           <div className="mb-7 flex items-center gap-3.5 border-b border-dashed border-[var(--border)] pb-5">
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-white">
@@ -181,7 +181,7 @@ export default function Home() {
                 placeholder="0"
                 autoFocus
               />
-              <span className="flex-shrink-0 text-[22px] font-extrabold text-[#7a6070]">₫</span>
+              <span className="flex-shrink-0 text-[clamp(18px,5vw,22px)] font-extrabold text-[#7a6070]">₫</span>
             </div>
 
             {/* Range bar visual */}
@@ -249,7 +249,7 @@ export default function Home() {
         </div>
 
         {/* Security footer */}
-        <div className="relative z-[2] mt-7 w-full max-w-[400px]">
+        <div className="relative z-[2] mt-7 w-full max-w-[clamp(340px,92vw,400px)]">
           <div className="mb-4 flex items-center justify-center text-[10px] font-extrabold uppercase tracking-[1.5px] text-[#8c7381] before:mr-2.5 before:w-9 before:border-b before:border-dashed before:border-[rgba(174,0,112,0.25)] before:content-[''] after:ml-2.5 after:w-9 after:border-b after:border-dashed after:border-[rgba(174,0,112,0.25)] after:content-['']">
             Bảo mật cổng thanh toán
           </div>

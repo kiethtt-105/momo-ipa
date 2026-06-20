@@ -146,7 +146,7 @@ useEffect(() => {
           style={{ animation: 'om1 6.5s infinite alternate ease-in-out' }}
         />
 
-        <div className="relative z-[2] grid w-full max-w-[400px] grid-cols-1 overflow-hidden rounded-[20px] border border-white/70 bg-[var(--surface)] shadow-[0_25px_50px_rgba(174,0,112,0.04),0_1px_2px_rgba(0,0,0,0.01)] backdrop-blur-[25px] will-change-transform md:max-w-[860px] md:grid-cols-[1.1fr_0.9fr] md:rounded-3xl">
+        <div className="relative z-[2] grid w-full max-w-[clamp(340px,92vw,860px)] grid-cols-1 overflow-hidden rounded-[20px] border border-white/70 bg-[var(--surface)] shadow-[0_25px_50px_rgba(174,0,112,0.04),0_1px_2px_rgba(0,0,0,0.01)] backdrop-blur-[25px] will-change-transform md:grid-cols-[1.1fr_0.9fr] md:rounded-3xl">
           {/* Status section */}
           <div className="relative flex flex-col items-center justify-center border-b border-dashed border-[rgba(174,0,112,0.15)] bg-white/20 px-6 pb-9 pt-11 text-center md:border-b-0 md:border-r md:border-dashed md:border-[rgba(174,0,112,0.12)] md:px-10 md:py-12">
             <div className="absolute left-5 top-4 flex items-center gap-2.5 md:left-8 md:top-6">
@@ -156,12 +156,12 @@ useEffect(() => {
 
             {m.spin ? (
               <div
-                className="mb-6 h-[70px] w-[70px] rounded-full border-[5px] border-[rgba(174,0,112,0.1)] border-t-[var(--mm)]"
+                className="mb-6 h-[clamp(56px,14vw,70px)] w-[clamp(56px,14vw,70px)] rounded-full border-[5px] border-[rgba(174,0,112,0.1)] border-t-[var(--mm)]"
                 style={{ animation: 'rot 0.8s linear infinite' }}
               />
             ) : (
               <div
-                className="mb-6 mt-5 flex h-[85px] w-[85px] items-center justify-center rounded-full text-4xl font-black md:h-[100px] md:w-[100px] md:text-[42px]"
+                className="mb-6 mt-5 flex h-[clamp(70px,18vw,100px)] w-[clamp(70px,18vw,100px)] items-center justify-center rounded-full text-[clamp(28px,7vw,42px)] font-black"
                 style={{ backgroundColor: m.bg, color: m.accent, animation: 'scaleup 0.4s cubic-bezier(.34,1.56,.64,1) both' }}
               >
                 {m.icon}
@@ -169,12 +169,12 @@ useEffect(() => {
             )}
 
             <h1
-              className="mb-3 text-[22px] font-extrabold leading-[1.3] md:text-[26px]"
+              className="mb-3 text-[clamp(20px,5vw,26px)] font-extrabold leading-[1.3]"
               style={{ color: m.spin ? 'var(--text)' : m.accent }}
             >
               {m.title}
             </h1>
-            <p className="max-w-[300px] text-sm leading-relaxed text-[var(--muted)]">
+            <p className="max-w-[clamp(240px,80vw,300px)] text-sm leading-relaxed text-[var(--muted)]">
               {m.sub || (status === 'failed' ? info?.message || 'Giao dịch không thành công' : '')}
             </p>
           </div>
