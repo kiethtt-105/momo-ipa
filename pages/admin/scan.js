@@ -440,17 +440,7 @@ export default function ScanPage() {
 
         {/* Header */}
         <div className="sticky top-0 z-[100] bg-white/92 backdrop-blur-xl border-b border-momo/10 px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={() => {
-              // Nếu đang ở màn hình scan, chặn lại để hiện popup hủy giao dịch
-              if (step === 'scan') {
-                setShowCancelModal(true)
-              } else {
-                router.push('/admin')
-              }
-            }}
-            className="w-[34px] h-[34px] rounded-lg border border-momo/15 bg-white cursor-pointer text-lg text-momo flex items-center justify-center active:opacity-80"
-          >←</button>
+
           <div className="flex items-center gap-2">
             <img src="/Main.png" alt="" className="w-[26px] h-[26px] rounded-md" />
             <span className="font-extrabold text-momo text-base">MoMo POS SCAN</span>
