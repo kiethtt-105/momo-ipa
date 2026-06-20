@@ -19,7 +19,7 @@ function buildTxUrl(method, amount, orderInfo) {
   }
 
   // Scan — admin tự quét thanh toán nhanh
-  const info = (orderInfo || '').trim() || `iPOS-TuanKiet ${Date.now()}`
+  const info = (orderInfo || '').trim() || `iPOS${Date.now()}`
   return `${TX_BASE_URL}/api/admin/scan-quick?amount=${amt}&orderInfo=${encodeURIComponent(info)}`
 }
 
@@ -74,7 +74,7 @@ export default function CreateTransactionPage() {
   return (
     <>
       <Head>
-        <title>Admin · CREATE TRANSACTION</title>
+        <title>Tạo Giao Dịch</title>
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -87,13 +87,13 @@ export default function CreateTransactionPage() {
           <div className="flex items-center gap-3 border-b border-[#f3f4f6] px-6 py-5">
             <img src="/Main.png" alt="" className="h-9 w-9 rounded-lg object-contain" />
             <div>
-              <div className="text-[17px] font-extrabold tracking-[-0.3px] text-[var(--mm)]">CREATE TRANSACTION</div>
+              <div className="text-[17px] font-extrabold tracking-[-0.3px] text-[var(--mm)]">TẠO GIAO DỊCH</div>
             </div>
           </div>
 
           <div className="px-6 py-5">
             {/* Method selector */}
-            <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">CHOISE METHOD</label>
+            <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">LỰA CHỌN PHƯƠNG THỨC</label>
             <div className="mb-5 grid grid-cols-2 gap-2.5">
               <button
                 className={`flex flex-col items-start gap-1 rounded-[12px] border-[1.5px] px-4 py-3 text-left transition-all ${

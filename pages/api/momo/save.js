@@ -63,7 +63,7 @@ export default async function handler(req, res) {
     paidAt:       isPaid ? now : (existing?.paidAt || null),
     createdAt:    existing?.createdAt || now,
     status:       isPaid ? 'PAID' : 'FAILED',
-    source:       'redirect-verified', // đánh dấu rõ: đã verify qua MoMo query API
+    source:       'redirect-verified', 
   }
 
   await redis.hset('momo:orders', { [orderId]: JSON.stringify(record) })
