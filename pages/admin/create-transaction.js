@@ -106,9 +106,8 @@ export default function CreateTransactionPage() {
                     <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
                     <rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM21 17v4h-4M14 21h3"/>
                   </svg>
-                  P2P
+                  Giao dịch P2P
                 </span>
-                <span className="text-[11px] text-[var(--admin-muted)]">Scan qr momo app hoặc ngân hàng hỗ trợ</span>
               </button>
 
               <button
@@ -122,9 +121,8 @@ export default function CreateTransactionPage() {
                     <path d="M3 9V5a2 2 0 0 1 2-2h2M21 9V5a2 2 0 0 0-2-2h-2M3 15v4a2 2 0 0 0 2 2h2M21 15v4a2 2 0 0 1-2 2h-2"/>
                     <path d="M12 11v4M9 14h6"/>
                   </svg>
-                  Scan
+                  Scan QR 
                 </span>
-                <span className="text-[11px] text-[var(--admin-muted)]">Scan QR Transaction - MOMO</span>
               </button>
             </div>
 
