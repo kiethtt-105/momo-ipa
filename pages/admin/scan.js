@@ -256,7 +256,21 @@ export default function ScanPage() {
         break // Không phải lỗi 41 → thoát
       }
 
-      setResult({ success: data.resultCode === 0, data, amount: amt, orderId })
+      // Thay vì tự hiện màn kết quả riêng (setResult), điều hướng về /result
+      // dùng chung với flow P2P — để 2 luồng có cùng 1 giao diện kết quả.
+      // /result sẽ tự gọi /api/momo/save để ghi nhận lại (không bắt buộc với
+      // luồng Scan vì /api/momo/pos đã lưu kết quả ngay rồi, nhưng gọi thêm
+      // không ảnh hưởng vì giao diện đọc trực tiếp từ query string).
+      const qs = new URLSearchParams({
+        orderId,
+        resultCode: data.resultCode,
+        transId: data.transId || '',
+        amount: amt,
+        payType: data.payType || 'qr',
+        message: data.message || '',
+        orderInfo: baseOrderInfo,
+      }).toString()
+      router.push(`/result?${qs}`)
     } catch {
       submitting.current = false
       setIsServerErr(true)
