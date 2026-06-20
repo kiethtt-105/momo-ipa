@@ -19,7 +19,7 @@ function buildTxUrl(method, amount, orderInfo) {
   }
 
   // Scan — admin tự quét thanh toán nhanh
-  const info = (orderInfo || '').trim() || `iPOS${Date.now()}`
+  const info = (orderInfo || '').trim() || genOrderId()
   return `${TX_BASE_URL}/api/admin/scan-quick?amount=${amt}&orderInfo=${encodeURIComponent(info)}`
 }
 
@@ -33,11 +33,16 @@ function unformatAmount(formatted) {
   return (formatted || '').replace(/\D/g, '')
 }
 
+// ─── SINH MÃ ĐƠN MẶC ĐỊNH — đồng bộ định dạng iPOS+... trên toàn hệ thống ──
+function genOrderId() {
+  return `iPOS${Date.now()}`
+}
+
 // ─── MAIN COMPONENT ────────────────────────────────────────
 export default function CreateTransactionPage() {
   const [method,    setMethod]    = useState('p2p') // 'p2p' | 'scan'
   const [amount,     setAmount]     = useState('')
-  const [orderInfo,  setOrderInfo]  = useState('')
+  const [orderInfo,  setOrderInfo]  = useState(() => genOrderId())
   const [lastUrl,    setLastUrl]    = useState('')
   const [copied,     setCopied]     = useState(false)
   const amountInputRef = useRef(null)
@@ -62,6 +67,7 @@ export default function CreateTransactionPage() {
     setLastUrl(url)
     setCopied(false)
     window.open(url, '_blank')
+    setOrderInfo(genOrderId()) // sinh mã mới cho lần tạo tiếp theo
   }
 
   const copyUrl = () => {

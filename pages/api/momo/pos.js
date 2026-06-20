@@ -69,16 +69,16 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Thiếu thông tin bắt buộc: orderId, amount, paymentCode' })
   }
 
-  // Chuẩn hóa orderId → luôn có tiền tố POS
+  // Chuẩn hóa orderId → luôn có tiền tố iPOS
   let orderId = String(rawOrderId).trim()
-  if (!orderId.startsWith('POS')) {
-    orderId = `POS${orderId}`
+  if (!orderId.startsWith('iPOS')) {
+    orderId = `iPOS${orderId}`
   }
 
-  // Xử lý orderInfo - dùng luôn orderId đầy đủ (POS...)
+  // Xử lý orderInfo - dùng luôn orderId đầy đủ (iPOS...)
   let orderInfo = String(rawOrderInfo || '').trim()
   if (!orderInfo) {
-    orderInfo = orderId  // Hiển thị POS178... trên MoMo
+    orderInfo = orderId  // Hiển thị iPOS178... trên MoMo
   }
 
   const paymentCode = String(rawPaymentCode).trim()
