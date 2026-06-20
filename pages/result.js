@@ -41,6 +41,8 @@ async function fetchFullInfo(orderId) {
     return null
   }
 }
+
+export default function ResultPage() {
   const router = useRouter()
   const [status, setStatus] = useState('loading')
   const [info, setInfo] = useState(null)
