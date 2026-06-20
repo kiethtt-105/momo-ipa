@@ -211,20 +211,47 @@ export default function ScanPage() {
     setManualCode(code)
 
     const amt = parseInt(amount)
-    const orderId = currentOrderId || `POS${Date.now()}`
-    const finalOrderInfo = orderInfo || `iPOS${orderId.replace('POS', '')}`
+    let orderId = currentOrderId || `POS${Date.now()}`
+    const baseOrderInfo = orderInfo || `iPOS${orderId.replace(/^POS/, '').replace(/_\d+$/, '')}`
+
+    // Tự động thử lại với orderId mới nếu bị trùng (resultCode 41)
+    const MAX_RETRY = 5
+    let attempt = 0
+    let data = null
 
     try {
-      const res = await fetch('/api/momo/pos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, amount: amt, orderInfo: finalOrderInfo, paymentCode: code }),
-      })
-      const data = await res.json()
+      while (attempt < MAX_RETRY) {
+        const res = await fetch('/api/momo/pos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, amount: amt, orderInfo: baseOrderInfo, paymentCode: code }),
+        })
+        data = await res.json()
+
+        if (data.resultCode === 41) {
+          // Trùng orderId → bump suffix _2, _3, ...
+          const match = orderId.match(/^(.+)_(\d+)$/)
+          orderId = match ? `${match[1]}_${parseInt(match[2]) + 1}` : `${orderId}_2`
+          setCurrentOrderId(orderId)
+          console.log(`[SCAN] Trùng orderId, thử lại với: ${orderId}`)
+          attempt++
+          try {
+            await fetch('/api/momo/save-pending', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ orderId, amount: amt, orderInfo: baseOrderInfo }),
+            })
+          } catch (e) { console.error('Lỗi lưu đơn nháp khi bump:', e) }
+          continue
+        }
+
+        break // Không phải lỗi 41 → thoát
+      }
+
       setResult({ success: data.resultCode === 0, data, amount: amt, orderId })
     } catch {
       submitting.current = false
-      setIsServerErr(true) // <--- Đổi state thành true để kích hoạt hiện nút bấm
+      setIsServerErr(true)
       setManualErr('Mất kết nối hoặc cổng thanh toán phản hồi chậm!')
     }
   }
