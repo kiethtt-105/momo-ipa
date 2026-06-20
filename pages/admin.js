@@ -105,7 +105,7 @@ export default function AdminPage() {
   const [confirmLoading, setConfirmLoading] = useState(false)
   const [confirmResult,  setConfirmResult]  = useState(null)
   const [confirmError,   setConfirmError]   = useState(null)
-  
+
   // Refs to hold the latest state values for use in async callbacks
   const ordersRef   = useRef([])
   const fetchingRef = useRef(false)
@@ -549,6 +549,18 @@ export default function AdminPage() {
                     🗑 Xóa ({selected.size})
                   </button>
                 )}
+
+                {/* ── TẠO GIAO DỊCH BUTTON ── */}
+                <button
+                  className="inline-flex items-center gap-1.5 rounded-[9px] bg-[var(--mm)] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-white shadow-[0_4px_14px_rgba(174,0,112,0.25)] transition-all hover:-translate-y-px hover:bg-[#91005d]"
+                  onClick={() => window.open('/admin/create-transaction', '_blank')}
+                  title="Mở trang Tạo giao dịch ở tab mới"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                  TẠO GIAO DỊCH
+                </button>
 
                 {/* ── QUERY BUTTON ── */}
                 <button
