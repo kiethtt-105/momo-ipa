@@ -526,7 +526,6 @@ export default function AdminPage() {
                   </svg>
                   Scan QR
                 </button>
-                
                 <button
                   className="rounded-[9px] border border-[var(--border)] bg-white/70 px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-semibold text-[var(--admin-muted)] hover:border-[var(--admin-danger)] hover:bg-white hover:text-[var(--admin-danger)]"
                   onClick={() => {
