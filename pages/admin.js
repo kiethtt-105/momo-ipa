@@ -583,17 +583,7 @@ export default function AdminPage() {
                     <span className="hidden max-md:inline">TRA CỨU</span>
                   </button>
 
-                  <button
-                    className="flex-1 whitespace-nowrap rounded-[9px] border border-[rgba(174,0,112,0.3)] bg-[#fff0f7] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-[var(--mm)] transition-all hover:bg-[var(--mm)] hover:text-white max-md:px-1.5 max-md:text-[11px] md:flex-none"
-                    onClick={() => window.open('/admin/scan', '_blank')}
-                    title="Mở Scan QR ở tab mới"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline-block align-[-2px]">
-                      <path d="M3 9V5a2 2 0 0 1 2-2h2M21 9V5a2 2 0 0 0-2-2h-2M3 15v4a2 2 0 0 0 2 2h2M21 15v4a2 2 0 0 1-2 2h-2" />
-                      <path d="M12 11v4M9 14h6" />
-                    </svg>
-                    SCAN
-                  </button>
+
                   <button
                     className="flex-1 whitespace-nowrap rounded-[9px] border border-[var(--border)] bg-white/70 px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-semibold text-[var(--admin-muted)] hover:border-[var(--admin-danger)] hover:bg-white hover:text-[var(--admin-danger)] max-md:px-1.5 max-md:text-[11px] md:flex-none"
                     onClick={() => {
