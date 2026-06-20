@@ -350,7 +350,7 @@ export default function AdminPage() {
 
   // ── ĐANG KIỂM TRA SESSION ─────────────────────────────────
   if (checkingSession) return (
-    <div className="relative min-h-screen w-screen overflow-x-hidden bg-[#f5edf2] font-[var(--admin-font)] flex items-center justify-center">
+    <div className="relative min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f5edf2] font-[var(--admin-font)] flex items-center justify-center">
       <Orbs />
       <div className="relative z-10 h-2 w-2 rounded-full bg-[#f59e0b]" style={{ animation: 'pulse-dot 0.8s infinite' }} />
     </div>
@@ -364,7 +364,7 @@ export default function AdminPage() {
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Admin.png" />
       </Head>
-      <div className="relative min-h-screen w-screen overflow-x-hidden bg-[#f5edf2] font-[var(--admin-font)]">
+      <div className="relative min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f5edf2] font-[var(--admin-font)]">
         <Orbs />
         <div className="relative z-10 flex min-h-screen items-center justify-center p-5">
           <div className="w-full max-w-[400px] rounded-3xl bg-white/95 px-9 py-10 text-center shadow-[0_24px_60px_rgba(174,0,112,0.1),0_0_0_1px_rgba(255,255,255,0.8)] backdrop-blur-[30px]">
@@ -427,7 +427,7 @@ export default function AdminPage() {
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
-      <div className="relative min-h-screen w-full overflow-x-clip bg-[#f5edf2] font-[var(--admin-font)] text-[var(--admin-text)]">
+      <div className="relative min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f5edf2] font-[var(--admin-font)] text-[var(--admin-text)]">
         <Orbs />
 
         {/* ── DETAIL MODAL ── */}
@@ -844,24 +844,24 @@ export default function AdminPage() {
 
 function Orbs() {
   return (
-    <>
+    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
       <div
-        className="pointer-events-none absolute left-[-5%] top-[-5%] z-0 h-[45vw] w-[45vw] rounded-full bg-[#ff9cb7] opacity-55 blur-[70px]"
+        className="absolute left-[-5%] top-[-5%] h-[45vw] max-h-[420px] w-[45vw] max-w-[420px] rounded-full bg-[#ff9cb7] opacity-55 blur-[70px]"
         style={{ animation: 'om1 7s infinite alternate ease-in-out' }}
       />
       <div
-        className="pointer-events-none absolute bottom-[-5%] right-[-5%] z-0 h-[55vw] w-[55vw] rounded-full bg-[#b0bec5] opacity-55 blur-[70px]"
+        className="absolute bottom-[-5%] right-[-5%] h-[55vw] max-h-[480px] w-[55vw] max-w-[480px] rounded-full bg-[#b0bec5] opacity-55 blur-[70px]"
         style={{ animation: 'om2 9s infinite alternate ease-in-out' }}
       />
       <div
-        className="pointer-events-none absolute right-[-5%] top-[20%] z-0 h-[40vw] w-[40vw] rounded-full bg-[#dfb2ea] opacity-55 blur-[70px]"
+        className="absolute right-[-5%] top-[20%] h-[40vw] max-h-[360px] w-[40vw] max-w-[360px] rounded-full bg-[#dfb2ea] opacity-55 blur-[70px]"
         style={{ animation: 'om3 8s infinite alternate ease-in-out' }}
       />
       <div
-        className="pointer-events-none absolute bottom-[-5%] left-[5%] z-0 h-[35vw] w-[35vw] rounded-full bg-[#80cbc4] opacity-55 blur-[70px]"
+        className="absolute bottom-[-5%] left-[5%] h-[35vw] max-h-[320px] w-[35vw] max-w-[320px] rounded-full bg-[#80cbc4] opacity-55 blur-[70px]"
         style={{ animation: 'om1 8.5s infinite alternate ease-in-out' }}
       />
-    </>
+    </div>
   )
 }
 
