@@ -526,20 +526,7 @@ export default function AdminPage() {
                   </svg>
                   Scan QR
                 </button>
-                <button
-                  className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px] border border-[var(--border)] bg-white/70 text-[var(--admin-muted)] transition-all hover:border-[var(--mm)] hover:bg-[var(--mm-light)] hover:text-[var(--mm)] disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => fetchOrders({ force: true })}
-                  disabled={fetching}
-                >
-                  <svg
-                    width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-                    style={fetching ? { animation: 'rot 0.8s linear infinite' } : undefined}
-                  >
-                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                    <path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                    <path d="M8 16H3v5"/>
-                  </svg>
-                </button>
+                
                 <button
                   className="rounded-[9px] border border-[var(--border)] bg-white/70 px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-semibold text-[var(--admin-muted)] hover:border-[var(--admin-danger)] hover:bg-white hover:text-[var(--admin-danger)]"
                   onClick={() => {
