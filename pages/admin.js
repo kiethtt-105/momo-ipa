@@ -643,16 +643,16 @@ export default function AdminPage() {
           </div>
 
           {/* ── MAIN ── */}
-          <main className="mx-auto max-w-[1600px] p-6">
+          <main className="mx-auto max-w-[1600px] p-6 max-md:p-3.5">
             {/* STAT CARDS */}
-            <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="mb-5 grid grid-cols-2 gap-4 max-md:gap-3 md:grid-cols-4">
               <StatCard label="Doanh thu"   value={`${fmt(totalRevenue)} ₫`} color="var(--mm)"  sub={`${counts.PAID} giao dịch thành công`} />
               <StatCard label="Thành công"  value={`${counts.PAID} GD`}      color="#16a34a"    sub={`${counts.PAID ? Math.round(counts.PAID / counts.ALL * 100) : 0}% tỉ lệ thành công`} />
               <StatCard label="Thất bại"    value={`${counts.FAILED} GD`}    color="#dc2626"    sub={`${counts.EXPIRED} đơn hết hạn`} />
               <StatCard label="Tổng đơn"    value={`${counts.ALL} GD`}       color="#374151"    sub={`${counts.PENDING} đang chờ xử lý`} />
             </div>
 
-            {/* TABLE */}
+            {/* TABLE (≥1024px) / CARD LIST (<1024px) */}
             <div className="overflow-hidden rounded-2xl border border-white/70 bg-[var(--admin-surface)] shadow-[0_4px_30px_rgba(0,0,0,0.04)] backdrop-blur-[16px]">
               {filtered.length === 0 ? (
                 <div className="px-6 py-[72px] text-center">
@@ -660,110 +660,142 @@ export default function AdminPage() {
                   <div className="text-[15px] font-semibold text-[var(--admin-muted)]">Không tìm thấy giao dịch nào</div>
                 </div>
               ) : (
-                <div className="max-h-[65vh] overflow-auto">
-                  <table className="w-full min-w-[1100px] border-collapse text-[13.5px]">
-                    <thead className="sticky top-0 z-10">
-                      <tr className="bg-[#f5edf2]">
-                        <th className="w-11 whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">
-                          <input
-                            type="checkbox"
-                            checked={selected.size > 0 && selected.size === filtered.length}
-                            ref={el => el && (el.indeterminate = selected.size > 0 && selected.size < filtered.length)}
-                            onChange={toggleAll}
-                          />
-                        </th>
-                        <SortableTh label="Trạng thái"   sortKey="status"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                        <SortableTh label="Số tiền"      sortKey="amount"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                        <SortableTh label="Nội dung"     sortKey="orderInfo"   currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                        <SortableTh label="Mã đơn"       sortKey="orderId"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                        <SortableTh label="Mã GD MoMo"   sortKey="transId"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                        <SortableTh label="Hình thức"    sortKey="payType"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                        <SortableTh label="Result"       sortKey="resultCode"  currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                        <SortableTh label="Tạo lúc"      sortKey="createdAt"   currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                        <SortableTh label="Hoàn tất"     sortKey="paidAt"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                        <th className="w-20 whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map(o => {
-                        const sm  = STATUS_META[o.status] || STATUS_META.PENDING
-                        const sel = selected.has(o.orderId)
-                        return (
-                          <tr
-                            key={o.orderId}
-                            className={`cursor-pointer border-b border-[rgba(174,0,112,0.03)] transition-colors last:border-b-0 hover:bg-white/60 ${sel ? 'bg-[rgba(174,0,112,0.05)]' : ''}`}
-                            onClick={() => setDetail(o.orderId)}
-                          >
-                            <td className="px-4 py-3.5 text-center align-middle" onClick={e => e.stopPropagation()}>
-                              <input type="checkbox" checked={sel} onChange={() => toggleOne(o.orderId)} />
-                            </td>
-                            <td className="px-4 py-3.5 align-middle">
-                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[20px] px-[11px] py-[5px] text-xs font-bold" style={{ background: sm.bg, color: sm.color }}>
-                                <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: sm.dot }} />
-                                {sm.label}
-                              </span>
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3.5 align-middle text-sm font-extrabold text-[var(--mm)]">{fmt(o.amount)} ₫</td>
-                            <td className="max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle text-[#374151]" title={o.orderInfo}>{o.orderInfo || '—'}</td>
-                            <td className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle font-mono text-xs text-[#4b5563]">{o.orderId}</td>
-                            <td className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle font-mono text-xs text-[#4b5563]">{o.transId || '—'}</td>
-                            <td className="px-4 py-3.5 align-middle">
-                              {o.payType
-                                ? <span className="rounded-md bg-black/[0.06] px-[9px] py-[3px] text-xs font-semibold">{o.payType}</span>
-                                : <span className="text-[#9ca3af]">—</span>}
-                            </td>
-                            <td className="px-4 py-3.5 align-middle">
-                              {o.resultCode !== undefined
-                                ? <span className="font-mono text-[13px] font-bold" style={{ color: o.resultCode === 0 ? '#16a34a' : '#dc2626' }}>
-                                    {o.resultCode === 0 ? '✓ 0' : `✗ ${o.resultCode}`}
-                                  </span>
-                                : <span className="text-[#9ca3af]">—</span>}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3.5 align-middle text-xs text-[var(--admin-muted)]">{fmtDate(o.createdAt)}</td>
-                            <td className="whitespace-nowrap px-4 py-3.5 align-middle text-xs text-[var(--admin-muted)]">{o.paidAt ? fmtDate(o.paidAt) : <span className="text-[#9ca3af]">—</span>}</td>
-                            <td className="px-4 py-3.5 text-center align-middle" onClick={e => e.stopPropagation()}>
-                              <div className="flex justify-center gap-1">
-                                {/* Tra cứu MoMo */}
-                                <button
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-[#6366f1] transition-all hover:bg-[#eef2ff] hover:text-[#4f46e5]"
-                                  onClick={() => openQueryForOrder(o.orderId)}
-                                  title="Tra cứu MoMo API"
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/>
-                                  </svg>
-                                </button>
-                                {/* Xóa */}
-                                <button
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-[#9ca3af] transition-all hover:bg-[#fee2e2] hover:text-[var(--admin-danger)]"
-                                  onClick={() => doDelete([o.orderId])}
-                                  title="Xóa"
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
-                                    <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                                  </svg>
-                                </button>
-                                {/* Confirm — chỉ hiện khi resultCode 9000 */}
-                                {o.resultCode === 9000 && (
+                <>
+                  {/* ── Desktop table — chỉ hiện ở màn hình rộng (≥1024px), nơi 10 cột vừa khít ── */}
+                  <div className="hidden max-h-[65vh] overflow-auto lg:block">
+                    <table className="w-full min-w-[1100px] border-collapse text-[13.5px]">
+                      <thead className="sticky top-0 z-10">
+                        <tr className="bg-[#f5edf2]">
+                          <th className="w-11 whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">
+                            <input
+                              type="checkbox"
+                              checked={selected.size > 0 && selected.size === filtered.length}
+                              ref={el => el && (el.indeterminate = selected.size > 0 && selected.size < filtered.length)}
+                              onChange={toggleAll}
+                            />
+                          </th>
+                          <SortableTh label="Trạng thái"   sortKey="status"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Số tiền"      sortKey="amount"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Nội dung"     sortKey="orderInfo"   currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Mã đơn"       sortKey="orderId"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Mã GD MoMo"   sortKey="transId"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Hình thức"    sortKey="payType"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Result"       sortKey="resultCode"  currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Tạo lúc"      sortKey="createdAt"   currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Hoàn tất"     sortKey="paidAt"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <th className="w-20 whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map(o => {
+                          const sm  = STATUS_META[o.status] || STATUS_META.PENDING
+                          const sel = selected.has(o.orderId)
+                          return (
+                            <tr
+                              key={o.orderId}
+                              className={`cursor-pointer border-b border-[rgba(174,0,112,0.03)] transition-colors last:border-b-0 hover:bg-white/60 ${sel ? 'bg-[rgba(174,0,112,0.05)]' : ''}`}
+                              onClick={() => setDetail(o.orderId)}
+                            >
+                              <td className="px-4 py-3.5 text-center align-middle" onClick={e => e.stopPropagation()}>
+                                <input type="checkbox" checked={sel} onChange={() => toggleOne(o.orderId)} />
+                              </td>
+                              <td className="px-4 py-3.5 align-middle">
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[20px] px-[11px] py-[5px] text-xs font-bold" style={{ background: sm.bg, color: sm.color }}>
+                                  <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: sm.dot }} />
+                                  {sm.label}
+                                </span>
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3.5 align-middle text-sm font-extrabold text-[var(--mm)]">{fmt(o.amount)} ₫</td>
+                              <td className="max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle text-[#374151]" title={o.orderInfo}>{o.orderInfo || '—'}</td>
+                              <td className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle font-mono text-xs text-[#4b5563]">{o.orderId}</td>
+                              <td className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle font-mono text-xs text-[#4b5563]">{o.transId || '—'}</td>
+                              <td className="px-4 py-3.5 align-middle">
+                                {o.payType
+                                  ? <span className="rounded-md bg-black/[0.06] px-[9px] py-[3px] text-xs font-semibold">{o.payType}</span>
+                                  : <span className="text-[#9ca3af]">—</span>}
+                              </td>
+                              <td className="px-4 py-3.5 align-middle">
+                                {o.resultCode !== undefined
+                                  ? <span className="font-mono text-[13px] font-bold" style={{ color: o.resultCode === 0 ? '#16a34a' : '#dc2626' }}>
+                                      {o.resultCode === 0 ? '✓ 0' : `✗ ${o.resultCode}`}
+                                    </span>
+                                  : <span className="text-[#9ca3af]">—</span>}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3.5 align-middle text-xs text-[var(--admin-muted)]">{fmtDate(o.createdAt)}</td>
+                              <td className="whitespace-nowrap px-4 py-3.5 align-middle text-xs text-[var(--admin-muted)]">{o.paidAt ? fmtDate(o.paidAt) : <span className="text-[#9ca3af]">—</span>}</td>
+                              <td className="px-4 py-3.5 text-center align-middle" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-center gap-1">
+                                  {/* Tra cứu MoMo */}
                                   <button
-                                    className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] border border-[rgba(22,163,74,0.3)] bg-[#f0fdf4] text-[#16a34a] transition-all hover:bg-[#16a34a] hover:text-white"
-                                    onClick={() => openConfirmForOrder(o.orderId, o.amount)}
-                                    title="Xác nhận / Huỷ giao dịch (9000)"
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-[#6366f1] transition-all hover:bg-[#eef2ff] hover:text-[#4f46e5]"
+                                    onClick={() => openQueryForOrder(o.orderId)}
+                                    title="Tra cứu MoMo API"
                                   >
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                      <polyline points="20 6 9 17 4 12"/>
+                                      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/>
                                     </svg>
                                   </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                                  {/* Xóa */}
+                                  <button
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-[#9ca3af] transition-all hover:bg-[#fee2e2] hover:text-[var(--admin-danger)]"
+                                    onClick={() => doDelete([o.orderId])}
+                                    title="Xóa"
+                                  >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                                      <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                                    </svg>
+                                  </button>
+                                  {/* Confirm — chỉ hiện khi resultCode 9000 */}
+                                  {o.resultCode === 9000 && (
+                                    <button
+                                      className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] border border-[rgba(22,163,74,0.3)] bg-[#f0fdf4] text-[#16a34a] transition-all hover:bg-[#16a34a] hover:text-white"
+                                      onClick={() => openConfirmForOrder(o.orderId, o.amount)}
+                                      title="Xác nhận / Huỷ giao dịch (9000)"
+                                    >
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <polyline points="20 6 9 17 4 12"/>
+                                      </svg>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* ── Card list — hiện ở điện thoại & tablet (<1024px), thay cho bảng cuộn ngang ── */}
+                  <div className="lg:hidden">
+                    <div className="flex items-center gap-2.5 border-b border-[var(--border)] bg-[#f5edf2] px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={selected.size > 0 && selected.size === filtered.length}
+                        ref={el => el && (el.indeterminate = selected.size > 0 && selected.size < filtered.length)}
+                        onChange={toggleAll}
+                      />
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">
+                        Chọn tất cả · {filtered.length} giao dịch
+                      </span>
+                    </div>
+                    <div className="max-h-[70vh] overflow-y-auto">
+                      {filtered.map(o => (
+                        <OrderCard
+                          key={o.orderId}
+                          o={o}
+                          selected={selected.has(o.orderId)}
+                          onToggle={() => toggleOne(o.orderId)}
+                          onOpenDetail={() => setDetail(o.orderId)}
+                          onQuery={() => openQueryForOrder(o.orderId)}
+                          onDelete={() => doDelete([o.orderId])}
+                          onConfirm={() => openConfirmForOrder(o.orderId, o.amount)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </main>
@@ -800,10 +832,104 @@ function Orbs() {
 
 function StatCard({ label, value, color, sub }) {
   return (
-    <div className="rounded-2xl border border-white/70 bg-[var(--admin-surface)] px-[22px] py-5 shadow-[0_2px_20px_rgba(174,0,112,0.04)] backdrop-blur-[12px] transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(174,0,112,0.08)]">
-      <div className="text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">{label}</div>
-      <div className="mt-1.5 text-[26px] font-extrabold tracking-[-0.5px]" style={{ color }}>{value}</div>
-      {sub && <div className="mt-[5px] text-xs text-[var(--admin-muted)]">{sub}</div>}
+    <div className="rounded-2xl border border-white/70 bg-[var(--admin-surface)] px-[22px] py-5 shadow-[0_2px_20px_rgba(174,0,112,0.04)] backdrop-blur-[12px] transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(174,0,112,0.08)] max-md:px-4 max-md:py-4">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)] max-md:text-[10px]">{label}</div>
+      <div className="mt-1.5 text-[26px] font-extrabold tracking-[-0.5px] max-md:text-[20px]" style={{ color }}>{value}</div>
+      {sub && <div className="mt-[5px] text-xs text-[var(--admin-muted)] max-md:truncate">{sub}</div>}
+    </div>
+  )
+}
+
+// ─── THẺ GIAO DỊCH — dùng cho danh sách dạng card trên điện thoại/tablet (<1024px) ──
+function OrderCard({ o, selected, onToggle, onOpenDetail, onQuery, onDelete, onConfirm }) {
+  const sm = STATUS_META[o.status] || STATUS_META.PENDING
+  return (
+    <div
+      className={`cursor-pointer border-b border-[rgba(174,0,112,0.06)] px-4 py-3.5 transition-colors active:bg-white/60 last:border-b-0 ${selected ? 'bg-[rgba(174,0,112,0.05)]' : ''}`}
+      onClick={onOpenDetail}
+    >
+      <div className="flex items-start gap-2.5">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggle}
+          onClick={e => e.stopPropagation()}
+          className="mt-[3px] flex-shrink-0"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[20px] px-[11px] py-[5px] text-xs font-bold" style={{ background: sm.bg, color: sm.color }}>
+              <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: sm.dot }} />
+              {sm.label}
+            </span>
+            <span className="flex-shrink-0 whitespace-nowrap text-[15px] font-extrabold text-[var(--mm)]">{fmt(o.amount)} ₫</span>
+          </div>
+
+          <div className="mt-2 truncate text-[13px] text-[#374151]" title={o.orderInfo}>{o.orderInfo || '—'}</div>
+
+          <div className="mt-2.5 grid grid-cols-2 gap-y-1.5 gap-x-3">
+            <InfoBit label="Mã đơn"      value={o.orderId}        mono />
+            <InfoBit label="Mã GD MoMo"  value={o.transId || '—'} mono />
+            <InfoBit label="Hình thức"   value={o.payType || '—'} />
+            <InfoBit
+              label="Result"
+              value={
+                o.resultCode !== undefined
+                  ? <span className="font-mono font-bold" style={{ color: o.resultCode === 0 ? '#16a34a' : '#dc2626' }}>
+                      {o.resultCode === 0 ? '✓ 0' : `✗ ${o.resultCode}`}
+                    </span>
+                  : '—'
+              }
+            />
+            <InfoBit label="Tạo lúc"  value={fmtDate(o.createdAt)} />
+            <InfoBit label="Hoàn tất" value={o.paidAt ? fmtDate(o.paidAt) : '—'} />
+          </div>
+
+          <div className="mt-3 flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+            <button
+              className="inline-flex h-8 items-center gap-1 rounded-[7px] bg-[#eef2ff] px-2.5 text-[#4f46e5] transition-all active:bg-[#e0e7ff]"
+              onClick={onQuery}
+              title="Tra cứu MoMo API"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/>
+              </svg>
+              <span className="text-[11px] font-bold">Tra cứu</span>
+            </button>
+            {o.resultCode === 9000 && (
+              <button
+                className="inline-flex h-8 items-center gap-1 rounded-[7px] border border-[rgba(22,163,74,0.3)] bg-[#f0fdf4] px-2.5 text-[#16a34a] transition-all active:bg-[#dcfce7]"
+                onClick={onConfirm}
+                title="Xác nhận / Huỷ giao dịch (9000)"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <span className="text-[11px] font-bold">Xác nhận</span>
+              </button>
+            )}
+            <button
+              className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[7px] text-[#9ca3af] transition-all active:bg-[#fee2e2] active:text-[var(--admin-danger)]"
+              onClick={onDelete}
+              title="Xóa"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function InfoBit({ label, value, mono }) {
+  return (
+    <div className="min-w-0 overflow-hidden">
+      <div className="text-[9.5px] font-semibold uppercase tracking-wide text-[var(--admin-muted)]">{label}</div>
+      <div className={`truncate text-[12px] text-[#374151] ${mono ? 'font-mono' : ''}`}>{value}</div>
     </div>
   )
 }
