@@ -389,7 +389,7 @@ export default function ScanPage() {
   return (
     <>
       <Head>
-        <title>POS · MoMo IPA</title>
+        <title>SCAN PAYMENT</title>
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
@@ -410,9 +410,18 @@ export default function ScanPage() {
           >←</button>
           <div className="flex items-center gap-2">
             <img src="/Main.png" alt="" className="w-[26px] h-[26px] rounded-md" />
-            <span className="font-extrabold text-momo text-base">MoMo POS</span>
+            <span className="font-extrabold text-momo text-base">MoMo POS SCAN</span>
           </div>
-          <div className="w-[34px]" />
+          <button
+            onClick={() => window.location.reload()}
+            title="Tải lại trang (dùng khi bị đơ)"
+            className="w-[34px] h-[34px] rounded-lg border border-momo/15 bg-white cursor-pointer text-momo flex items-center justify-center active:opacity-80 active:rotate-180 transition-transform duration-300"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M3 12a9 9 0 0 1 15.5-6.36M21 12a9 9 0 0 1-15.5 6.36" />
+              <path d="M3 3v6h6M21 21v-6h-6" />
+            </svg>
+          </button>
         </div>
 
         {/* Step bar */}

@@ -423,7 +423,7 @@ export default function AdminPage() {
   return (
     <>
       <Head>
-        <title>QUẢN TRỊ GIAO DỊCH - IPA  </title>
+        <title>ADMIN  </title>
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
