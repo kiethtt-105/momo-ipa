@@ -143,10 +143,9 @@ export default function CreateTransactionPage() {
             {/* Order info — chỉ cần cho phương thức Scan */}
             {!isP2P && (
               <>
-                <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Mã đơn hàng</label>
+                <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">ORDER ID</label>
                 <input
                   type="text"
-                  placeholder="Nhập mã đơn hàng "
                   value={orderInfo}
                   onChange={e => setOrderInfo(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreate()}
