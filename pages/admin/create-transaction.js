@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Head from 'next/head'
 
 // ─── CONSTANTS ─────────────────────────────────────────────
@@ -30,6 +30,16 @@ export default function CreateTransactionPage() {
   const [orderInfo,  setOrderInfo]  = useState('')
   const [lastUrl,    setLastUrl]    = useState('')
   const [copied,     setCopied]     = useState(false)
+  const amountInputRef = useRef(null)
+
+  // Chỉ tự focus input "Số tiền" trên màn lớn (laptop/desktop).
+  // Trên điện thoại, autoFocus sẽ bật bàn phím ngay khi load
+  // trang → che mất nút "Mở giao dịch" và gây giật layout.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth > 768) {
+      amountInputRef.current?.focus()
+    }
+  }, [])
 
   const isP2P     = method === 'p2p'
   const canSubmit = parseInt(amount || 0, 10) > 0
@@ -59,7 +69,7 @@ export default function CreateTransactionPage() {
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
 
-      <div className="relative flex min-h-screen w-screen items-center justify-center overflow-x-hidden bg-[#f5edf2] p-5 font-[var(--admin-font)] text-[var(--admin-text)]">
+      <div className="relative flex min-h-screen w-full items-center justify-center overflow-x-hidden bg-[#f5edf2] p-5 font-[var(--admin-font)] text-[var(--admin-text)]">
         <div className="w-full max-w-[460px] overflow-hidden rounded-[20px] bg-white/95 shadow-[0_24px_60px_rgba(174,0,112,0.1),0_0_0_1px_rgba(255,255,255,0.8)] backdrop-blur-[30px]">
           {/* Header */}
           <div className="flex items-center gap-3 border-b border-[#f3f4f6] px-6 py-5">
@@ -118,7 +128,7 @@ export default function CreateTransactionPage() {
               onChange={e => setAmount(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreate()}
               className="mb-4 w-full rounded-[10px] border-[1.5px] border-[var(--border)] bg-[#fafafa] px-3.5 py-2.5 font-mono text-sm text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.1)]"
-              autoFocus
+              ref={amountInputRef}
             />
 
             {/* Order info — chỉ cần cho phương thức Scan */}
