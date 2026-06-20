@@ -17,7 +17,30 @@ function notifyOtherTabs(orderId, status) {
   }
 }
 
-export default function ResultPage() {
+// Gọi API tra cứu chính thức của MoMo (pages/api/momo/query.js) để lấy
+// TOÀN BỘ field có thể có cho 1 đơn hàng — đầy đủ hơn nhiều so với chỉ
+// vài field bắn về qua URL redirect (transId, payType, requestId,
+// orderInfo, orderType, responseTime, extraData, refundTrans...).
+// Hàm này không throw — nếu lỗi/timeout thì chỉ log, trang vẫn hiển thị
+// được info cơ bản đã có trước đó.
+async function fetchFullInfo(orderId) {
+  try {
+    const res = await fetch('/api/momo/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      console.error('[result] /api/momo/query lỗi:', data?.message)
+      return null
+    }
+    return data
+  } catch (e) {
+    console.error('[result] Không gọi được /api/momo/query:', e)
+    return null
+  }
+}
   const router = useRouter()
   const [status, setStatus] = useState('loading')
   const [info, setInfo] = useState(null)
@@ -61,6 +84,9 @@ useEffect(() => {
         resolvedRef.current = true
         setInfo({ orderId, transId, amount: parseInt(amount), payType, message })
         notifyOtherTabs(orderId, 'success')
+        fetchFullInfo(orderId).then(full => {
+          if (full) setInfo(prev => ({ ...prev, ...full }))
+        })
         fetch('/api/momo/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -73,6 +99,9 @@ useEffect(() => {
         resolvedRef.current = true
         setInfo({ orderId, message, resultCode: code })
         notifyOtherTabs(orderId, 'failed')
+        fetchFullInfo(orderId).then(full => {
+          if (full) setInfo(prev => ({ ...prev, ...full }))
+        })
         fetch('/api/momo/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -93,6 +122,9 @@ useEffect(() => {
             resolvedRef.current = true
             setInfo(data)
             notifyOtherTabs(orderId, 'success')
+            fetchFullInfo(orderId).then(full => {
+              if (full) setInfo(prev => ({ ...prev, ...full }))
+            })
             clearInterval(poll)
             cleanUrlBar()
           }
@@ -101,6 +133,9 @@ useEffect(() => {
             resolvedRef.current = true
             setInfo(data)
             notifyOtherTabs(orderId, 'failed')
+            fetchFullInfo(orderId).then(full => {
+              if (full) setInfo(prev => ({ ...prev, ...full }))
+            })
             clearInterval(poll)
             cleanUrlBar()
           }
@@ -121,6 +156,11 @@ useEffect(() => {
   }, [router.isReady, router.query])
 
   const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
+  const fmtTime = ms => {
+    if (!ms) return null
+    const d = new Date(parseInt(ms))
+    return isNaN(d.getTime()) ? null : d.toLocaleString('vi-VN')
+  }
 
   const META = {
     loading: { spin: true,  title: 'Đang xác nhận…',          sub: 'Vui lòng không đóng trang',              accent: '#ae0070', bg: '#fdf5f9' },
@@ -224,9 +264,45 @@ useEffect(() => {
                   </div>
                 )}
                 {info.payType && (
-                  <div className="flex items-center justify-between px-5 py-4 text-sm last:border-b-0">
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
                     <span className="font-medium text-[var(--muted)]">Hình thức</span>
                     <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.payType}</span>
+                  </div>
+                )}
+                {info.orderType && (
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Loại đơn hàng</span>
+                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.orderType}</span>
+                  </div>
+                )}
+                {info.orderInfo && (
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Nội dung</span>
+                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.orderInfo}</span>
+                  </div>
+                )}
+                {info.requestId && (
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Request ID</span>
+                    <span className="max-w-[60%] break-all text-right font-mono text-xs font-bold text-[var(--text)]">{info.requestId}</span>
+                  </div>
+                )}
+                {fmtTime(info.responseTime) && (
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Thời gian phản hồi</span>
+                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{fmtTime(info.responseTime)}</span>
+                  </div>
+                )}
+                {info.extraData && info.extraData !== '' && (
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Extra Data</span>
+                    <span className="max-w-[60%] break-all text-right font-mono text-xs font-bold text-[var(--text)]">{info.extraData}</span>
+                  </div>
+                )}
+                {Array.isArray(info.refundTrans) && info.refundTrans.length > 0 && (
+                  <div className="flex items-center justify-between px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Giao dịch hoàn tiền</span>
+                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.refundTrans.length} lần</span>
                   </div>
                 )}
               </div>
@@ -243,9 +319,45 @@ useEffect(() => {
                   <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.orderId}</span>
                 </div>
                 {info.message && (
-                  <div className="flex items-center justify-between px-5 py-4 text-sm last:border-b-0">
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
                     <span className="font-medium text-[var(--muted)]">Nguyên nhân</span>
                     <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.message}</span>
+                  </div>
+                )}
+                {info.amount > 0 && (
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Số tiền</span>
+                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{fmt(info.amount)} ₫</span>
+                  </div>
+                )}
+                {info.transId && (
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Mã GD MoMo</span>
+                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.transId}</span>
+                  </div>
+                )}
+                {info.payType && (
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Hình thức</span>
+                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.payType}</span>
+                  </div>
+                )}
+                {info.orderInfo && (
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Nội dung</span>
+                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.orderInfo}</span>
+                  </div>
+                )}
+                {info.requestId && (
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Request ID</span>
+                    <span className="max-w-[60%] break-all text-right font-mono text-xs font-bold text-[var(--text)]">{info.requestId}</span>
+                  </div>
+                )}
+                {fmtTime(info.responseTime) && (
+                  <div className="flex items-center justify-between px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Thời gian phản hồi</span>
+                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{fmtTime(info.responseTime)}</span>
                   </div>
                 )}
               </div>
