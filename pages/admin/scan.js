@@ -12,43 +12,42 @@ function cleanCode(raw) {
 export default function ScanPage() {
   const router = useRouter()
 
-  const [authed,   setAuthed]   = useState(null)
+  const [authed, setAuthed] = useState(null)
   const [password, setPassword] = useState('')
-  const [pwError,  setPwError]  = useState(false)
+  const [pwError, setPwError] = useState(false)
 
   const [step, setStep] = useState('amount')
 
-  const videoRef  = useRef(null)
+  const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
-  const rafRef    = useRef(null)
+  const rafRef = useRef(null)
   const submitting = useRef(false)
 
-  const [ready,    setReady]    = useState(false)
+  const [ready, setReady] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [camError, setCamError] = useState('')
 
-  const [amount,    setAmount]    = useState('')
+  const [amount, setAmount] = useState('')
   const [orderInfo, setOrderInfo] = useState('')
-  const [result,    setResult]    = useState(null)
+  const [result, setResult] = useState(null)
 
   const [manualCode, setManualCode] = useState('')
-  const [manualErr,  setManualErr]  = useState('')
+  const [manualErr, setManualErr] = useState('')
 
   const [currentOrderId, setCurrentOrderId] = useState(null)
-  const [isServerErr, setIsServerErr] = useState(false);
+  const [isServerErr, setIsServerErr] = useState(false)
 
+  const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [showConfirmAmountModal, setShowConfirmAmountModal] = useState(false)
 
-
-const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
-const [showCancelModal, setShowCancelModal] = useState(false)
-  const [showConfirmAmountModal, setShowConfirmAmountModal] = useState(false);
   // Load jsQR
   useEffect(() => {
     if (window.jsQR) { setReady(true); return }
     const s = document.createElement('script')
     s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'
-    s.onload  = () => setReady(true)
+    s.onload = () => setReady(true)
     s.onerror = () => setCamError('Không tải được thư viện QR.')
     document.head.appendChild(s)
   }, [])
@@ -80,21 +79,21 @@ const [showCancelModal, setShowCancelModal] = useState(false)
     if (urlOrderInfo) {
       setOrderInfo(urlOrderInfo)
     }
-      
+
     if (quick === 'true' && urlAmount && !currentOrderId && !submitting.current && !showConfirmAmountModal) {
-          // Chỉ bật Popup xác nhận thông tin từ link nhanh, chưa tạo đơn hàng vội
-          setShowConfirmAmountModal(true);
-          router.replace('/admin/scan', undefined, { shallow: true });
-        }
-      }, [urlAmount, urlOrderInfo, quick, router.isReady])
+      // Chỉ bật Popup xác nhận thông tin từ link nhanh, chưa tạo đơn hàng vội
+      setShowConfirmAmountModal(true)
+      router.replace('/admin/scan', undefined, { shallow: true })
+    }
+  }, [urlAmount, urlOrderInfo, quick, router.isReady])
+
   // Thêm đoạn này ở khu vực các useEffect đầu file để tự focus khi nhấn thử lại
   useEffect(() => {
     if (!result && step === 'scan') {
-      const inputEl = document.querySelector('input[placeholder*="Bắn mã"]');
-      if (inputEl) inputEl.focus();
+      const inputEl = document.querySelector('input[placeholder*="Bắn mã"]')
+      if (inputEl) inputEl.focus()
     }
-  }, [result, step]);
-
+  }, [result, step])
 
   function setVideoRef(el) {
     videoRef.current = el
@@ -123,15 +122,15 @@ const [showCancelModal, setShowCancelModal] = useState(false)
   }
 
   function tick() {
-    const video  = videoRef.current
+    const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas) return
     if (video.readyState < 2) { rafRef.current = requestAnimationFrame(tick); return }
-    canvas.width  = video.videoWidth
+    canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
     ctx.drawImage(video, 0, 0)
-    const img  = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height)
     const code = window.jsQR?.(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' })
     if (code?.data && !submitting.current) {
       onDetected(code.data)
@@ -160,19 +159,20 @@ const [showCancelModal, setShowCancelModal] = useState(false)
 
     const amt = parseInt(amount)
     const orderId = currentOrderId || `POS${Date.now()}`
+    const finalOrderInfo = orderInfo || `iPOS${orderId.replace('POS', '')}`
 
     try {
       const res = await fetch('/api/momo/pos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, amount: amt, orderInfo, paymentCode: code }),
+        body: JSON.stringify({ orderId, amount: amt, orderInfo: finalOrderInfo, paymentCode: code }),
       })
       const data = await res.json()
       setResult({ success: data.resultCode === 0, data, amount: amt, orderId })
     } catch {
-      submitting.current = false;
-      setIsServerErr(true); // <--- Đổi state thành true để kích hoạt hiện nút bấm
-      setManualErr('Mất kết nối hoặc cổng thanh toán phản hồi chậm!');
+      submitting.current = false
+      setIsServerErr(true) // <--- Đổi state thành true để kích hoạt hiện nút bấm
+      setManualErr('Mất kết nối hoặc cổng thanh toán phản hồi chậm!')
     }
   }
 
@@ -223,7 +223,7 @@ const [showCancelModal, setShowCancelModal] = useState(false)
 
   // Hàm ép đơn hàng PENDING thành FAILED khi thực hiện hủy giao dịch
   async function triggerCancelOrderBackend() {
-    submitting.current = true;
+    submitting.current = true
     try {
       await fetch('/api/momo/pos', {
         method: 'POST',
@@ -234,25 +234,29 @@ const [showCancelModal, setShowCancelModal] = useState(false)
           orderInfo: orderInfo || currentOrderId,
           paymentCode: '000000000000000000' // Bắn mã ảo để API pos.js cập nhật trạng thái FAILED
         }),
-      });
+      })
     } catch (e) {
-      console.error(e);
+      console.error(e)
     } finally {
-      submitting.current = false;
-      setAmount('');
-      setOrderInfo('');
-      setCurrentOrderId(null);
-      setManualCode('');
-      setManualErr('');
-      setStep('amount');
+      submitting.current = false
+      setAmount('')
+      setOrderInfo('')
+      setCurrentOrderId(null)
+      setManualCode('')
+      setManualErr('')
+      setStep('amount')
     }
   }
 
+  // Class dùng lại nhiều lần
+  const inputBase = 'w-full px-3.5 py-[11px] border-[1.5px] border-momo/15 rounded-[10px] text-sm bg-[#f5edf2]/40 text-gray-900 mb-2 outline-none focus:border-momo/40 transition-colors'
+  const btnPrimary = 'w-full bg-momo text-white border-none rounded-xl py-[13px] px-6 text-sm font-bold cursor-pointer shadow-[0_4px_16px_rgba(174,0,112,0.25)] disabled:opacity-40 disabled:cursor-not-allowed active:opacity-80'
+  const card = 'bg-white/96 rounded-2xl px-4 py-[18px] shadow-[0_2px_16px_rgba(174,0,112,0.06)] border border-white/80'
+
   if (authed === null) {
     return (
-      <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#fff8fb' }}>
-        <style>{`@keyframes p{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
-        <div style={{ width:10, height:10, borderRadius:'50%', background:'#ae0070', animation:'p .8s infinite' }} />
+      <div className="min-h-screen flex items-center justify-center bg-[#fff8fb]">
+        <div className="w-2.5 h-2.5 rounded-full bg-momo animate-pulse2" />
       </div>
     )
   }
@@ -261,7 +265,7 @@ const [showCancelModal, setShowCancelModal] = useState(false)
     async function login() {
       setPwError(false)
       const res = await fetch('/api/admin/login', {
-        method:'POST', headers:{'Content-Type':'application/json'},
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
       })
       if (res.ok) { setAuthed(true); setPassword('') }
@@ -270,19 +274,19 @@ const [showCancelModal, setShowCancelModal] = useState(false)
     return (
       <>
         <Head><title>Admin · Đăng nhập</title></Head>
-        <style dangerouslySetInnerHTML={{ __html: CSS }} />
-        <div style={{ ...S.bg, position:'relative' }}>
-          <div style={S.loginCard}>
-            <img src="/Main.png" alt="" style={{ width:48, height:48, borderRadius:12, marginBottom:16 }} />
-            <h1 style={{ fontSize:20, fontWeight:800, color:'#111', marginBottom:6 }}>Quản trị viên</h1>
-            <p style={{ fontSize:13, color:'#6b7280', marginBottom:24 }}>MoMo POS · Thu tiền tại quầy</p>
-            <input type="password" placeholder="Mật khẩu" value={password} autoFocus
+        <div className="relative min-h-screen bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[360px] bg-white rounded-[20px] px-7 py-9 shadow-[0_20px_60px_rgba(174,0,112,0.12)] flex flex-col items-center">
+            <img src="/Main.png" alt="" className="w-12 h-12 rounded-xl mb-4" />
+            <h1 className="text-xl font-extrabold text-gray-900 mb-1.5">Quản trị viên</h1>
+            <p className="text-sm text-gray-500 mb-6">MoMo POS · Thu tiền tại quầy</p>
+            <input
+              type="password" placeholder="Mật khẩu" value={password} autoFocus
               onChange={e => { setPassword(e.target.value); setPwError(false) }}
               onKeyDown={e => e.key === 'Enter' && login()}
-              style={{ ...S.input, borderColor: pwError ? '#dc2626' : 'rgba(174,0,112,0.2)', marginBottom:8 }}
+              className={`${inputBase} ${pwError ? 'border-red-600' : ''}`}
             />
-            {pwError && <p style={{ color:'#dc2626', fontSize:13, marginBottom:10 }}>⚠ Sai mật khẩu</p>}
-            <button onClick={login} style={S.btnPrimary}>Đăng nhập</button>
+            {pwError && <p className="text-red-600 text-sm mb-2.5">⚠ Sai mật khẩu</p>}
+            <button onClick={login} className={btnPrimary}>Đăng nhập</button>
           </div>
         </div>
       </>
@@ -290,39 +294,35 @@ const [showCancelModal, setShowCancelModal] = useState(false)
   }
 
   if (result) {
-    const isSuccess = result.success;
+    const isSuccess = result.success
 
     return (
       <>
         <Head><title>Kết quả thanh toán</title></Head>
-        <style dangerouslySetInnerHTML={{ __html: CSS }} />
-        <div style={S.bg}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:20 }}>
-            <div style={{ ...S.card, maxWidth:420, width:'100%', textAlign:'center', padding:'40px 24px' }}>
-              <div style={{ fontSize:56, marginBottom:12 }}>{isSuccess ? '✅' : '❌'}</div>
-              
-              <h2 style={{ fontSize:22, fontWeight:800, color: isSuccess ? '#16a34a' : '#dc2626', marginBottom:8 }}>
+        <div className="min-h-screen bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
+          <div className="flex items-center justify-center min-h-screen p-5">
+            <div className={`${card} max-w-[420px] w-full text-center px-6 py-10`}>
+              <div className="text-5xl mb-3">{isSuccess ? '✅' : '❌'}</div>
+
+              <h2 className={`text-xl font-extrabold mb-2 ${isSuccess ? 'text-green-600' : 'text-red-600'}`}>
                 {isSuccess ? 'Thanh toán thành công' : 'Thanh toán thất bại'}
               </h2>
-              
-              <div style={{ fontSize:28, fontWeight:800, color:'#ae0070', marginBottom:8 }}>
+
+              <div className="text-2xl font-extrabold text-momo mb-2">
                 {fmt(result.amount)} ₫
               </div>
 
-              <p style={{ fontSize:13, color:'#6b7280', marginBottom:4 }}>{result.data.message}</p>
+              <p className="text-sm text-gray-500 mb-1">{result.data.message}</p>
               {result.data.transId && (
-                <p style={{ fontSize:12, fontFamily:'monospace', color:'#374151', marginTop:4 }}>
+                <p className="text-xs font-mono text-gray-700 mt-1">
                   Mã GD: {result.data.transId}
                 </p>
               )}
 
-              <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:32 }}>
-
-
-                <button onClick={resetAll} style={S.btnPrimary}>
+              <div className="flex flex-col gap-3 mt-8">
+                <button onClick={resetAll} className={btnPrimary}>
                   {isSuccess ? 'Giao Dịch Mới' : ' Tạo Giao Dịch Mới'}
                 </button>
-
               </div>
             </div>
           </div>
@@ -332,7 +332,7 @@ const [showCancelModal, setShowCancelModal] = useState(false)
   }
 
   const stepIdx = step === 'amount' ? 0 : 1
-  const STEPS   = ['Thông tin ', 'Scan QR']
+  const STEPS = ['Thông tin ', 'Scan QR']
 
   return (
     <>
@@ -341,79 +341,76 @@ const [showCancelModal, setShowCancelModal] = useState(false)
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
-      <style dangerouslySetInnerHTML={{ __html: CSS }} />
-      <div style={S.bg}>
+      <div className="min-h-screen bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
 
         {/* Header */}
-        <div style={S.header}>
+        <div className="sticky top-0 z-[100] bg-white/92 backdrop-blur-xl border-b border-momo/10 px-4 py-3 flex items-center justify-between">
           <button
             onClick={() => {
               // Nếu đang ở màn hình scan, chặn lại để hiện popup hủy giao dịch
               if (step === 'scan') {
-                setShowCancelModal(true);
+                setShowCancelModal(true)
               } else {
-                router.push('/admin');
+                router.push('/admin')
               }
             }}
-            style={S.backBtn}
+            className="w-[34px] h-[34px] rounded-lg border border-momo/15 bg-white cursor-pointer text-lg text-momo flex items-center justify-center active:opacity-80"
           >←</button>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <img src="/Main.png" alt="" style={{ width:26, height:26, borderRadius:6 }} />
-            <span style={{ fontWeight:800, color:'#ae0070', fontSize:16 }}>MoMo POS</span>
+          <div className="flex items-center gap-2">
+            <img src="/Main.png" alt="" className="w-[26px] h-[26px] rounded-md" />
+            <span className="font-extrabold text-momo text-base">MoMo POS</span>
           </div>
-          <div style={{ width:34 }} />
+          <div className="w-[34px]" />
         </div>
 
         {/* Step bar */}
-        <div style={{ display:'flex', justifyContent:'center', alignItems:'center', padding:'14px 24px 0', gap:0, maxWidth:480, margin:'0 auto' }}>
+        <div className="flex justify-center items-center pt-3.5 px-6 max-w-[480px] mx-auto">
           {STEPS.map((label, i) => (
-            <div key={i} style={{ display:'flex', alignItems:'center', flex: i < STEPS.length-1 ? 1 : 'none' }}>
-              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-                <div style={{
-                  width:28, height:28, borderRadius:'50%',
-                  display:'flex', alignItems:'center', justifyContent:'center',
-                  fontSize:12, fontWeight:800, transition:'all .3s',
-                  background: i <= stepIdx ? '#ae0070' : '#e5e7eb',
-                  color:      i <= stepIdx ? '#fff'    : '#9ca3af',
-                }}>{i < stepIdx ? '✓' : i + 1}</div>
-                <span style={{ fontSize:10, fontWeight:600, whiteSpace:'nowrap', color: i <= stepIdx ? '#ae0070' : '#9ca3af' }}>{label}</span>
+            <div key={i} className={`flex items-center ${i < STEPS.length - 1 ? 'flex-1' : ''}`}>
+              <div className="flex flex-col items-center gap-1">
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold transition-all duration-300 ${
+                    i <= stepIdx ? 'bg-momo text-white' : 'bg-gray-200 text-gray-400'
+                  }`}
+                >{i < stepIdx ? '✓' : i + 1}</div>
+                <span className={`text-[10px] font-semibold whitespace-nowrap ${i <= stepIdx ? 'text-momo' : 'text-gray-400'}`}>{label}</span>
               </div>
-              {i < STEPS.length-1 && (
-                <div style={{ flex:1, height:2, margin:'0 8px', marginBottom:18, transition:'all .3s', background: i < stepIdx ? '#ae0070' : '#e5e7eb' }} />
+              {i < STEPS.length - 1 && (
+                <div className={`flex-1 h-0.5 mx-2 mb-[18px] transition-all duration-300 ${i < stepIdx ? 'bg-momo' : 'bg-gray-200'}`} />
               )}
             </div>
           ))}
         </div>
 
-        <div style={S.content}>
+        <div className="max-w-[480px] mx-auto px-4 pb-10 pt-4 flex flex-col gap-3">
 
           {/* STEP 1: AMOUNT */}
           {step === 'amount' && (
-            <div style={S.card}>
-              <h3 style={S.sectionTitle}>💰 Nhập số tiền </h3>
+            <div className={card}>
+              <h3 className="text-[13px] font-bold text-gray-700 mb-3.5">💰 Nhập số tiền </h3>
               <input
                 type="number" placeholder="Nhập số tiền..."
                 value={amount} onChange={e => setAmount(e.target.value)}
                 onKeyDown={handleEnterKey}
-                style={S.input} min={1000} max={5000000} autoFocus 
+                className={inputBase} min={1000} max={5000000} autoFocus
                 step={1000}
                 disabled={quick === 'true'}
               />
 
-              <div style={{ paddingTop:12, borderTop:'1px solid #f3f4f6', marginBottom:14 }}>
-                <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>Nội dung thanh toán</p>
+              <div className="pt-3 border-t border-gray-100 mb-3.5">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-2">Nội dung thanh toán</p>
                 <input
                   placeholder="Nhập mã đơn hàng "
                   value={orderInfo} onChange={e => setOrderInfo(e.target.value)}
                   onKeyDown={handleEnterKey}
-                  style={S.input}
+                  className={inputBase}
                   disabled={quick === 'true'}
                 />
               </div>
               <button
                 onClick={() => setShowConfirmAmountModal(true)}
                 disabled={!amount || parseInt(amount) < 1000 || submitting.current}
-                style={{ ...S.btnPrimary, opacity: (!amount || parseInt(amount) < 1000) ? 0.4 : 1 }}
+                className={btnPrimary}
               >
                 Xác nhận  →
               </button>
@@ -422,34 +419,34 @@ const [showCancelModal, setShowCancelModal] = useState(false)
 
           {/* STEP 2: SCAN */}
           {step === 'scan' && (
-            <div style={S.card}>
-              <h3 style={{ ...S.sectionTitle, marginBottom:12 }}>📷 Quy trình nhận mã thanh toán MoMo</h3>
+            <div className={card}>
+              <h3 className="text-[13px] font-bold text-gray-700 mb-3">📷 Quy trình nhận mã thanh toán MoMo</h3>
 
               {/* TÓM TẮT ĐƠN HÀNG ĐẦY ĐỦ */}
               {(amount || orderInfo || currentOrderId) && (
-                <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:12, padding:'16px', marginBottom:20 }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:'#64748b', marginBottom:12, textTransform:'uppercase' }}>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5">
+                  <div className="text-xs font-bold text-slate-500 mb-3 uppercase">
                     THÔNG TIN ĐƠN HÀNG TẠI QUẦY
                   </div>
 
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 10 }}>
-                    <span style={{ color:'#475569', fontSize: 13 }}>Mã đơn hàng (Log ID):</span>
-                    <span style={{ fontWeight:700, fontFamily:'monospace', color:'#111827', background:'#e2e8f0', padding:'2px 6px', borderRadius:4 }}>
+                  <div className="flex justify-between items-center mb-2.5">
+                    <span className="text-slate-600 text-[13px]">Mã đơn hàng (Log ID):</span>
+                    <span className="font-bold font-mono text-gray-900 bg-slate-200 px-1.5 py-0.5 rounded">
                       {currentOrderId || 'Chưa khởi tạo'}
                     </span>
                   </div>
 
-                  <div style={{ display:'flex', justifyBounding:'space-between', justifyContent:'space-between', alignItems:'center' }}>
-                    <span style={{color:'#475569'}}>Số tiền thanh toán</span>
-                    <span style={{ fontSize:28, fontWeight:800, color:'#ae0070' }}>{fmt(amount)} ₫</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-600">Số tiền thanh toán</span>
+                    <span className="text-[28px] font-extrabold text-momo">{fmt(amount)} ₫</span>
                   </div>
 
                   {orderInfo && (
                     <>
-                      <div style={{ height:1, background:'#e2e8f0', margin:'12px 0' }} />
+                      <div className="h-px bg-slate-200 my-3" />
                       <div>
-                        <div style={{ fontSize:12, color:'#64748b', marginBottom:4 }}>Nội dung thanh toán</div>
-                        <div style={{ fontSize:15, color:'#111827', fontWeight:500 }}>{orderInfo}</div>
+                        <div className="text-xs text-slate-500 mb-1">Nội dung thanh toán</div>
+                        <div className="text-[15px] text-gray-900 font-medium">{orderInfo}</div>
                       </div>
                     </>
                   )}
@@ -457,9 +454,9 @@ const [showCancelModal, setShowCancelModal] = useState(false)
               )}
 
               {/* Input mã thủ công & Súng Quét */}
-              <div style={{ marginBottom: 16, padding:'14px', background:'#f9f0f5', borderRadius:10, border:'1px solid rgba(174,0,112,0.15)' }}>
-                <p style={{ fontSize:11, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>
-                  MÃ THANH TOÁN MOMO 
+              <div className="mb-4 p-3.5 bg-[#f9f0f5] rounded-[10px] border border-momo/15">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-2">
+                  MÃ THANH TOÁN MOMO
                 </p>
                 <input
                   autoFocus
@@ -467,85 +464,68 @@ const [showCancelModal, setShowCancelModal] = useState(false)
                   value={manualCode}
                   onChange={e => { setManualCode(e.target.value); setManualErr('') }}
                   onKeyDown={handleManualCodeKey}
-                  style={{ ...S.input, marginBottom: manualErr ? 4 : 8, background: '#fff' }}
+                  className={`${inputBase} bg-white ${manualErr ? 'mb-1' : 'mb-2'}`}
                   disabled={submitting.current}
                 />
-                {manualErr && <p style={{ fontSize:12, color:'#dc2626', marginBottom:8 }}>⚠ {manualErr}</p>}
+                {manualErr && <p className="text-xs text-red-600 mb-2">⚠ {manualErr}</p>}
                 {/* Chỉ hiện khi server bị đơ hoặc lỗi kết nối mạng */}
                 {isServerErr && !submitting.current && (
                   <button
                     onClick={submitManualCode}
-                    style={{
-                      background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 8,
-                      padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                      width: '100%', marginTop: 6, transition: 'background .15s',
-                      boxShadow: '0 4px 12px rgba(245,158,11,0.2)'
-                    }}
+                    className="w-full bg-amber-500 text-white border-none rounded-lg py-2.5 px-4 text-[13px] font-bold cursor-pointer mt-1.5 shadow-[0_4px_12px_rgba(245,158,11,0.2)] active:opacity-80"
                   >
                     ⚡ Gửi lại dữ liệu (Kiểm tra giao dịch)
                   </button>
                 )}
-                                <button
+                <button
                   onClick={submitManualCode}
                   disabled={!manualCode.trim() || submitting.current}
-                  style={{
-                    background: '#ae0070', color: '#fff', border: 'none', borderRadius: 8,
-                    padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                    width: '100%', marginTop: 4, transition: 'background .15s'
-                  }}
+                  className="w-full bg-momo text-white border-none rounded-lg py-2 px-4 text-[13px] font-bold cursor-pointer mt-1 disabled:opacity-40 disabled:cursor-not-allowed active:opacity-80"
                 >
                   {submitting.current ? 'Đang xử lý...' : '✓ Xác nhận thanh toán'}
                 </button>
               </div>
 
               {/* Camera chạy ngầm không gây vỡ/xấu giao diện */}
-              {!submitting.current && (
-                <>
-                  {/* Giữ camera chạy ngầm ẩn hoàn toàn, không hiển thị bất kỳ nút/chữ gì ra giao diện */}
-                  {scanning && (
-                    <div style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-                      <video ref={setVideoRef} playsInline muted style={{ width: '100%' }} />
-                      <canvas ref={canvasRef} />
-                    </div>
-                  )}
-                </>
+              {!submitting.current && scanning && (
+                <div className="absolute w-px h-px opacity-0 overflow-hidden pointer-events-none">
+                  <video ref={setVideoRef} playsInline muted className="w-full" />
+                  <canvas ref={canvasRef} />
+                </div>
               )}
 
               {/* CỤM NÚT DIỀU HƯỚNG DƯỚI ĐÁY ĐƯỢC THU NHỎ GỌN GÀNG HÀNG NGANG */}
               {!submitting.current && (
-                <div style={{ display: 'flex', gap: 12, marginTop: 12, borderTop: '1px solid #f3f4f6', paddingTop: 14 }}>
+                <div className="flex gap-3 mt-3 border-t border-gray-100 pt-3.5">
                   <button
                     onClick={() => setShowCancelModal(true)}
-                    style={{
-                      background: '#fff', color: '#64748b', border: '1px solid #cbd5e1',
-                      borderRadius: 8, padding: '9px 14px', fontSize: 13, fontWeight: 600,
-                      cursor: 'pointer', flex: 1
-                    }}
+                    className="flex-1 bg-white text-slate-500 border border-slate-300 rounded-lg py-2.5 px-3.5 text-[13px] font-semibold cursor-pointer active:opacity-80"
                   >
                     ← Hủy & Quay lại
                   </button>
                 </div>
               )}
+
               {/* Trạng thái đang xử lý thanh toán */}
               {submitting.current && (
-                <div style={{ padding: '30px 20px', textAlign: 'center', background: '#f9f0f5', borderRadius: 12, marginTop: 12 }}>
-                  <div className="spinner" style={{ width:36, height:36, borderWidth:4, margin:'0 auto 12px' }} />
-                  <p style={{ fontSize:15, fontWeight:700, color:'#ae0070' }}>Đang xử lý thanh toán...</p>
-                  <p style={{ fontSize:13, color:'#6b7280' }}>Vui lòng không đóng trang</p>
+                <div className="py-7 px-5 text-center bg-[#f9f0f5] rounded-xl mt-3">
+                  <div className="inline-block w-9 h-9 border-4 border-momo/30 border-t-momo rounded-full animate-spin mx-auto mb-3" />
+                  <p className="text-[15px] font-bold text-momo">Đang xử lý thanh toán...</p>
+                  <p className="text-[13px] text-gray-500">Vui lòng không đóng trang</p>
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+              <div className="flex gap-2.5 mt-2.5">
                 {result && !result.success && (
-                  <button 
+                  <button
                     onClick={() => {
-                      setResult(null);
-                      setManualCode('');
-                      setManualErr('');
-                      submitting.current = false;
-                      setScanning(true);
+                      setResult(null)
+                      setManualCode('')
+                      setManualErr('')
+                      submitting.current = false
+                      setScanning(true)
                     }}
-                    style={{ ...S.btnSecondary, background: '#f59e0b', color: 'white', border: 'none', borderRadius: 10, padding: '10px' }}
+                    className="w-full bg-amber-500 text-white border-none rounded-[10px] py-2.5 cursor-pointer font-semibold active:opacity-80"
                   >
                     🔄 Thử lại
                   </button>
@@ -556,48 +536,48 @@ const [showCancelModal, setShowCancelModal] = useState(false)
 
           {/* ─── POPUP XÁC NHẬN SỐ TIỀN & THÔNG TIN ĐƠN HÀNG (render ở mọi step) ─── */}
           {showConfirmAmountModal && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16 }}>
-              <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 365, padding: 24, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', marginBottom: 14, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
+              <div className="bg-white rounded-2xl w-full max-w-[365px] p-6 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1)]">
+                <div className="text-base font-bold text-slate-800 mb-3.5 text-center uppercase tracking-wide">
                   🔎 Kiểm tra thông tin đơn hàng
                 </div>
 
-                <div style={{ background: '#f8fafc', borderRadius: 12, padding: 16, marginBottom: 20, border: '1px solid #e2e8f0' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ color: '#64748b', fontSize: 13 }}>Số tiền cần thu:</span>
-                      <span style={{ fontSize: 24, fontWeight: 900, color: '#ae0070' }}>{fmt(amount)} ₫</span>
+                <div className="bg-slate-50 rounded-xl p-4 mb-5 border border-slate-200">
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 text-[13px]">Số tiền cần thu:</span>
+                      <span className="text-2xl font-black text-momo">{fmt(amount)} ₫</span>
                     </div>
-                    <div style={{ height: '1px', background: '#e2e8f0' }} />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span style={{ color: '#64748b', fontSize: 13 }}>Nội dung thanh toán:</span>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: '#111827', wordBreak: 'break-all' }}>
-                        {orderInfo || 'Thanh toán tại quầy'}
+                    <div className="h-px bg-slate-200" />
+                    <div className="flex flex-col gap-1">
+                      <span className="text-slate-500 text-[13px]">Nội dung thanh toán:</span>
+                      <span className="text-sm font-semibold text-gray-900 break-all">
+                        {orderInfo || `iPOS${Date.now()}`}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 12 }}>
+                <div className="flex gap-3">
                   <button
                     onClick={() => {
-                      setShowConfirmAmountModal(false);
+                      setShowConfirmAmountModal(false)
                       // Nếu đi từ link nhanh bị hủy, trả URL về nguyên bản để thu ngân nhập tay tùy ý
                       if (quick === 'true') {
-                        router.replace('/admin/scan', undefined, { shallow: true });
+                        router.replace('/admin/scan', undefined, { shallow: true })
                       }
                     }}
-                    style={{ flex: 1, padding: '11px', background: '#fff', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                    className="flex-1 py-2.5 bg-white text-slate-500 border border-slate-300 rounded-lg text-[13px] font-semibold cursor-pointer active:opacity-80"
                   >
                     Trở lại
                   </button>
 
                   <button
                     onClick={async () => {
-                      setShowConfirmAmountModal(false);
-                      const generatedId = `POS${Date.now()}`;
-                      setCurrentOrderId(generatedId);
-                      submitting.current = true;
+                      setShowConfirmAmountModal(false)
+                      const generatedId = `POS${Date.now()}`
+                      setCurrentOrderId(generatedId)
+                      submitting.current = true
 
                       try {
                         // Chính thức tạo Log đơn hàng nháp PENDING lên hệ thống
@@ -607,17 +587,17 @@ const [showCancelModal, setShowCancelModal] = useState(false)
                           body: JSON.stringify({
                             orderId: generatedId,
                             amount: parseInt(amount),
-                            orderInfo: orderInfo || generatedId
+                            orderInfo: orderInfo || `iPOS${generatedId.replace('POS', '')}`
                           }),
-                        });
+                        })
                       } catch (e) {
-                        console.error("Lỗi lưu đơn hàng nháp:", e);
+                        console.error("Lỗi lưu đơn hàng nháp:", e)
                       } finally {
-                        submitting.current = false;
-                        setStep('scan'); // Chuyển sang màn hình Step 2 để bắn súng quét mã
+                        submitting.current = false
+                        setStep('scan') // Chuyển sang màn hình Step 2 để bắn súng quét mã
                       }
                     }}
-                    style={{ flex: 1, padding: '11px', background: '#ae0070', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(174,0,112,0.2)' }}
+                    className="flex-1 py-2.5 bg-momo text-white border-none rounded-lg text-[13px] font-bold cursor-pointer shadow-[0_4px_12px_rgba(174,0,112,0.2)] active:opacity-80"
                   >
                     Xác nhận
                   </button>
@@ -628,28 +608,28 @@ const [showCancelModal, setShowCancelModal] = useState(false)
 
           {/* POPUP MODAL XÁC NHẬN HỦY GIAO DỊCH CHẶN TREO ĐƠN (render ở mọi step) */}
           {showCancelModal && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16 }}>
-              <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 350, padding: 22, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 6, textAlign: 'center' }}>
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
+              <div className="bg-white rounded-2xl w-full max-w-[350px] p-[22px] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1)]">
+                <div className="text-[15px] font-bold text-slate-800 mb-1.5 text-center">
                   Xác nhận hủy giao dịch?
                 </div>
-                <p style={{ fontSize: 13, color: '#64748b', textAlign: 'center', marginBottom: 18, lineHeight: 1.5 }}>
-                  Hành động này sẽ hủy bỏ và đánh dấu thất bại cho đơn hàng <span style={{fontFamily:'monospace', fontWeight:600}}>{currentOrderId}</span>.
+                <p className="text-[13px] text-slate-500 text-center mb-4.5 leading-relaxed">
+                  Hành động này sẽ hủy bỏ và đánh dấu thất bại cho đơn hàng <span className="font-mono font-semibold">{currentOrderId}</span>.
                 </p>
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div className="flex gap-2.5">
                   <button
                     onClick={() => setShowCancelModal(false)}
-                    style={{ flex: 1, padding: '9px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                    className="flex-1 py-2.5 bg-slate-100 text-slate-600 border-none rounded-lg text-[13px] font-semibold cursor-pointer active:opacity-80"
                   >
                     Tiếp tục chờ
                   </button>
                   <button
                     onClick={async () => {
-                      setShowCancelModal(false);
-                      stopCamera();
-                      await triggerCancelOrderBackend();
+                      setShowCancelModal(false)
+                      stopCamera()
+                      await triggerCancelOrderBackend()
                     }}
-                    style={{ flex: 1, padding: '9px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                    className="flex-1 py-2.5 bg-red-600 text-white border-none rounded-lg text-[13px] font-semibold cursor-pointer active:opacity-80"
                   >
                     Đồng ý hủy đơn
                   </button>
@@ -663,26 +643,3 @@ const [showCancelModal, setShowCancelModal] = useState(false)
     </>
   )
 }
-
-const S = {
-  bg:        { minHeight:'100vh', background:'linear-gradient(135deg,#fff0f7 0%,#fce4f0 50%,#f5edf2 100%)', fontFamily:"'Inter',sans-serif" },
-  header:    { position:'sticky', top:0, zIndex:100, background:'rgba(255,255,255,0.92)', backdropFilter:'blur(20px)', borderBottom:'1px solid rgba(174,0,112,0.1)', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' },
-  backBtn:   { width:34, height:34, borderRadius:8, border:'1px solid rgba(174,0,112,0.15)', background:'white', cursor:'pointer', fontSize:18, color:'#ae0070', display:'flex', alignItems:'center', justifyContent:'center' },
-  content:   { maxWidth:480, margin:'0 auto', padding:'16px 16px 40px', display:'flex', flexDirection:'column', gap:12 },
-  card:      { background:'rgba(255,255,255,0.96)', borderRadius:16, padding:'18px 16px', boxShadow:'0 2px 16px rgba(174,0,112,0.06)', border:'1px solid rgba(255,255,255,0.8)' },
-  loginCard: { background:'white', borderRadius:20, padding:'36px 28px', width:'100%', maxWidth:360, boxShadow:'0 20px 60px rgba(174,0,112,0.12)', display:'flex', flexDirection:'column', alignItems:'center', position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)' },
-  sectionTitle: { fontSize:13, fontWeight:700, color:'#374151', marginBottom:14 },
-  input:     { width:'100%', padding:'11px 14px', border:'1.5px solid rgba(174,0,112,0.15)', borderRadius:10, fontSize:14, background:'rgba(245,237,242,0.4)', color:'#111', marginBottom:8 },
-  btnPrimary:   { background:'#ae0070', color:'#fff', border:'none', borderRadius:12, padding:'13px 24px', fontSize:14, fontWeight:700, cursor:'pointer', width:'100%', boxShadow:'0 4px 16px rgba(174,0,112,0.25)' },
-  btnSecondary: { background:'white', color:'#374151', border:'1px solid rgba(0,0,0,0.1)', borderRadius:12, padding:'12px 24px', fontSize:14, fontWeight:600, cursor:'pointer', width:'100%' },
-}
-
-const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; font-family:'Inter',sans-serif; }
-  input { outline:none; }
-  button { transition:opacity .15s; }
-  button:active { opacity:.8; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-  .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
-`
