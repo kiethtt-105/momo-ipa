@@ -424,9 +424,9 @@ export default function AdminPage() {
   return (
     <>
       <Head>
-        <title>Admin · Giao dịch MoMo</title>
+        <title>QUẢN TRỊ GIAO DỊCH - IPA  </title>
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <link rel="icon" type="image/png" href="/Main.png" />
+        <link rel="icon" type="image/png" href="/admin ipa.png" />
       </Head>
       <div className="relative min-h-screen w-screen overflow-x-hidden bg-[#f5edf2] font-[var(--admin-font)] text-[var(--admin-text)]">
         <Orbs />
@@ -562,7 +562,7 @@ export default function AdminPage() {
                     <path d="m21 21-4.35-4.35"/>
                     <path d="M11 8v3l2 2"/>
                   </svg>
-                  Tra cứu Giao dịch
+                  TRA CỨU GIAO DỊCH
                 </button>
 
                 <button
@@ -574,7 +574,7 @@ export default function AdminPage() {
                     <path d="M3 9V5a2 2 0 0 1 2-2h2M21 9V5a2 2 0 0 0-2-2h-2M3 15v4a2 2 0 0 0 2 2h2M21 15v4a2 2 0 0 1-2 2h-2" />
                     <path d="M12 11v4M9 14h6" />
                   </svg>
-                  SCAN - PAYMENT
+                  QUÉT ĐỂ THANH TOÁN
                 </button>
                 <button
                   className="rounded-[9px] border border-[var(--border)] bg-white/70 px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-semibold text-[var(--admin-muted)] hover:border-[var(--admin-danger)] hover:bg-white hover:text-[var(--admin-danger)]"
