@@ -23,6 +23,16 @@ function buildTxUrl(method, amount, orderInfo) {
   return `${TX_BASE_URL}/api/admin/scan-quick?amount=${amt}&orderInfo=${encodeURIComponent(info)}`
 }
 
+// ─── FORMAT SỐ TIỀN (hiển thị có dấu phẩy ngăn hàng nghìn) ──
+function formatAmount(raw) {
+  const digits = (raw || '').replace(/\D/g, '')
+  if (!digits) return ''
+  return parseInt(digits, 10).toLocaleString('en-US')
+}
+function unformatAmount(formatted) {
+  return (formatted || '').replace(/\D/g, '')
+}
+
 // ─── MAIN COMPONENT ────────────────────────────────────────
 export default function CreateTransactionPage() {
   const [method,    setMethod]    = useState('p2p') // 'p2p' | 'scan'
@@ -67,6 +77,8 @@ export default function CreateTransactionPage() {
         <title>Admin · Tạo giao dịch</title>
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&display=swap" />
       </Head>
 
       <div className="relative flex min-h-screen w-full items-center justify-center overflow-x-hidden bg-[#f5edf2] p-5 font-[var(--admin-font)] text-[var(--admin-text)]">
@@ -97,7 +109,7 @@ export default function CreateTransactionPage() {
                   </svg>
                   P2P
                 </span>
-                <span className="text-[11px] text-[var(--admin-muted)]">Khách quét mã QR MoMo</span>
+                <span className="text-[11px] text-[var(--admin-muted)]">Scan qr momo app hoặc ngân hàng hỗ trợ</span>
               </button>
 
               <button
@@ -113,37 +125,35 @@ export default function CreateTransactionPage() {
                   </svg>
                   Scan
                 </span>
-                <span className="text-[11px] text-[var(--admin-muted)]">Admin tự quét thanh toán</span>
+                <span className="text-[11px] text-[var(--admin-muted)]">Scan QR Transaction - MOMO</span>
               </button>
             </div>
 
             {/* Amount */}
             <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Số tiền (₫)</label>
             <input
-              type="number"
-              min="1"
+              type="text"
               inputMode="numeric"
-              placeholder="VD: 50000"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
+              placeholder="VD: 50,000"
+              value={formatAmount(amount)}
+              onChange={e => setAmount(unformatAmount(e.target.value))}
               onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreate()}
-              className="mb-4 w-full rounded-[10px] border-[1.5px] border-[var(--border)] bg-[#fafafa] px-3.5 py-2.5 font-mono text-sm text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.1)]"
+              className="mb-4 w-full rounded-[10px] border-[1.5px] border-[var(--border)] bg-[#fafafa] px-3.5 py-2.5 font-['Outfit',_sans-serif] text-xl font-extrabold tracking-tight text-[var(--mm)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.1)]"
               ref={amountInputRef}
             />
 
             {/* Order info — chỉ cần cho phương thức Scan */}
             {!isP2P && (
               <>
-                <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Nội dung (orderInfo)</label>
+                <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Mã đơn hàng</label>
                 <input
                   type="text"
-                  placeholder="VD: iPOS-TuanKiet 31053726"
+                  placeholder="Nhập mã đơn hàng "
                   value={orderInfo}
                   onChange={e => setOrderInfo(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreate()}
                   className="mb-1 w-full rounded-[10px] border-[1.5px] border-[var(--border)] bg-[#fafafa] px-3.5 py-2.5 font-mono text-sm text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.1)]"
                 />
-                <div className="mb-4 text-[11px] text-[var(--admin-muted)]">Để trống sẽ tự tạo nội dung mặc định.</div>
               </>
             )}
 

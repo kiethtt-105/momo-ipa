@@ -443,6 +443,8 @@ export default function ScanPage() {
         <title>SCAN PAYMENT</title>
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&display=swap" />
       </Head>
       <div className="min-h-[100dvh] flex flex-col bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
 
@@ -495,7 +497,7 @@ export default function ScanPage() {
                 value={formatAmountDisplay(amount)}
                 onChange={e => setAmount(e.target.value.replace(/\D/g, ''))}
                 onKeyDown={handleEnterKey}
-                className={inputBase} autoFocus
+                className={`${inputBase} font-['Outfit',_sans-serif] text-xl font-extrabold tracking-tight text-momo`} autoFocus
                 disabled={quick === 'true'}
               />
 
