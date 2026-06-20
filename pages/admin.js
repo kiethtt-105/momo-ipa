@@ -301,7 +301,7 @@ export default function AdminPage() {
   // ── ĐANG KIỂM TRA SESSION ─────────────────────────────────
   if (checkingSession) return (
     <div className="bg-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <Orbs /><style>{CSS}</style>
+      <Orbs /><style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="sync-dot syncing" style={{ position: 'relative', zIndex: 10 }} />
     </div>
   )
@@ -315,7 +315,7 @@ export default function AdminPage() {
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
       <div className="bg-wrap">
-        <Orbs /><style>{CSS}</style>
+        <Orbs /><style dangerouslySetInnerHTML={{ __html: CSS }} />
         <div className="login-wrap">
           <div className="login-card">
             <div className="login-logo-box">
@@ -371,7 +371,7 @@ export default function AdminPage() {
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
       <div className="bg-wrap">
-        <Orbs /><style>{CSS}</style>
+        <Orbs /><style dangerouslySetInnerHTML={{ __html: CSS }} />
 
         {/* ── DETAIL MODAL ── */}
         {detailOrder && (

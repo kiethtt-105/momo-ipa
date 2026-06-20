@@ -40,8 +40,8 @@ export default function ScanPage() {
 
 
 
-  const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query[cite: 12]
-  const [showCancelModal, setShowCancelModal] = useState(false);[cite: 12]
+const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
+const [showCancelModal, setShowCancelModal] = useState(false)
   const [showConfirmAmountModal, setShowConfirmAmountModal] = useState(false);
   // Load jsQR
   useEffect(() => {
@@ -268,7 +268,7 @@ export default function ScanPage() {
     return (
       <>
         <Head><title>Admin · Đăng nhập</title></Head>
-        <style>{CSS}</style>
+        <style dangerouslySetInnerHTML={{ __html: CSS }} />
         <div style={{ ...S.bg, position:'relative' }}>
           <div style={S.loginCard}>
             <img src="/Main.png" alt="" style={{ width:48, height:48, borderRadius:12, marginBottom:16 }} />
@@ -293,7 +293,7 @@ export default function ScanPage() {
     return (
       <>
         <Head><title>Kết quả thanh toán</title></Head>
-        <style>{CSS}</style>
+        <style dangerouslySetInnerHTML={{ __html: CSS }} />
         <div style={S.bg}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:20 }}>
             <div style={{ ...S.card, maxWidth:420, width:'100%', textAlign:'center', padding:'40px 24px' }}>
@@ -339,7 +339,7 @@ export default function ScanPage() {
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
-      <style>{CSS}</style>
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div style={S.bg}>
 
         {/* Header */}
