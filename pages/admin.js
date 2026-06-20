@@ -418,7 +418,7 @@ export default function AdminPage() {
           />
         )}
 
-        <div className="relative z-[1] pt-[60px]">
+        <div className="relative z-[1] pt-[60px] max-md:pt-[148px]">
           {/* ── HEADER ── */}
           <header className="fixed inset-x-0 top-0 z-[200] border-b border-[var(--border)] bg-white/88 shadow-[0_1px_16px_rgba(174,0,112,0.06)] backdrop-blur-[20px]">
             <div className="mx-auto flex h-[60px] max-w-[1600px] items-center gap-5 px-6 max-md:h-auto max-md:flex-wrap max-md:gap-2.5 max-md:px-4 max-md:py-2.5">
@@ -432,7 +432,8 @@ export default function AdminPage() {
                 />
               </div>
 
-              <nav className="flex flex-1 justify-center gap-0.5 max-md:order-3 max-md:w-full max-md:justify-start max-md:overflow-x-auto max-md:pb-0.5">
+              {/* Tabs ngang — desktop */}
+              <nav className="hidden flex-1 justify-center gap-0.5 md:flex">
                 {FILTERS.map(f => (
                   <button
                     key={f.key}
@@ -454,6 +455,24 @@ export default function AdminPage() {
                   </button>
                 ))}
               </nav>
+
+              {/* Select dropdown — mobile, gọn hơn tabs ngang */}
+              <div className="relative order-3 w-full md:hidden">
+                <select
+                  value={filter}
+                  onChange={e => setFilter(e.target.value)}
+                  className="w-full appearance-none rounded-lg border border-[var(--border)] bg-[var(--mm-light)] px-3.5 py-2 pr-8 font-[var(--admin-font)] text-[13px] font-semibold text-[var(--mm)]"
+                >
+                  {FILTERS.map(f => (
+                    <option key={f.key} value={f.key}>
+                      {f.label} ({counts[f.key]})
+                    </option>
+                  ))}
+                </select>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--mm)]">
+                  <path d="m6 9 6 6 6-6"/>
+                </svg>
+              </div>
 
               <div className="flex flex-shrink-0 items-center gap-2 max-md:ml-auto">
                 <div className="relative flex items-center">
@@ -533,6 +552,27 @@ export default function AdminPage() {
             </div>
           </header>
 
+          {/* ── STATUS BAR (sticky ở desktop, luôn hiển thị, không cuộn mất) ── */}
+          <div className="relative z-[150] border-b border-[var(--border)] bg-white/75 px-6 py-2 backdrop-blur-[12px] max-md:px-4 md:sticky md:top-[60px]">
+            <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 text-xs text-[var(--admin-muted)]">
+              <span className="font-semibold">
+                {filtered.length} giao dịch
+                {filter !== 'ALL' && ` · lọc theo "${FILTERS.find(f => f.key === filter)?.label}"`}
+                {search && ` · tìm "${search}"`}
+              </span>
+              <span className="flex items-center gap-1.5">
+                {/* Dot luôn chiếm chỗ cố định, chỉ đổi màu/animation — không thêm/bớt text để tránh giật layout */}
+                <span
+                  className={`h-1.5 w-1.5 flex-shrink-0 rounded-full transition-colors duration-300 ${fetching ? 'bg-[#f59e0b]' : 'bg-[#22c55e]'}`}
+                  style={fetching ? { animation: 'pulse-dot 0.8s infinite' } : undefined}
+                />
+                <span className="italic">
+                  {lastSync ? `Cập nhật lúc ${lastSync.toLocaleTimeString('vi-VN')}` : 'Đang đồng bộ...'}
+                </span>
+              </span>
+            </div>
+          </div>
+
           {/* ── MAIN ── */}
           <main className="mx-auto max-w-[1600px] p-6">
             {/* STAT CARDS */}
@@ -551,10 +591,10 @@ export default function AdminPage() {
                   <div className="text-[15px] font-semibold text-[var(--admin-muted)]">Không tìm thấy giao dịch nào</div>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="max-h-[65vh] overflow-auto">
                   <table className="w-full min-w-[1100px] border-collapse text-[13.5px]">
-                    <thead>
-                      <tr className="bg-[rgba(245,237,242,0.8)]">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="bg-[#f5edf2]">
                         <th className="w-11 whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">
                           <input
                             type="checkbox"
@@ -656,20 +696,6 @@ export default function AdminPage() {
                   </table>
                 </div>
               )}
-
-              <div className="flex items-center justify-between border-t border-[var(--border)] px-5 py-3 text-xs text-[var(--admin-muted)]">
-                <span className="font-semibold">
-                  {filtered.length} giao dịch
-                  {filter !== 'ALL' && ` · lọc theo "${FILTERS.find(f => f.key === filter)?.label}"`}
-                  {search && ` · tìm "${search}"`}
-                </span>
-                {lastSync && (
-                  <span className="italic">
-                    Cập nhật lúc {lastSync.toLocaleTimeString('vi-VN')}
-                    {fetching && ' · đang tải...'}
-                  </span>
-                )}
-              </div>
             </div>
           </main>
         </div>
