@@ -441,15 +441,13 @@ export default function ScanPage() {
                     <span className="text-[28px] font-extrabold text-momo">{fmt(amount)} ₫</span>
                   </div>
 
-                  {orderInfo && (
-                    <>
-                      <div className="h-px bg-slate-200 my-3" />
-                      <div>
-                        <div className="text-xs text-slate-500 mb-1">Nội dung thanh toán</div>
-                        <div className="text-[15px] text-gray-900 font-medium">{orderInfo}</div>
-                      </div>
-                    </>
-                  )}
+                  <div className="h-px bg-slate-200 my-3" />
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Nội dung thanh toán</div>
+                    <div className="text-[15px] text-gray-900 font-medium">
+                      {orderInfo || (currentOrderId ? `iPOS${currentOrderId.replace('POS', '')}` : '')}
+                    </div>
+                  </div>
                 </div>
               )}
 
