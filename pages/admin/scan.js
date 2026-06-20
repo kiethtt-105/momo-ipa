@@ -190,7 +190,9 @@ const [showCancelModal, setShowCancelModal] = useState(false)
   const handleEnterKey = (e) => {
     if (e.key === 'Enter') {
       if (amount && parseInt(amount) >= 1000) {
-        setStep('scan')
+        // Mở popup xác nhận giống nút "Xác nhận →" để luồng tạo
+        // orderId + gọi save-pending luôn được thực hiện trước khi sang step scan
+        setShowConfirmAmountModal(true)
       }
     }
   }
