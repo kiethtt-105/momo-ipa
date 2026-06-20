@@ -13,7 +13,16 @@ export default async function handler(req, res) {
     return res.status(400).send('Số tiền không hợp lệ (1.000 – 50.000.000 ₫)')
   }
 
-  const orderId = `iPOS${Date.now()}${Math.random().toString(36).slice(2, 6)}`
+  // Ưu tiên dùng orderId do client gửi lên (từ form Tạo Giao Dịch),
+  // chuẩn hóa luôn về tiền tố iPOS để đồng bộ định dạng toàn hệ thống.
+  // Nếu không có (gọi URL trực tiếp, ví dụ iPhone Shortcuts) thì tự sinh.
+  const rawOrderInfo = (req.query.orderInfo || '').toString().trim()
+  let orderId
+  if (rawOrderInfo) {
+    orderId = rawOrderInfo.startsWith('iPOS') ? rawOrderInfo : `iPOS${rawOrderInfo}`
+  } else {
+    orderId = `iPOS${Date.now()}${Math.random().toString(36).slice(2, 6)}`
+  }
   const orderInfo = `Thanh toán ${orderId}`
   const now = new Date().toISOString()
 

@@ -15,7 +15,8 @@ function buildTxUrl(method, amount, orderInfo) {
 
   if (method === 'p2p') {
     // P2P — khách quét QR, trả về trang chuyển hướng MoMo
-    return `${TX_BASE_URL}/api/momo/redirect?amount=${amt}`
+    const info = (orderInfo || '').trim() || genOrderId()
+    return `${TX_BASE_URL}/api/momo/redirect?amount=${amt}&orderInfo=${encodeURIComponent(info)}`
   }
 
   // Scan — admin tự quét thanh toán nhanh
@@ -144,19 +145,15 @@ export default function CreateTransactionPage() {
               ref={amountInputRef}
             />
 
-            {/* Order info — chỉ cần cho phương thức Scan */}
-            {!isP2P && (
-              <>
-                <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">ORDER ID</label>
-                <input
-                  type="text"
-                  value={orderInfo}
-                  onChange={e => setOrderInfo(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreate()}
-                  className="mb-1 w-full rounded-[10px] border-[1.5px] border-[var(--border)] bg-[#fafafa] px-3.5 py-2.5 font-mono text-sm text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.1)]"
-                />
-              </>
-            )}
+            {/* Order info — hiện cho cả P2P và Scan */}
+            <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">ORDER ID</label>
+            <input
+              type="text"
+              value={orderInfo}
+              onChange={e => setOrderInfo(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreate()}
+              className="mb-1 w-full rounded-[10px] border-[1.5px] border-[var(--border)] bg-[#fafafa] px-3.5 py-2.5 font-mono text-sm text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.1)]"
+            />
 
             {/* Submit */}
             <button

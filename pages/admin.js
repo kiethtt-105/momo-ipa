@@ -22,6 +22,52 @@ const decodeExtra = b64 => {
   try { return JSON.parse(atob(b64)) } catch { return b64 }
 }
 
+// ─── DATE RANGE PRESETS (Hôm qua / Hôm nay / Tuần này / Tháng này) ─
+// Trả về chuỗi yyyy-mm-dd theo giờ địa phương (không dùng toISOString
+// vì nó quy về UTC, có thể lệch ngày với người dùng VN).
+const toDayStr = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+const DATE_PRESETS = [
+  {
+    key: 'yesterday',
+    label: 'Hôm qua',
+    range: () => {
+      const d = new Date()
+      d.setDate(d.getDate() - 1)
+      const s = toDayStr(d)
+      return [s, s]
+    },
+  },
+  {
+    key: 'today',
+    label: 'Hôm nay',
+    range: () => {
+      const s = toDayStr(new Date())
+      return [s, s]
+    },
+  },
+  {
+    key: 'thisWeek',
+    label: 'Tuần này',
+    range: () => {
+      const now = new Date()
+      const day = now.getDay() === 0 ? 7 : now.getDay() // Thứ 2 = đầu tuần
+      const start = new Date(now)
+      start.setDate(now.getDate() - day + 1)
+      return [toDayStr(start), toDayStr(now)]
+    },
+  },
+  {
+    key: 'thisMonth',
+    label: 'Tháng này',
+    range: () => {
+      const now = new Date()
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      return [toDayStr(start), toDayStr(now)]
+    },
+  },
+]
+
 // ─── NORMALIZE STATUS ─────────────────────────────────────
 const normalizeStatus = (order) => {
   let status = order.status || 'PENDING'
@@ -84,8 +130,8 @@ export default function AdminPage() {
   const [lastSync,        setLastSync]        = useState(null)
   const [filter,          setFilter]          = useState('ALL')
   const [search,          setSearch]          = useState('')
-  const [dateFrom,        setDateFrom]        = useState('')
-  const [dateTo,          setDateTo]          = useState('')
+  const [dateFrom,        setDateFrom]        = useState(() => toDayStr(new Date()))
+  const [dateTo,          setDateTo]          = useState(() => toDayStr(new Date()))
   const [sortKey,         setSortKey]         = useState('createdAt')
   const [sortDir,         setSortDir]         = useState('desc') // 'asc' | 'desc'
   const [selected,        setSelected]        = useState(new Set())
@@ -583,7 +629,17 @@ export default function AdminPage() {
                     <span className="hidden max-md:inline">TRA CỨU</span>
                   </button>
 
-
+                  <button
+                    className="flex-1 whitespace-nowrap rounded-[9px] border border-[rgba(174,0,112,0.3)] bg-[#fff0f7] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-[var(--mm)] transition-all hover:bg-[var(--mm)] hover:text-white max-md:px-1.5 max-md:text-[11px] md:flex-none"
+                    onClick={() => window.open('/admin/scan', '_blank')}
+                    title="Mở Scan QR ở tab mới"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline-block align-[-2px]">
+                      <path d="M3 9V5a2 2 0 0 1 2-2h2M21 9V5a2 2 0 0 0-2-2h-2M3 15v4a2 2 0 0 0 2 2h2M21 15v4a2 2 0 0 1-2 2h-2" />
+                      <path d="M12 11v4M9 14h6" />
+                    </svg>
+                    SCAN
+                  </button>
                   <button
                     className="flex-1 whitespace-nowrap rounded-[9px] border border-[var(--border)] bg-white/70 px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-semibold text-[var(--admin-muted)] hover:border-[var(--admin-danger)] hover:bg-white hover:text-[var(--admin-danger)] max-md:px-1.5 max-md:text-[11px] md:flex-none"
                     onClick={() => {
@@ -605,6 +661,27 @@ export default function AdminPage() {
                   {filtered.length} giao dịch
                   {filter !== 'ALL' && ` · "${FILTERS.find(f => f.key === filter)?.label}"`}
                 </span>
+
+                {/* Lọc nhanh theo khoảng ngày — kiểu MoMo Business */}
+                <div className="flex flex-wrap items-center gap-1">
+                  {DATE_PRESETS.map(p => {
+                    const [from, to] = p.range()
+                    const active = dateFrom === from && dateTo === to
+                    return (
+                      <button
+                        key={p.key}
+                        className={`whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
+                          active
+                            ? 'bg-[var(--mm)] text-white'
+                            : 'bg-white/70 text-[var(--admin-muted)] hover:bg-[var(--mm-light)] hover:text-[var(--mm)]'
+                        }`}
+                        onClick={() => { setDateFrom(from); setDateTo(to) }}
+                      >
+                        {p.label}
+                      </button>
+                    )
+                  })}
+                </div>
 
                 {/* Lọc theo ngày */}
                 <div className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white/70 px-2 py-1">
