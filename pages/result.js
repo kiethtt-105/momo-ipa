@@ -173,6 +173,25 @@ useEffect(() => {
   }
   const m = META[status] || META.loading
 
+  const InfoTile = ({ label, value, full, mono }) => (
+    <div
+      className={`rounded-xl border border-[rgba(174,0,112,0.08)] bg-white/60 px-4 py-3 ${
+        full ? 'col-span-full' : ''
+      }`}
+    >
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+        {label}
+      </p>
+      <p
+        className={`break-all font-bold text-[var(--text)] ${
+          mono ? 'font-mono text-xs' : 'text-sm'
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  )
+
   return (
     <>
       <Head>
@@ -206,7 +225,8 @@ useEffect(() => {
           style={{ animation: 'om1 6.5s infinite alternate ease-in-out' }}
         />
 
-        <div className="relative z-[2] grid w-full max-w-[clamp(340px,92vw,860px)] grid-cols-1 overflow-hidden rounded-[20px] border border-white/70 bg-[var(--surface)] shadow-[0_25px_50px_rgba(174,0,112,0.04),0_1px_2px_rgba(0,0,0,0.01)] backdrop-blur-[25px] will-change-transform md:grid-cols-[1.1fr_0.9fr] md:rounded-3xl">
+        <div className="relative z-[2] grid w-full max-w-[clamp(340px,92vw,860px)] grid-cols-1 overflow-hidden rounded-[20px] border border-white/70 bg-[var(--surface)] shadow-[0_30px_60px_rgba(174,0,112,0.1),0_1px_2px_rgba(0,0,0,0.02)] backdrop-blur-[25px] will-change-transform md:grid-cols-[1.1fr_0.9fr] md:rounded-3xl">
+          <div className="absolute inset-x-0 top-0 z-[3] h-1 bg-gradient-to-r from-[#ff9cb7] via-[var(--mm)] to-[#dfb2ea]" />
           {/* Status section */}
           <div className="relative flex flex-col items-center justify-center border-b border-dashed border-[rgba(174,0,112,0.15)] bg-white/20 px-6 pb-9 pt-11 text-center md:border-b-0 md:border-r md:border-dashed md:border-[rgba(174,0,112,0.12)] md:px-10 md:py-12">
             <div className="absolute left-5 top-4 flex items-center gap-2.5 md:left-8 md:top-6">
@@ -248,120 +268,69 @@ useEffect(() => {
             )}
 
             {status === 'success' && info && (
-              <div className="mb-6 overflow-hidden rounded-2xl border border-[rgba(174,0,112,0.08)] bg-white/60">
+              <div className="mb-6 space-y-4">
                 {info.amount > 0 && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm">
-                    <span className="font-medium text-[var(--muted)]">Số tiền</span>
-                    <span className="max-w-[60%] break-all text-right text-2xl font-black text-[var(--mm)]">{fmt(info.amount)} ₫</span>
+                  <div className="rounded-2xl bg-gradient-to-br from-[#fff0f6] to-[#ffe3ef] px-5 py-5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+                      Số tiền
+                    </p>
+                    <p className="text-3xl font-black text-[var(--mm)]">
+                      {fmt(info.amount)} <span className="text-xl">₫</span>
+                    </p>
                   </div>
                 )}
-                <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                  <span className="font-medium text-[var(--muted)]">Mã đơn hàng</span>
-                  <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.orderId}</span>
+
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3">
+                  <InfoTile label="Mã đơn hàng" value={info.orderId} full />
+                  {info.transId && <InfoTile label="Mã GD MoMo" value={info.transId} />}
+                  {info.payType && <InfoTile label="Hình thức" value={info.payType} />}
+                  {info.orderType && <InfoTile label="Loại đơn hàng" value={info.orderType} />}
+                  {info.requestId && <InfoTile label="Request ID" value={info.requestId} mono />}
+                  {fmtTime(info.responseTime) && (
+                    <InfoTile label="Thời gian phản hồi" value={fmtTime(info.responseTime)} />
+                  )}
+                  {info.extraData && info.extraData !== '' && (
+                    <InfoTile label="Extra Data" value={info.extraData} mono full />
+                  )}
+                  {Array.isArray(info.refundTrans) && info.refundTrans.length > 0 && (
+                    <InfoTile label="Giao dịch hoàn tiền" value={`${info.refundTrans.length} lần`} />
+                  )}
+                  {info.orderInfo && <InfoTile label="Nội dung" value={info.orderInfo} full />}
                 </div>
-                {info.transId && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Mã GD MoMo</span>
-                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.transId}</span>
-                  </div>
-                )}
-                {info.payType && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Hình thức</span>
-                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.payType}</span>
-                  </div>
-                )}
-                {info.orderType && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Loại đơn hàng</span>
-                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.orderType}</span>
-                  </div>
-                )}
-                {info.orderInfo && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Nội dung</span>
-                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.orderInfo}</span>
-                  </div>
-                )}
-                {info.requestId && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Request ID</span>
-                    <span className="max-w-[60%] break-all text-right font-mono text-xs font-bold text-[var(--text)]">{info.requestId}</span>
-                  </div>
-                )}
-                {fmtTime(info.responseTime) && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Thời gian phản hồi</span>
-                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{fmtTime(info.responseTime)}</span>
-                  </div>
-                )}
-                {info.extraData && info.extraData !== '' && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Extra Data</span>
-                    <span className="max-w-[60%] break-all text-right font-mono text-xs font-bold text-[var(--text)]">{info.extraData}</span>
-                  </div>
-                )}
-                {Array.isArray(info.refundTrans) && info.refundTrans.length > 0 && (
-                  <div className="flex items-center justify-between px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Giao dịch hoàn tiền</span>
-                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.refundTrans.length} lần</span>
-                  </div>
-                )}
               </div>
             )}
 
             {status === 'failed' && info?.resultCode && (
-              <div className="mb-6 overflow-hidden rounded-2xl border border-[rgba(174,0,112,0.08)] bg-white/60">
-                <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm">
-                  <span className="font-medium text-[var(--muted)]">Mã lỗi hệ thống</span>
-                  <span className="max-w-[60%] break-all text-right font-bold text-[#dc2626]">{info.resultCode}</span>
+              <div className="mb-6 space-y-4">
+                <div className="rounded-2xl bg-gradient-to-br from-[#fff1f1] to-[#ffe2e2] px-5 py-4 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+                    Mã lỗi hệ thống
+                  </p>
+                  <p className="text-2xl font-black text-[#dc2626]">{info.resultCode}</p>
                 </div>
-                <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                  <span className="font-medium text-[var(--muted)]">Đơn hàng số</span>
-                  <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.orderId}</span>
-                </div>
+
                 {info.message && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Nguyên nhân</span>
-                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.message}</span>
+                  <div className="rounded-2xl border border-[#fecaca] bg-[#fff5f5] px-5 py-4">
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-[#dc2626]">
+                      Nguyên nhân
+                    </p>
+                    <p className="text-sm font-medium leading-relaxed text-[var(--text)]">
+                      {info.message}
+                    </p>
                   </div>
                 )}
-                {info.amount > 0 && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Số tiền</span>
-                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{fmt(info.amount)} ₫</span>
-                  </div>
-                )}
-                {info.transId && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Mã GD MoMo</span>
-                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.transId}</span>
-                  </div>
-                )}
-                {info.payType && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Hình thức</span>
-                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.payType}</span>
-                  </div>
-                )}
-                {info.orderInfo && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Nội dung</span>
-                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.orderInfo}</span>
-                  </div>
-                )}
-                {info.requestId && (
-                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Request ID</span>
-                    <span className="max-w-[60%] break-all text-right font-mono text-xs font-bold text-[var(--text)]">{info.requestId}</span>
-                  </div>
-                )}
-                {fmtTime(info.responseTime) && (
-                  <div className="flex items-center justify-between px-5 py-4 text-sm last:border-b-0">
-                    <span className="font-medium text-[var(--muted)]">Thời gian phản hồi</span>
-                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{fmtTime(info.responseTime)}</span>
-                  </div>
-                )}
+
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3">
+                  <InfoTile label="Đơn hàng số" value={info.orderId} full />
+                  {info.amount > 0 && <InfoTile label="Số tiền" value={`${fmt(info.amount)} ₫`} />}
+                  {info.transId && <InfoTile label="Mã GD MoMo" value={info.transId} />}
+                  {info.payType && <InfoTile label="Hình thức" value={info.payType} />}
+                  {info.requestId && <InfoTile label="Request ID" value={info.requestId} mono />}
+                  {fmtTime(info.responseTime) && (
+                    <InfoTile label="Thời gian phản hồi" value={fmtTime(info.responseTime)} />
+                  )}
+                  {info.orderInfo && <InfoTile label="Nội dung" value={info.orderInfo} full />}
+                </div>
               </div>
             )}
 
