@@ -523,78 +523,87 @@ export default function AdminPage() {
                 </svg>
               </div>
 
-              <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 max-md:ml-auto max-md:w-full">
-                <div className="relative flex items-center">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute left-[11px] text-[var(--admin-muted)]"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                  <input
-                    type="text" placeholder="Tìm kiếm..."
-                    value={search} onChange={e => setSearch(e.target.value)}
-                    className="w-[160px] rounded-[10px] border border-[var(--border)] bg-white/70 py-[7px] pl-[34px] pr-8 font-[var(--admin-font)] text-[13px] text-[var(--admin-text)] transition-all focus:w-[180px] focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.08)] md:w-[220px] md:focus:w-[260px]"
-                  />
-                  {search && (
+              <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 max-md:w-full max-md:flex-col md:ml-auto">
+                {/* Hàng 1 (mobile): ô tìm kiếm + nút Tạo giao dịch */}
+                <div className="flex w-full items-center gap-2 md:w-auto">
+                  <div className="relative flex flex-1 items-center md:flex-none">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute left-[11px] text-[var(--admin-muted)]"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <input
+                      type="text" placeholder="Tìm kiếm..."
+                      value={search} onChange={e => setSearch(e.target.value)}
+                      className="w-full rounded-[10px] border border-[var(--border)] bg-white/70 py-[7px] pl-[34px] pr-8 font-[var(--admin-font)] text-[13px] text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.08)] md:w-[220px] md:focus:w-[260px]"
+                    />
+                    {search && (
+                      <button
+                        className="absolute right-[10px] text-xs leading-none text-[var(--admin-muted)]"
+                        onClick={() => setSearch('')}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {selected.size > 0 && (
                     <button
-                      className="absolute right-[10px] text-xs leading-none text-[var(--admin-muted)]"
-                      onClick={() => setSearch('')}
+                      className="flex-shrink-0 whitespace-nowrap rounded-[9px] bg-[var(--admin-danger)] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-white"
+                      onClick={() => doDelete([...selected])}
                     >
-                      ✕
+                      🗑 Xóa ({selected.size})
                     </button>
                   )}
+
+                  {/* ── TẠO GIAO DỊCH BUTTON ── */}
+                  <button
+                    className="inline-flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[9px] bg-[var(--mm)] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-white shadow-[0_4px_14px_rgba(174,0,112,0.25)] transition-all hover:-translate-y-px hover:bg-[#91005d] max-md:px-2.5 max-md:text-[12px]"
+                    onClick={() => window.open('/admin/create-transaction', '_blank')}
+                    title="Mở trang Tạo giao dịch ở tab mới"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                    <span className="max-md:hidden">TẠO GIAO DỊCH</span>
+                    <span className="hidden max-md:inline">TẠO</span>
+                  </button>
                 </div>
 
-                {selected.size > 0 && (
+                {/* Hàng 2 (mobile): Tra cứu / Scan / Đăng xuất chia đều 3 cột */}
+                <div className="flex w-full items-center gap-2 md:w-auto">
+                  {/* ── QUERY BUTTON ── */}
                   <button
-                    className="rounded-[9px] bg-[var(--admin-danger)] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-white"
-                    onClick={() => doDelete([...selected])}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[9px] border border-[rgba(99,102,241,0.3)] bg-[#eef2ff] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-[#4f46e5] transition-all hover:border-[#4f46e5] hover:bg-[#4f46e5] hover:text-white max-md:px-1.5 max-md:text-[11px] md:flex-none"
+                    onClick={() => { setQueryOrderId(''); setQueryResult(null); setQueryError(null); setQueryModal(true) }}
+                    title="Tra cứu trạng thái giao dịch MoMo"
                   >
-                    🗑 Xóa ({selected.size})
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="flex-shrink-0">
+                      <circle cx="11" cy="11" r="8"/>
+                      <path d="m21 21-4.35-4.35"/>
+                      <path d="M11 8v3l2 2"/>
+                    </svg>
+                    <span className="max-md:hidden">TRA CỨU GIAO DỊCH</span>
+                    <span className="hidden max-md:inline">TRA CỨU</span>
                   </button>
-                )}
 
-                {/* ── TẠO GIAO DỊCH BUTTON ── */}
-                <button
-                  className="inline-flex items-center gap-1.5 rounded-[9px] bg-[var(--mm)] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-white shadow-[0_4px_14px_rgba(174,0,112,0.25)] transition-all hover:-translate-y-px hover:bg-[#91005d]"
-                  onClick={() => window.open('/admin/create-transaction', '_blank')}
-                  title="Mở trang Tạo giao dịch ở tab mới"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M12 5v14M5 12h14"/>
-                  </svg>
-                  TẠO GIAO DỊCH
-                </button>
-
-                {/* ── QUERY BUTTON ── */}
-                <button
-                  className="inline-flex items-center gap-1.5 rounded-[9px] border border-[rgba(99,102,241,0.3)] bg-[#eef2ff] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-[#4f46e5] transition-all hover:border-[#4f46e5] hover:bg-[#4f46e5] hover:text-white"
-                  onClick={() => { setQueryOrderId(''); setQueryResult(null); setQueryError(null); setQueryModal(true) }}
-                  title="Tra cứu trạng thái giao dịch MoMo"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <circle cx="11" cy="11" r="8"/>
-                    <path d="m21 21-4.35-4.35"/>
-                    <path d="M11 8v3l2 2"/>
-                  </svg>
-                  TRA CỨU GIAO DỊCH
-                </button>
-
-                <button
-                  className="rounded-[9px] border border-[rgba(174,0,112,0.3)] bg-[#fff0f7] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-[var(--mm)] transition-all hover:bg-[var(--mm)] hover:text-white"
-                  onClick={() => window.open('/admin/scan', '_blank')}
-                  title="Mở Scan QR ở tab mới"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline-block align-[-2px]">
-                    <path d="M3 9V5a2 2 0 0 1 2-2h2M21 9V5a2 2 0 0 0-2-2h-2M3 15v4a2 2 0 0 0 2 2h2M21 15v4a2 2 0 0 1-2 2h-2" />
-                    <path d="M12 11v4M9 14h6" />
-                  </svg>
-                  SCAN PAYMENT
-                </button>
-                <button
-                  className="rounded-[9px] border border-[var(--border)] bg-white/70 px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-semibold text-[var(--admin-muted)] hover:border-[var(--admin-danger)] hover:bg-white hover:text-[var(--admin-danger)]"
-                  onClick={() => {
-                    fetch('/api/admin/session', { method: 'DELETE' }).finally(() => setAuthed(false))
-                  }}
-                >
-                  Đăng xuất
-                </button>
+                  <button
+                    className="flex-1 whitespace-nowrap rounded-[9px] border border-[rgba(174,0,112,0.3)] bg-[#fff0f7] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-[var(--mm)] transition-all hover:bg-[var(--mm)] hover:text-white max-md:px-1.5 max-md:text-[11px] md:flex-none"
+                    onClick={() => window.open('/admin/scan', '_blank')}
+                    title="Mở Scan QR ở tab mới"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline-block align-[-2px]">
+                      <path d="M3 9V5a2 2 0 0 1 2-2h2M21 9V5a2 2 0 0 0-2-2h-2M3 15v4a2 2 0 0 0 2 2h2M21 15v4a2 2 0 0 1-2 2h-2" />
+                      <path d="M12 11v4M9 14h6" />
+                    </svg>
+                    <span className="max-md:hidden">SCAN PAYMENT</span>
+                    <span className="hidden max-md:inline">SCAN</span>
+                  </button>
+                  <button
+                    className="flex-1 whitespace-nowrap rounded-[9px] border border-[var(--border)] bg-white/70 px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-semibold text-[var(--admin-muted)] hover:border-[var(--admin-danger)] hover:bg-white hover:text-[var(--admin-danger)] max-md:px-1.5 max-md:text-[11px] md:flex-none"
+                    onClick={() => {
+                      fetch('/api/admin/session', { method: 'DELETE' }).finally(() => setAuthed(false))
+                    }}
+                  >
+                    Đăng xuất
+                  </button>
+                </div>
               </div>
             </div>
           </header>
