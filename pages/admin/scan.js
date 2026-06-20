@@ -330,7 +330,7 @@ export default function ScanPage() {
         <div className="relative min-h-screen bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[360px] bg-white rounded-[20px] px-7 py-9 shadow-[0_20px_60px_rgba(174,0,112,0.12)] flex flex-col items-center">
             <img src="/Main.png" alt="" className="w-12 h-12 rounded-xl mb-4" />
-            <h1 className="text-xl font-extrabold text-gray-900 mb-1.5"></h1>
+            <h1 className="text-xl font-extrabold text-gray-900 mb-1.5">Hệ thống quản lý giao dịch</h1>
             <input
               type="password" placeholder="Mật khẩu" value={password} autoFocus
               onChange={e => { setPassword(e.target.value); setPwError(false) }}
