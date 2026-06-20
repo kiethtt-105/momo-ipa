@@ -1,16 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-* ,
+:root {
+  --mm: #ae0070;
+  --mm-dark: #91005d;
+  --mm-light: #fff0f7;
+  --text: #1a0413;
+  --muted: #614655;
+  --surface: rgba(255, 255, 255, 0.88);
+  --bg-input: rgba(240, 232, 236, 0.6);
+  --border: rgba(174, 0, 112, 0.1);
+  --font: 'Be Vietnam Pro', sans-serif;
+
+  /* admin dashboard */
+  --admin-success: #16a34a;
+  --admin-danger: #dc2626;
+  --admin-warning: #d97706;
+  --admin-muted: #6b7280;
+  --admin-text: #111827;
+  --admin-surface: rgba(255, 255, 255, 0.92);
+  --admin-font: 'Inter', sans-serif;
+}
+
+*,
 *::before,
 *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
   font-family: 'Inter', sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+  width: 100%;
 }
 
 input {
@@ -23,4 +51,49 @@ button {
 
 button:active {
   opacity: 0.8;
+}
+
+/* Bỏ viền trên của section đầu tiên trong modal admin (DetailModal/QueryModal) */
+.msection-wrap:first-child .msection-title {
+  border-top: none;
+}
+
+/* ─── Keyframes dùng chung cho trang thanh toán MoMo (index/result) ─── */
+@keyframes om1 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(8vw, 4vh) scale(1.15); }
+  100% { transform: translate(-4vw, 7vh) scale(0.9); }
+}
+@keyframes om2 {
+  0% { transform: translate(0, 0) scale(1.1); }
+  50% { transform: translate(-10vw, -6vh) scale(0.9); }
+  100% { transform: translate(6vw, 4vh) scale(1.1); }
+}
+@keyframes om3 {
+  0% { transform: translate(0, 0) scale(0.9); }
+  50% { transform: translate(-5vw, 7vh) scale(1.2); }
+  100% { transform: translate(7vw, -4vh) scale(1); }
+}
+@keyframes rot {
+  to { transform: rotate(360deg); }
+}
+@keyframes pop {
+  from { transform: scale(0.94); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes slideup {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes scaleup {
+  from { transform: scale(0.7); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes fadein {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

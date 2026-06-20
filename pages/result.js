@@ -122,290 +122,128 @@ useEffect(() => {
         <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
       </Head>
 
-      <style>{`
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      <div className="relative grid min-h-dvh w-screen place-items-center content-center overflow-y-auto overflow-x-hidden bg-[#f6eff2] px-4 py-6 font-[var(--font)]">
+        <div
+          className="pointer-events-none absolute inset-0 z-[1] opacity-50"
+          style={{
+            backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3e%3cfilter id='noiseFilter'%3e%3ccolorMatrix type='matrix' values='0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.05 0'/%3e%3cturbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3e%3c/filter%3e%3crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3e%3c/svg%3e\")",
+          }}
+        />
+        <div
+          className="pointer-events-none absolute left-[-5%] top-[-5%] z-0 h-[50vw] w-[50vw] rounded-full bg-[#ff9cb7] opacity-65 blur-[55px]"
+          style={{ animation: 'om1 5s infinite alternate ease-in-out' }}
+        />
+        <div
+          className="pointer-events-none absolute bottom-[-5%] right-[-5%] z-0 h-[60vw] w-[60vw] rounded-full bg-[#b0bec5] opacity-65 blur-[55px]"
+          style={{ animation: 'om2 7s infinite alternate ease-in-out' }}
+        />
+        <div
+          className="pointer-events-none absolute right-[-5%] top-[25%] z-0 h-[45vw] w-[45vw] rounded-full bg-[#dfb2ea] opacity-65 blur-[55px]"
+          style={{ animation: 'om3 6s infinite alternate ease-in-out' }}
+        />
+        <div
+          className="pointer-events-none absolute bottom-[-5%] left-[5%] z-0 h-[40vw] w-[40vw] rounded-full bg-[#80cbc4] opacity-65 blur-[55px]"
+          style={{ animation: 'om1 6.5s infinite alternate ease-in-out' }}
+        />
 
-        :root {
-          --mm: #ae0070;
-          --text: #1a0413;
-          --muted: #614655;
-          --surface: rgba(255, 255, 255, 0.85);
-          --border-input: rgba(174, 0, 112, 0.1);
-        }
-
-        html, body {
-          height: 100%;
-          width: 100%;
-          font-family: 'Be Vietnam Pro', sans-serif;
-          background: #f3e9ed;
-          overflow-x: hidden;
-        }
-
-        .wrapper {
-          position: relative;
-          display: grid;
-          place-items: center;       /* Thêm thuộc tính này */
-          align-content: center;     /* Thêm thuộc tính này */
-          min-height: 100dvh;
-          width: 100vw;
-          padding: 24px 16px;        /* Tăng nhẹ padding cho thoáng */
-          background-color: #f6eff2;
-          overflow-y: auto;
-          overflow-x: hidden;
-        }
-        /* NỀN MESH GRADIENT ĐẬM RÕ - CHẢY NHANH ĐỒNG BỘ */
-        .orb {
-          position: absolute;
-          border-radius: 50%;
-          filter: blur(55px);
-          opacity: 0.65;
-          z-index: 0;
-          pointer-events: none;
-          transform: translate3d(0,0,0); /* Kích hoạt tăng tốc phần cứng card đồ họa */
-        }
-        .orb-1 { top: -5%; left: -5%; width: 50vw; height: 50vw; background: #ff9cb7; animation: orbMove1 5s infinite alternate ease-in-out; }
-        .orb-2 { bottom: -5%; right: -5%; width: 60vw; height: 60vw; background: #b0bec5; animation: orbMove2 7s infinite alternate ease-in-out; }
-        .orb-3 { top: 25%; right: -5%; width: 45vw; height: 45vw; background: #dfb2ea; animation: orbMove3 6s infinite alternate ease-in-out; }
-        .orb-4 { bottom: -5%; left: 5%; width: 40vw; height: 40vw; background: #80cbc4; animation: orbMove1 6.5s infinite alternate ease-in-out; }
-
-        @keyframes orbMove1 { 0% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(8vw, 4vh, 0) scale(1.15); } 100% { transform: translate3d(-4vw, 7vh, 0) scale(0.9); } }
-        @keyframes orbMove2 { 0% { transform: translate3d(0, 0, 0) scale(1.1); } 50% { transform: translate3d(-10vw, -6vh, 0) scale(0.9); } 100% { transform: translate3d(6vw, 4vh, 0) scale(1.1); } }
-        @keyframes orbMove3 { 0% { transform: translate3d(0, 0, 0) scale(0.9); } 50% { transform: translate3d(-5vw, 7vh, 0) scale(1.2); } 100% { transform: translate3d(7vw, -4vh, 0) scale(1); } }
-
-        .wrapper::before {
-          content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3e%3cfilter id='noiseFilter'%3e%3ccolorMatrix type='matrix' values='0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.15 0 0 0 0 0 0.05 0'/%3e%3cturbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3e%3c/filter%3e%3crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3e%3c/svg%3e");
-          opacity: 0.5; z-index: 1; pointer-events: none;
-        }
-
-        /* CONTAINER CARD KÍNH MỜ SIÊU MƯỢT */
-        .container-card {
-          position: relative;
-          z-index: 2;
-          background: var(--surface);
-          backdrop-filter: blur(25px);
-          -webkit-backdrop-filter: blur(25px);
-          width: 100%;
-          max-width: 860px;
-          border-radius: 24px;
-          box-shadow: 0 25px 50px rgba(174, 0, 112, 0.04), 0 1px 2px rgba(0, 0, 0, 0.01);
-          border: 1px solid rgba(255, 255, 255, 0.7);
-          display: grid;
-          grid-template-columns: 1.1fr 0.9fr;
-          overflow: hidden;
-          will-change: transform;
-        }
-
-        .status-section {
-          background: rgba(255, 255, 255, 0.2);
-          padding: 50px 40px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          position: relative;
-          border-right: 1px dashed rgba(174, 0, 112, 0.12);
-        }
-
-        .brand-header {
-          position: absolute;
-          top: 24px;
-          left: 32px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-        .brand-logo { width: 32px; height: 32px; border-radius: 8px; object-fit: contain; }
-        .brand-title { font-size: 14px; font-weight: 800; color: var(--text); letter-spacing: -0.2px; }
-
-        .icon-wrapper {
-          width: 100px;
-          height: 100px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 42px;
-          font-weight: 900;
-          margin-bottom: 24px;
-          margin-top: 20px;
-          box-shadow: 0 8px 20px rgba(0,0,0,0.02);
-          animation: scaleUp 0.4s cubic-bezier(.34,1.56,.64,1) both;
-        }
-        @keyframes scaleUp { from { transform: scale(0.7); opacity: 0 } to { transform: scale(1); opacity: 1 } }
-
-        .loading-spinner {
-          width: 70px;
-          height: 70px;
-          border-radius: 50%;
-          border: 5px solid rgba(174, 0, 112, 0.1);
-          border-top-color: var(--mm);
-          animation: spin 0.8s linear infinite;
-          margin-bottom: 24px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .status-title { font-size: 26px; font-weight: 800; line-height: 1.3; margin-bottom: 12px; color: var(--text); }
-        .status-subtitle { font-size: 14px; color: var(--muted); line-height: 1.5; max-width: 300px; }
-
-        .details-section {
-          background: transparent;
-          padding: 50px 40px;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-        }
-
-        .details-heading { font-size: 17px; font-weight: 800; color: var(--text); margin-bottom: 20px; letter-spacing: -0.3px; }
-
-        .info-card {
-          background: rgba(255, 255, 255, 0.6);
-          border: 1px solid rgba(174, 0, 112, 0.08);
-          border-radius: 16px;
-          overflow: hidden;
-          margin-bottom: 24px;
-        }
-
-        .info-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 16px 20px;
-          font-size: 14px;
-          border-bottom: 1px solid rgba(174, 0, 112, 0.04);
-        }
-        .info-item:last-child { border-bottom: none; }
-        .info-label { color: var(--muted); font-weight: 500; }
-        .info-value { font-weight: 700; color: var(--text); text-align: right; max-width: 60%; word-break: break-all; }
-        .info-value.amount-highlight { font-size: 24px; font-weight: 900; color: var(--mm); }
-
-        .action-button {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 100%;
-          padding: 16px;
-          border-radius: 14px;
-          background: var(--mm);
-          color: #ffffff;
-          font-size: 16px;
-          font-weight: 700;
-          text-decoration: none;
-          text-align: center;
-          box-shadow: 0 8px 24px rgba(174, 0, 112, 0.2);
-          transition: all 0.2s ease;
-          border: none;
-          cursor: pointer;
-        }
-        .action-button:hover { background: #91005d; transform: translateY(-2px); box-shadow: 0 12px 28px rgba(174, 0, 112, 0.3); }
-
-        .state-empty-text { font-size: 14px; color: var(--muted); text-align: center; padding: 20px 0; }
-
-        @media (max-width: 768px) {
-          .wrapper { padding: 16px; }
-          .container-card { 
-            display: grid;           /* Đảm bảo kích hoạt grid */
-            grid-template-columns: 1fr; 
-            max-width: 400px;        /* Bóp gọn chiều rộng khít đều với tỉ lệ trang chủ cho cân đối */
-            border-radius: 20px; 
-          }
-          .status-section { border-right: none; border-bottom: 1px dashed rgba(174, 0, 112, 0.15); padding: 45px 24px 35px 24px; }
-          .brand-header { top: 16px; left: 20px; }
-          .icon-wrapper { width: 85px; height: 85px; font-size: 36px; margin-bottom: 16px; }
-          .status-title { font-size: 22px; }
-          .details-section { padding: 35px 24px; }
-        }   
-      `}</style>
-
-      <div className="wrapper">
-        <div className="orb orb-1"></div>
-        <div className="orb orb-2"></div>
-        <div className="orb orb-3"></div>
-        <div className="orb orb-4"></div>
-
-        <div className="container-card">
-          <div className="status-section">
-            <div className="brand-header">
-              <img src="/Main.png" alt="Logo" className="brand-logo" />
-              <span className="brand-title">IPA</span>
+        <div className="relative z-[2] grid w-full max-w-[400px] grid-cols-1 overflow-hidden rounded-[20px] border border-white/70 bg-[var(--surface)] shadow-[0_25px_50px_rgba(174,0,112,0.04),0_1px_2px_rgba(0,0,0,0.01)] backdrop-blur-[25px] will-change-transform md:max-w-[860px] md:grid-cols-[1.1fr_0.9fr] md:rounded-3xl">
+          {/* Status section */}
+          <div className="relative flex flex-col items-center justify-center border-b border-dashed border-[rgba(174,0,112,0.15)] bg-white/20 px-6 pb-9 pt-11 text-center md:border-b-0 md:border-r md:border-dashed md:border-[rgba(174,0,112,0.12)] md:px-10 md:py-12">
+            <div className="absolute left-5 top-4 flex items-center gap-2.5 md:left-8 md:top-6">
+              <img src="/Main.png" alt="Logo" className="h-8 w-8 rounded-lg object-contain" />
+              <span className="text-sm font-extrabold tracking-[-0.2px] text-[var(--text)]">IPA</span>
             </div>
 
             {m.spin ? (
-              <div className="loading-spinner" />
+              <div
+                className="mb-6 h-[70px] w-[70px] rounded-full border-[5px] border-[rgba(174,0,112,0.1)] border-t-[var(--mm)]"
+                style={{ animation: 'rot 0.8s linear infinite' }}
+              />
             ) : (
-              <div className="icon-wrapper" style={{ backgroundColor: m.bg, color: m.accent }}>
+              <div
+                className="mb-6 mt-5 flex h-[85px] w-[85px] items-center justify-center rounded-full text-4xl font-black md:h-[100px] md:w-[100px] md:text-[42px]"
+                style={{ backgroundColor: m.bg, color: m.accent, animation: 'scaleup 0.4s cubic-bezier(.34,1.56,.64,1) both' }}
+              >
                 {m.icon}
               </div>
             )}
 
-            <h1 className="status-title" style={{ color: m.spin ? 'var(--text)' : m.accent }}>
+            <h1
+              className="mb-3 text-[22px] font-extrabold leading-[1.3] md:text-[26px]"
+              style={{ color: m.spin ? 'var(--text)' : m.accent }}
+            >
               {m.title}
             </h1>
-            <p className="status-subtitle">
+            <p className="max-w-[300px] text-sm leading-relaxed text-[var(--muted)]">
               {m.sub || (status === 'failed' ? info?.message || 'Giao dịch không thành công' : '')}
             </p>
           </div>
 
-          <div className="details-section">
+          {/* Details section */}
+          <div className="flex flex-col justify-center px-6 py-9 md:px-10 md:py-12">
             {(status === 'success' || status === 'failed') && (
-              <h2 className="details-heading">Thông tin đơn hàng</h2>
+              <h2 className="mb-5 text-[17px] font-extrabold tracking-[-0.3px] text-[var(--text)]">
+                Thông tin đơn hàng
+              </h2>
             )}
 
             {status === 'success' && info && (
-              <div className="info-card">
+              <div className="mb-6 overflow-hidden rounded-2xl border border-[rgba(174,0,112,0.08)] bg-white/60">
                 {info.amount > 0 && (
-                  <div className="info-item">
-                    <span className="info-label">Số tiền</span>
-                    <span className="info-value amount-highlight">{fmt(info.amount)} ₫</span>
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm">
+                    <span className="font-medium text-[var(--muted)]">Số tiền</span>
+                    <span className="max-w-[60%] break-all text-right text-2xl font-black text-[var(--mm)]">{fmt(info.amount)} ₫</span>
                   </div>
                 )}
-                <div className="info-item">
-                  <span className="info-label">Mã đơn hàng</span>
-                  <span className="info-value">{info.orderId}</span>
+                <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                  <span className="font-medium text-[var(--muted)]">Mã đơn hàng</span>
+                  <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.orderId}</span>
                 </div>
                 {info.transId && (
-                  <div className="info-item">
-                    <span className="info-label">Mã GD MoMo</span>
-                    <span className="info-value">{info.transId}</span>
+                  <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Mã GD MoMo</span>
+                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.transId}</span>
                   </div>
                 )}
                 {info.payType && (
-                  <div className="info-item">
-                    <span className="info-label">Hình thức</span>
-                    <span className="info-value">{info.payType}</span>
+                  <div className="flex items-center justify-between px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Hình thức</span>
+                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.payType}</span>
                   </div>
                 )}
               </div>
             )}
 
             {status === 'failed' && info?.resultCode && (
-              <div className="info-card">
-                <div className="info-item">
-                  <span className="info-label">Mã lỗi hệ thống</span>
-                  <span className="info-value" style={{ color: 'var(--danger)' }}>{info.resultCode}</span>
+              <div className="mb-6 overflow-hidden rounded-2xl border border-[rgba(174,0,112,0.08)] bg-white/60">
+                <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm">
+                  <span className="font-medium text-[var(--muted)]">Mã lỗi hệ thống</span>
+                  <span className="max-w-[60%] break-all text-right font-bold text-[#dc2626]">{info.resultCode}</span>
                 </div>
-                <div className="info-item">
-                  <span className="info-label">Đơn hàng số</span>
-                  <span className="info-value">{info.orderId}</span>
+                <div className="flex items-center justify-between border-b border-[rgba(174,0,112,0.04)] px-5 py-4 text-sm last:border-b-0">
+                  <span className="font-medium text-[var(--muted)]">Đơn hàng số</span>
+                  <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.orderId}</span>
                 </div>
                 {info.message && (
-                  <div className="info-item">
-                    <span className="info-label">Nguyên nhân</span>
-                    <span className="info-value">{info.message}</span>
+                  <div className="flex items-center justify-between px-5 py-4 text-sm last:border-b-0">
+                    <span className="font-medium text-[var(--muted)]">Nguyên nhân</span>
+                    <span className="max-w-[60%] break-all text-right font-bold text-[var(--text)]">{info.message}</span>
                   </div>
                 )}
               </div>
             )}
 
             {status === 'loading' && (
-              <div className="state-empty-text">
+              <div className="px-0 py-5 text-center text-sm text-[var(--muted)]">
                 <p>Đang đồng bộ dữ liệu kết quả từ MoMo...</p>
               </div>
             )}
 
             {status !== 'loading' && (
-              <Link href="/" className="action-button">
+              <Link
+                href="/"
+                className="flex w-full items-center justify-center rounded-2xl bg-[var(--mm)] py-4 text-center text-base font-bold text-white shadow-[0_8px_24px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[var(--mm-dark)] hover:shadow-[0_12px_28px_rgba(174,0,112,0.3)]"
+              >
                 {status === 'failed' ? 'Thử thanh toán lại' : 'Quay lại trang chủ'}
               </Link>
             )}
