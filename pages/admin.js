@@ -84,6 +84,10 @@ export default function AdminPage() {
   const [lastSync,        setLastSync]        = useState(null)
   const [filter,          setFilter]          = useState('ALL')
   const [search,          setSearch]          = useState('')
+  const [dateFrom,        setDateFrom]        = useState('')
+  const [dateTo,          setDateTo]          = useState('')
+  const [sortKey,         setSortKey]         = useState('createdAt')
+  const [sortDir,         setSortDir]         = useState('desc') // 'asc' | 'desc'
   const [selected,        setSelected]        = useState(new Set())
   const [detail,          setDetail]          = useState(null)
 
@@ -262,6 +266,41 @@ export default function AdminPage() {
         o.message?.toLowerCase().includes(q)
       )
     })
+    // Lọc theo khoảng ngày (dựa trên createdAt) — so khớp theo ngày dương lịch, không theo giờ
+    .filter(o => {
+      if (!dateFrom && !dateTo) return true
+      if (!o.createdAt) return false
+      const d = new Date(o.createdAt)
+      const dayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      if (dateFrom && dayStr < dateFrom) return false
+      if (dateTo && dayStr > dateTo) return false
+      return true
+    })
+    // Sắp xếp theo cột đang chọn
+    .sort((a, b) => {
+      let av = a[sortKey]
+      let bv = b[sortKey]
+
+      // Cột thời gian → so theo timestamp
+      if (sortKey === 'createdAt' || sortKey === 'paidAt') {
+        av = av ? new Date(av).getTime() : 0
+        bv = bv ? new Date(bv).getTime() : 0
+      }
+      // Cột số tiền → so theo số
+      else if (sortKey === 'amount') {
+        av = parseInt(av || 0)
+        bv = parseInt(bv || 0)
+      }
+      // Cột text → so theo chuỗi, không phân biệt hoa thường
+      else {
+        av = (av ?? '').toString().toLowerCase()
+        bv = (bv ?? '').toString().toLowerCase()
+      }
+
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
   // Get the order details for the currently selected order
   const detailOrder = detail ? displayed.find(o => o.orderId === detail) : null
 
@@ -275,6 +314,17 @@ export default function AdminPage() {
     selected.size === filtered.length
       ? setSelected(new Set())
       : setSelected(new Set(filtered.map(o => o.orderId)))
+
+  // ── SORT ──────────────────────────────────────────────────
+  // Click cùng cột → đảo chiều asc/desc. Click cột khác → chuyển cột, mặc định desc.
+  const toggleSort = key => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('desc')
+    }
+  }
 
   // ── DELETE ────────────────────────────────────────────────
   const doDelete = async (ids) => {
@@ -538,16 +588,50 @@ export default function AdminPage() {
             </div>
           </header>
 
-          {/* ── STATUS BAR (sticky ở desktop, luôn hiển thị, không cuộn mất) ── */}
-          <div className="relative z-[150] border-b border-[var(--border)] bg-white/75 px-6 py-2 backdrop-blur-[12px] max-md:px-4 md:sticky md:top-[60px]">
-            <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 text-xs text-[var(--admin-muted)]">
-              <span className="font-semibold">
-                {filtered.length} giao dịch
-                {filter !== 'ALL' && ` · lọc theo "${FILTERS.find(f => f.key === filter)?.label}"`}
-                {search && ` · tìm "${search}"`}
-              </span>
-              <span className="flex items-center gap-1.5">
-                {/* Dot luôn chiếm chỗ cố định, chỉ đổi màu/animation — không thêm/bớt text để tránh giật layout */}
+          {/* ── TOOLBAR: lọc theo ngày + trạng thái danh sách (sticky ở desktop) ── */}
+          <div className="relative z-[150] border-b border-[var(--border)] bg-white/75 px-6 py-2.5 backdrop-blur-[12px] max-md:px-4 md:sticky md:top-[60px]">
+            <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-[var(--admin-muted)]">
+                  {filtered.length} giao dịch
+                  {filter !== 'ALL' && ` · "${FILTERS.find(f => f.key === filter)?.label}"`}
+                </span>
+
+                {/* Lọc theo ngày */}
+                <div className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white/70 px-2 py-1">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0 text-[var(--admin-muted)]">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+                  </svg>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={e => setDateFrom(e.target.value)}
+                    max={dateTo || undefined}
+                    className="border-none bg-transparent font-[var(--admin-font)] text-xs text-[var(--admin-text)] outline-none"
+                    title="Từ ngày"
+                  />
+                  <span className="text-[var(--admin-muted)]">–</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={e => setDateTo(e.target.value)}
+                    min={dateFrom || undefined}
+                    className="border-none bg-transparent font-[var(--admin-font)] text-xs text-[var(--admin-text)] outline-none"
+                    title="Đến ngày"
+                  />
+                  {(dateFrom || dateTo) && (
+                    <button
+                      className="ml-0.5 flex-shrink-0 text-xs leading-none text-[var(--admin-muted)] hover:text-[var(--admin-danger)]"
+                      onClick={() => { setDateFrom(''); setDateTo('') }}
+                      title="Xóa lọc ngày"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <span className="flex items-center gap-1.5 text-xs text-[var(--admin-muted)]">
                 <span
                   className={`h-1.5 w-1.5 flex-shrink-0 rounded-full transition-colors duration-300 ${fetching ? 'bg-[#f59e0b]' : 'bg-[#22c55e]'}`}
                   style={fetching ? { animation: 'pulse-dot 0.8s infinite' } : undefined}
@@ -589,15 +673,15 @@ export default function AdminPage() {
                             onChange={toggleAll}
                           />
                         </th>
-                        <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Trạng thái</th>
-                        <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Số tiền</th>
-                        <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Nội dung</th>
-                        <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Mã đơn</th>
-                        <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Mã GD MoMo</th>
-                        <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Hình thức</th>
-                        <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Result</th>
-                        <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Tạo lúc</th>
-                        <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Hoàn tất</th>
+                        <SortableTh label="Trạng thái"   sortKey="status"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                        <SortableTh label="Số tiền"      sortKey="amount"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                        <SortableTh label="Nội dung"     sortKey="orderInfo"   currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                        <SortableTh label="Mã đơn"       sortKey="orderId"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                        <SortableTh label="Mã GD MoMo"   sortKey="transId"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                        <SortableTh label="Hình thức"    sortKey="payType"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                        <SortableTh label="Result"       sortKey="resultCode"  currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                        <SortableTh label="Tạo lúc"      sortKey="createdAt"   currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                        <SortableTh label="Hoàn tất"     sortKey="paidAt"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                         <th className="w-20 whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Thao tác</th>
                       </tr>
                     </thead>
@@ -722,6 +806,27 @@ function StatCard({ label, value, color, sub }) {
       <div className="mt-1.5 text-[26px] font-extrabold tracking-[-0.5px]" style={{ color }}>{value}</div>
       {sub && <div className="mt-[5px] text-xs text-[var(--admin-muted)]">{sub}</div>}
     </div>
+  )
+}
+
+// ─── TIÊU ĐỀ CỘT CÓ THỂ CLICK ĐỂ SẮP XẾP ───────────────────────
+function SortableTh({ label, sortKey, currentKey, dir, onSort }) {
+  const active = currentKey === sortKey
+  return (
+    <th
+      className="cursor-pointer select-none whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)] transition-colors hover:bg-black/[0.03]"
+      onClick={() => onSort(sortKey)}
+    >
+      <span className={`inline-flex items-center gap-1 ${active ? 'text-[var(--mm)]' : ''}`}>
+        {label}
+        <svg
+          width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+          className={`flex-shrink-0 transition-all ${active ? 'opacity-100' : 'opacity-25'} ${active && dir === 'asc' ? 'rotate-180' : ''}`}
+        >
+          <path d="m6 9 6 6 6-6"/>
+        </svg>
+      </span>
+    </th>
   )
 }
 
