@@ -41,6 +41,7 @@ export default function ScanPage() {
   const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [showConfirmAmountModal, setShowConfirmAmountModal] = useState(false)
+  const [quickToast, setQuickToast] = useState(false)
 
   // Load jsQR
   useEffect(() => {
@@ -69,6 +70,35 @@ export default function ScanPage() {
     }
   }, [step, ready])
 
+  // Tạo đơn nháp PENDING + chuyển sang step scan.
+  // Nhận amount/orderInfo qua tham số (không đọc từ state) để dùng được ngay
+  // cả khi gọi từ luồng link nhanh, lúc đó state amount/orderInfo có thể
+  // chưa kịp cập nhật xong (setState là async).
+  async function confirmAndProceed(amt, info) {
+    setShowConfirmAmountModal(false)
+    const generatedId = `POS${Date.now()}`
+    setCurrentOrderId(generatedId)
+    submitting.current = true
+
+    try {
+      // Chính thức tạo Log đơn hàng nháp PENDING lên hệ thống
+      await fetch('/api/momo/save-pending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: generatedId,
+          amount: parseInt(amt),
+          orderInfo: info || `iPOS${generatedId.replace('POS', '')}`
+        }),
+      })
+    } catch (e) {
+      console.error("Lỗi lưu đơn hàng nháp:", e)
+    } finally {
+      submitting.current = false
+      setStep('scan') // Chuyển sang màn hình Step 2 để bắn súng quét mã
+    }
+  }
+
   // Load amount và orderInfo từ query params & Dọn dẹp URL chống lặp logic
   useEffect(() => {
     if (!router.isReady) return
@@ -80,12 +110,35 @@ export default function ScanPage() {
       setOrderInfo(urlOrderInfo)
     }
 
-    if (quick === 'true' && urlAmount && !currentOrderId && !submitting.current && !showConfirmAmountModal) {
-      // Chỉ bật Popup xác nhận thông tin từ link nhanh, chưa tạo đơn hàng vội
-      setShowConfirmAmountModal(true)
+    if (quick === 'true' && urlAmount && !currentOrderId && !submitting.current) {
+      // Lấy thông tin từ link nhanh (?quick=true&amount=...) → BỎ QUA popup xác nhận,
+      // tạo đơn nháp ngay luôn. Chỉ hiện 1 toast nhỏ tự ẩn để báo cho thu ngân biết.
       router.replace('/admin/scan', undefined, { shallow: true })
+      confirmAndProceed(urlAmount, urlOrderInfo)
+      setQuickToast(true)
     }
   }, [urlAmount, urlOrderInfo, quick, router.isReady])
+
+  // Tự ẩn toast "đã bỏ qua xác nhận" sau ~2.5s
+  useEffect(() => {
+    if (!quickToast) return
+    const t = setTimeout(() => setQuickToast(false), 2500)
+    return () => clearTimeout(t)
+  }, [quickToast])
+
+  // Khi popup xác nhận số tiền (nhập tay) đang mở → Enter cũng xác nhận luôn,
+  // không cần bấm chuột vào nút "Xác nhận"
+  useEffect(() => {
+    if (!showConfirmAmountModal) return
+    const fn = e => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        confirmAndProceed(amount, orderInfo)
+      }
+    }
+    window.addEventListener('keydown', fn)
+    return () => window.removeEventListener('keydown', fn)
+  }, [showConfirmAmountModal, amount, orderInfo])
 
   // Thêm đoạn này ở khu vực các useEffect đầu file để tự focus khi nhấn thử lại
   useEffect(() => {
@@ -571,30 +624,7 @@ export default function ScanPage() {
                   </button>
 
                   <button
-                    onClick={async () => {
-                      setShowConfirmAmountModal(false)
-                      const generatedId = `POS${Date.now()}`
-                      setCurrentOrderId(generatedId)
-                      submitting.current = true
-
-                      try {
-                        // Chính thức tạo Log đơn hàng nháp PENDING lên hệ thống
-                        await fetch('/api/momo/save-pending', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            orderId: generatedId,
-                            amount: parseInt(amount),
-                            orderInfo: orderInfo || `iPOS${generatedId.replace('POS', '')}`
-                          }),
-                        })
-                      } catch (e) {
-                        console.error("Lỗi lưu đơn hàng nháp:", e)
-                      } finally {
-                        submitting.current = false
-                        setStep('scan') // Chuyển sang màn hình Step 2 để bắn súng quét mã
-                      }
-                    }}
+                    onClick={() => confirmAndProceed(amount, orderInfo)}
                     className="flex-1 py-2.5 bg-momo text-white border-none rounded-lg text-[13px] font-bold cursor-pointer shadow-[0_4px_12px_rgba(174,0,112,0.2)] active:opacity-80"
                   >
                     Xác nhận
@@ -633,6 +663,16 @@ export default function ScanPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TOAST: thông báo nhỏ khi bỏ qua bước xác nhận vì lấy từ link nhanh */}
+          {quickToast && (
+            <div
+              className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-slate-900 text-white text-[13px] font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2"
+              style={{ animation: 'fadein 0.2s ease' }}
+            >
+              ⚡ Đã tạo đơn từ link nhanh — bỏ qua bước xác nhận
             </div>
           )}
 
