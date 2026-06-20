@@ -427,7 +427,7 @@ export default function AdminPage() {
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
-      <div className="relative min-h-screen w-screen overflow-x-hidden bg-[#f5edf2] font-[var(--admin-font)] text-[var(--admin-text)]">
+      <div className="relative min-h-screen w-full overflow-x-clip bg-[#f5edf2] font-[var(--admin-font)] text-[var(--admin-text)]">
         <Orbs />
 
         {/* ── DETAIL MODAL ── */}
@@ -682,12 +682,26 @@ export default function AdminPage() {
                 </div>
               ) : (
                 <>
-                  {/* ── Desktop table — chỉ hiện ở màn hình rộng (≥1024px), nơi 10 cột vừa khít ── */}
+                  {/* ── Desktop table — chỉ hiện ở màn hình rộng (≥1024px) ── */}
+                  {/* table-auto + min-width: cột co giãn theo nội dung thật, bảng tự cuộn ngang riêng khi không đủ chỗ, KHÔNG còn bị cắt/tràn ra ngoài trang */}
                   <div className="hidden max-h-[65vh] overflow-auto lg:block">
-                    <table className="w-full table-fixed border-collapse text-[13.5px]">
+                    <table className="w-full min-w-[1180px] table-auto border-collapse text-[13.5px]">
+                      <colgroup>
+                        <col className="w-[36px]" />
+                        <col className="w-[110px]" />
+                        <col className="w-[90px]" />
+                        <col className="w-[22%]" />
+                        <col className="w-[130px]" />
+                        <col className="w-[130px]" />
+                        <col className="w-[80px]" />
+                        <col className="w-[80px]" />
+                        <col className="w-[120px]" />
+                        <col className="w-[120px]" />
+                        <col className="w-[90px]" />
+                      </colgroup>
                       <thead className="sticky top-0 z-10">
                         <tr className="bg-[#f5edf2]">
-                          <th className="w-[3%] whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">
+                          <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">
                             <input
                               type="checkbox"
                               checked={selected.size > 0 && selected.size === filtered.length}
@@ -695,16 +709,16 @@ export default function AdminPage() {
                               onChange={toggleAll}
                             />
                           </th>
-                          <SortableTh label="Trạng thái"   sortKey="status"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} width="w-[9%]" />
-                          <SortableTh label="Số tiền"      sortKey="amount"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} width="w-[8%]" />
-                          <SortableTh label="Nội dung"     sortKey="orderInfo"   currentKey={sortKey} dir={sortDir} onSort={toggleSort} width="w-[20%]" />
-                          <SortableTh label="Mã đơn"       sortKey="orderId"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} width="w-[11%]" />
-                          <SortableTh label="Mã GD MoMo"   sortKey="transId"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} width="w-[11%]" />
-                          <SortableTh label="Hình thức"    sortKey="payType"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} width="w-[7%]" />
-                          <SortableTh label="Result"       sortKey="resultCode"  currentKey={sortKey} dir={sortDir} onSort={toggleSort} width="w-[7%]" />
-                          <SortableTh label="Tạo lúc"      sortKey="createdAt"   currentKey={sortKey} dir={sortDir} onSort={toggleSort} width="w-[9%]" />
-                          <SortableTh label="Hoàn tất"     sortKey="paidAt"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} width="w-[9%]" />
-                          <th className="w-[6%] whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Thao tác</th>
+                          <SortableTh label="Trạng thái"   sortKey="status"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Số tiền"      sortKey="amount"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Nội dung"     sortKey="orderInfo"   currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Mã đơn"       sortKey="orderId"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Mã GD MoMo"   sortKey="transId"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Hình thức"    sortKey="payType"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Result"       sortKey="resultCode"  currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Tạo lúc"      sortKey="createdAt"   currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <SortableTh label="Hoàn tất"     sortKey="paidAt"      currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                          <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -727,9 +741,9 @@ export default function AdminPage() {
                                 </span>
                               </td>
                               <td className="whitespace-nowrap px-4 py-3.5 align-middle text-sm font-extrabold text-[var(--mm)]">{fmt(o.amount)} ₫</td>
-                              <td className="overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle text-[#374151]" title={o.orderInfo}>{o.orderInfo || '—'}</td>
-                              <td className="overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle font-mono text-xs text-[#4b5563]">{o.orderId}</td>
-                              <td className="overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle font-mono text-xs text-[#4b5563]">{o.transId || '—'}</td>
+                              <td className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle text-[#374151]" title={o.orderInfo}>{o.orderInfo || '—'}</td>
+                              <td className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle font-mono text-xs text-[#4b5563]">{o.orderId}</td>
+                              <td className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle font-mono text-xs text-[#4b5563]">{o.transId || '—'}</td>
                               <td className="px-4 py-3.5 align-middle">
                                 {o.payType
                                   ? <span className="rounded-md bg-black/[0.06] px-[9px] py-[3px] text-xs font-semibold">{o.payType}</span>
@@ -956,11 +970,11 @@ function InfoBit({ label, value, mono }) {
 }
 
 // ─── TIÊU ĐỀ CỘT CÓ THỂ CLICK ĐỂ SẮP XẾP ───────────────────────
-function SortableTh({ label, sortKey, currentKey, dir, onSort, width }) {
+function SortableTh({ label, sortKey, currentKey, dir, onSort }) {
   const active = currentKey === sortKey
   return (
     <th
-      className={`cursor-pointer select-none truncate border-b border-[var(--border)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)] transition-colors hover:bg-black/[0.03] ${width || ''}`}
+      className="cursor-pointer select-none whitespace-nowrap border-b border-[var(--border)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)] transition-colors hover:bg-black/[0.03]"
       onClick={() => onSort(sortKey)}
     >
       <span className={`inline-flex items-center gap-1 ${active ? 'text-[var(--mm)]' : ''}`}>
