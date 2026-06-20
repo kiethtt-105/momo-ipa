@@ -4,6 +4,14 @@ import { useRouter } from 'next/router'
 
 const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
 
+// Định dạng số tiền hiển thị trong input theo kiểu "12.111đ" trong lúc người dùng đang nhập
+// (state amount vẫn lưu chuỗi số thuần, không lưu định dạng, để không ảnh hưởng các logic khác)
+function formatAmountDisplay(raw) {
+  const digits = (raw || '').replace(/\D/g, '')
+  if (!digits) return ''
+  return `${parseInt(digits, 10).toLocaleString('vi-VN')}đ`
+}
+
 function cleanCode(raw) {
   if (!raw) return ''
   return raw.trim()
@@ -335,7 +343,7 @@ export default function ScanPage() {
 
   if (authed === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#fff8fb]">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-[#fff8fb]">
         <div className="w-2.5 h-2.5 rounded-full bg-momo animate-pulse2" />
       </div>
     )
@@ -354,7 +362,7 @@ export default function ScanPage() {
     return (
       <>
         <Head><title>Admin · Đăng nhập</title></Head>
-        <div className="relative min-h-screen bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
+        <div className="relative min-h-[100dvh] bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[360px] bg-white rounded-[20px] px-7 py-9 shadow-[0_20px_60px_rgba(174,0,112,0.12)] flex flex-col items-center">
             <img src="/Main.png" alt="" className="w-12 h-12 rounded-xl mb-4" />
             <h1 className="text-xl font-extrabold text-gray-900 mb-1.5">Hệ thống quản lý giao dịch</h1>
@@ -378,8 +386,8 @@ export default function ScanPage() {
     return (
       <>
         <Head><title>Kết quả thanh toán</title></Head>
-        <div className="min-h-screen bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
-          <div className="flex items-center justify-center min-h-screen p-5">
+        <div className="min-h-[100dvh] bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
+          <div className="flex items-center justify-center min-h-[100dvh] p-5">
             <div className={`${card} max-w-[420px] w-full text-center px-6 py-10`}>
               <div className="text-5xl mb-3">{isSuccess ? '✅' : '❌'}</div>
 
@@ -436,10 +444,10 @@ export default function ScanPage() {
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
-      <div className="min-h-screen bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
+      <div className="min-h-[100dvh] flex flex-col bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
 
         {/* Header */}
-        <div className="sticky top-0 z-[100] bg-white/92 backdrop-blur-xl border-b border-momo/10 px-4 py-3 flex items-center justify-between">
+        <div className="sticky top-0 z-[100] flex-shrink-0 bg-white/92 backdrop-blur-xl border-b border-momo/10 px-4 py-3 flex items-center justify-between">
 
           <div className="flex items-center gap-2">
             <img src="/Main.png" alt="" className="w-[26px] h-[26px] rounded-md" />
@@ -458,7 +466,7 @@ export default function ScanPage() {
         </div>
 
         {/* Step bar */}
-        <div className="flex justify-center items-center pt-3.5 px-6 max-w-[480px] mx-auto">
+        <div className="flex flex-shrink-0 justify-center items-center pt-3.5 px-6 max-w-[480px] w-full mx-auto">
           {STEPS.map((label, i) => (
             <div key={i} className={`flex items-center ${i < STEPS.length - 1 ? 'flex-1' : ''}`}>
               <div className="flex flex-col items-center gap-1">
@@ -476,18 +484,18 @@ export default function ScanPage() {
           ))}
         </div>
 
-        <div className="max-w-[480px] mx-auto px-4 pb-10 pt-4 flex flex-col gap-3">
+        <div className={`flex-1 flex flex-col max-w-[480px] w-full mx-auto px-4 pb-10 pt-4 gap-3 ${step === 'amount' ? 'justify-center' : ''}`}>
 
           {/* STEP 1: AMOUNT */}
           {step === 'amount' && (
             <div className={card}>
               <h3 className="text-[13px] font-bold text-gray-700 mb-3.5">💰 Nhập số tiền </h3>
               <input
-                type="number" placeholder="Nhập số tiền..."
-                value={amount} onChange={e => setAmount(e.target.value)}
+                type="text" inputMode="numeric" placeholder="Nhập số tiền..."
+                value={formatAmountDisplay(amount)}
+                onChange={e => setAmount(e.target.value.replace(/\D/g, ''))}
                 onKeyDown={handleEnterKey}
-                className={inputBase} min={1000} max={5000000} autoFocus
-                step={1000}
+                className={inputBase} autoFocus
                 disabled={quick === 'true'}
               />
 
