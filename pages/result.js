@@ -3,6 +3,20 @@ import { useRouter } from 'next/router'
 import Head from 'next/head'
 import Link from 'next/link'
 
+// Bắn tín hiệu sang các tab khác cùng domain (ví dụ /admin/scan đang mở
+// riêng) để báo "đã có kết quả cuối cùng cho đơn hàng này" — tab đó sẽ tự
+// reload lại để admin thấy trạng thái mới nhất ngay, không cần bấm tay.
+function notifyOtherTabs(orderId, status) {
+  if (typeof window === 'undefined' || !window.BroadcastChannel) return
+  try {
+    const ch = new BroadcastChannel('momo-result')
+    ch.postMessage({ type: 'momo-result-done', orderId, status })
+    ch.close()
+  } catch (e) {
+    console.error('Không gửi được tín hiệu BroadcastChannel:', e)
+  }
+}
+
 export default function ResultPage() {
   const router = useRouter()
   const [status, setStatus] = useState('loading')
@@ -46,6 +60,7 @@ useEffect(() => {
         setStatus('success')
         resolvedRef.current = true
         setInfo({ orderId, transId, amount: parseInt(amount), payType, message })
+        notifyOtherTabs(orderId, 'success')
         fetch('/api/momo/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -57,6 +72,7 @@ useEffect(() => {
         setStatus('failed')
         resolvedRef.current = true
         setInfo({ orderId, message, resultCode: code })
+        notifyOtherTabs(orderId, 'failed')
         fetch('/api/momo/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -76,6 +92,7 @@ useEffect(() => {
             setStatus('success')
             resolvedRef.current = true
             setInfo(data)
+            notifyOtherTabs(orderId, 'success')
             clearInterval(poll)
             cleanUrlBar()
           }
@@ -83,6 +100,7 @@ useEffect(() => {
             setStatus('failed')
             resolvedRef.current = true
             setInfo(data)
+            notifyOtherTabs(orderId, 'failed')
             clearInterval(poll)
             cleanUrlBar()
           }

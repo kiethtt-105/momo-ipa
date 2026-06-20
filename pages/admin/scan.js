@@ -61,6 +61,20 @@ export default function ScanPage() {
     document.head.appendChild(s)
   }, [])
 
+  // Lắng nghe tín hiệu từ tab /result (mở riêng khi quét/scan thanh toán)
+  // — khi có kết quả cuối cùng (thành công/thất bại), tự reload lại trang
+  // này để admin thấy ngay trạng thái mới nhất, không cần bấm tay.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.BroadcastChannel) return
+    const ch = new BroadcastChannel('momo-result')
+    ch.onmessage = (e) => {
+      if (e.data?.type === 'momo-result-done') {
+        window.location.reload()
+      }
+    }
+    return () => ch.close()
+  }, [])
+
   // Auth
   useEffect(() => {
     fetch('/api/admin/session')
@@ -256,11 +270,10 @@ export default function ScanPage() {
         break // Không phải lỗi 41 → thoát
       }
 
-      // Thay vì tự hiện màn kết quả riêng (setResult), điều hướng về /result
-      // dùng chung với flow P2P — để 2 luồng có cùng 1 giao diện kết quả.
-      // /result sẽ tự gọi /api/momo/save để ghi nhận lại (không bắt buộc với
-      // luồng Scan vì /api/momo/pos đã lưu kết quả ngay rồi, nhưng gọi thêm
-      // không ảnh hưởng vì giao diện đọc trực tiếp từ query string).
+      // Mở /result ở TAB MỚI — tab /admin/scan này giữ nguyên y như cũ
+      // (không mất số tiền/nội dung đang nhập). Khi tab /result có kết quả
+      // cuối cùng, nó sẽ tự bắn tín hiệu qua BroadcastChannel để tab này
+      // reload lại (xem listener "momo-result" ở useEffect phía trên).
       const qs = new URLSearchParams({
         orderId,
         resultCode: data.resultCode,
@@ -270,7 +283,8 @@ export default function ScanPage() {
         message: data.message || '',
         orderInfo: baseOrderInfo,
       }).toString()
-      router.push(`/result?${qs}`)
+      window.open(`/result?${qs}`, '_blank')
+      submitting.current = false
     } catch {
       submitting.current = false
       setIsServerErr(true)
