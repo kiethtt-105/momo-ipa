@@ -2,6 +2,12 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 
+// ─── CONSTANTS ─────────────────────────────────────────────
+// Phải trùng với TX_BASE_URL trong admin/create-transaction.js — dùng để
+// bắn THẲNG vào API tạo giao dịch khi admin bấm "Thử thanh toán lại",
+// không cần quay lại trang create-transaction nữa.
+const TX_BASE_URL = 'https://kiehtt.vercel.app'
+
 // Bắn tín hiệu sang các tab khác cùng domain (ví dụ /admin/scan đang mở
 // riêng) để báo "đã có kết quả cuối cùng cho đơn hàng này" — tab đó sẽ tự
 // reload lại để admin thấy trạng thái mới nhất ngay, không cần bấm tay.
@@ -47,21 +53,43 @@ async function fetchFullInfo(orderId) {
   return { ...(ourRecord || {}), ...(momoFull || {}) }
 }
 
-// Xây URL "Thử lại" — quay về trang TẠO GIAO DỊCH (admin/create-transaction)
-// kèm sẵn amount/orderInfo/method, để admin xác nhận lại 1 lần rồi bấm gửi —
-// thay vì bắn thẳng vào /api/momo/redirect hay /admin/scan (dễ tạo đơn nháp
-// mới mà admin không kịp nhìn lại thông tin). Đây cũng là cách gộp về
-// "1 cổng vào duy nhất" cho admin, đỡ phải nhớ 2-3 đường dẫn khác nhau.
+// Sinh orderInfo cho lần thử lại — giữ NGUYÊN gốc của orderInfo cũ, chỉ thêm/
+// tăng hậu tố "_N" ở cuối (vd: iPOS123 → iPOS123_2, lần thử lại tiếp theo của
+// CHÍNH đơn _2 đó → iPOS123_3...). Vẫn tránh trùng đơn nhưng nhìn vào vẫn biết
+// đây là đơn thử lại của đơn nào, không phải sinh 1 mã ngẫu nhiên mới hoàn toàn.
+function appendRetrySuffix(orderInfo) {
+  const m = orderInfo.match(/^(.*)_(\d+)$/)
+  if (m) {
+    const base = m[1]
+    const next = parseInt(m[2], 10) + 1
+    return `${base}_${next}`
+  }
+  return `${orderInfo}_2`
+}
+
+// Xây URL "Thử lại" — bắn THẲNG vào API tạo giao dịch (giống hệt hành vi của
+// nút "Xác nhận tạo giao dịch" ở trang create-transaction: mở luôn, không cần
+// quay lại trang đó xem/sửa rồi bấm thêm 1 lần nữa). Giữ nguyên amount/method
+// của đơn cũ, chỉ đổi orderInfo (thêm hậu tố _N) để không bị lỗi trùng đơn.
 function buildRetryUrl(info) {
-  if (!info) return '/admin/create-transaction'
+  if (!info || !info.amount) return '/admin/create-transaction' // thiếu dữ liệu → fallback về trang tạo thủ công
+
   const amt = info.amount
-  const orderInfo = info.orderInfo || ''
   const source = info.source || ''
-
-  if (!amt) return '/admin/create-transaction' // không đủ dữ liệu để tạo lại
-
   const method = (source === 'pos' || source === 'scan') ? 'scan' : 'p2p'
-  return `/admin/create-transaction?method=${method}&amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
+  const baseOrderInfo = info.orderInfo || `iPOS${Date.now()}`
+  const retryOrderInfo = appendRetrySuffix(baseOrderInfo)
+
+  if (method === 'p2p') {
+    return `${TX_BASE_URL}/api/momo/redirect?amount=${amt}&orderInfo=${encodeURIComponent(retryOrderInfo)}`
+  }
+  return `${TX_BASE_URL}/api/admin/scan-quick?amount=${amt}&orderInfo=${encodeURIComponent(retryOrderInfo)}`
+}
+
+// True khi buildRetryUrl() trả về URL API thật (mở tab mới ngay), false khi
+// rơi về fallback '/admin/create-transaction' (thiếu dữ liệu, cần admin tự nhập).
+function isDirectRetry(info) {
+  return !!(info && info.amount)
 }
 
 export default function ResultPage() {
@@ -365,6 +393,8 @@ useEffect(() => {
             {status === 'failed' && (
               <a
                 href={buildRetryUrl(info)}
+                target={isDirectRetry(info) ? '_blank' : undefined}
+                rel={isDirectRetry(info) ? 'noopener noreferrer' : undefined}
                 className="flex w-full items-center justify-center rounded-2xl bg-[var(--mm)] py-4 text-center text-base font-bold text-white shadow-[0_8px_24px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[var(--mm-dark)] hover:shadow-[0_12px_28px_rgba(174,0,112,0.3)]"
               >
                 Thử thanh toán lại
@@ -376,7 +406,7 @@ useEffect(() => {
                 onClick={() => window.close()}
                 className="flex w-full items-center justify-center rounded-2xl bg-[var(--mm)] py-4 text-center text-base font-bold text-white shadow-[0_8px_24px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[var(--mm-dark)] hover:shadow-[0_12px_28px_rgba(174,0,112,0.3)]"
               >
-                Đóng tab này
+                Xác nhận 
               </button>
             )}
           </div>

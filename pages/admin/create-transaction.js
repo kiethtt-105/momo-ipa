@@ -13,16 +13,10 @@ const TX_BASE_URL = 'https://kiehtt.vercel.app'
 function buildTxUrl(method, amount, orderInfo) {
   const amt = parseInt(amount, 10)
   if (!amt || amt <= 0) return null
-
-  if (method === 'p2p') {
-    // P2P — khách quét QR, trả về trang chuyển hướng MoMo
-    const info = (orderInfo || '').trim() || genOrderId()
-    return `${TX_BASE_URL}/api/momo/redirect?amount=${amt}&orderInfo=${encodeURIComponent(info)}`
-  }
-
-  // Scan — admin tự quét thanh toán nhanh
-  const info = (orderInfo || '').trim() || genOrderId()
-  return `${TX_BASE_URL}/api/admin/scan-quick?amount=${amt}&orderInfo=${encodeURIComponent(info)}`
+  const path = method === 'p2p'
+    ? '/api/momo/redirect'      // P2P — khách quét QR, trả về trang chuyển hướng MoMo
+    : '/api/admin/scan-quick'   // Scan — admin tự quét thanh toán nhanh
+  return `${TX_BASE_URL}${path}?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
 }
 
 // ─── FORMAT SỐ TIỀN (hiển thị có dấu phẩy ngăn hàng nghìn) ──
@@ -55,6 +49,13 @@ export default function CreateTransactionPage() {
   const [orderInfo,  setOrderInfo]  = useState(() => genOrderId())
   const [lastUrl,    setLastUrl]    = useState('')
   const [copied,     setCopied]     = useState(false)
+  // Các đơn đã bắn đi từ CỬA SỔ NÀY, đang chờ kết quả thanh toán cuối cùng —
+  // dùng để khớp với tín hiệu BroadcastChannel bắn về từ result.js.
+  const [pendingOrders, setPendingOrders] = useState([])
+  // Kết quả mới nhất nhận được — hiện popup nổi ngay tại trang này, để admin
+  // (đang xem cửa sổ "Tạo giao dịch") biết luôn thành công/thất bại mà không
+  // cần chuyển qua tab/cửa sổ khác.
+  const [resultToast,   setResultToast]   = useState(null) // { orderId, status, amount }
   const amountInputRef = useRef(null)
 
   // Khôi phục draft đã nhập trước đó (nếu lỡ F5)
@@ -99,17 +100,48 @@ export default function CreateTransactionPage() {
     }
   }, [])
 
+  // ── LẮNG NGHE KẾT QUẢ THANH TOÁN ──────────────────────────
+  // result.js (trang nhận redirect kết quả từ MoMo) bắn tín hiệu qua
+  // BroadcastChannel 'momo-result' ngay khi có kết quả cuối (thành công/thất
+  // bại). Trang Tạo giao dịch này lắng nghe và hiện popup NGAY TẠI ĐÂY, vì
+  // đây là cửa sổ admin đang focus lúc vừa bắn giao dịch đi.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.BroadcastChannel) return
+    const ch = new BroadcastChannel('momo-result')
+    ch.onmessage = (e) => {
+      const { orderId, status } = e.data || {}
+      if (!orderId) return
+      setPendingOrders(prev => {
+        const match = prev.find(o => o.orderId === orderId)
+        setResultToast({ orderId, status, amount: match?.amount ?? null })
+        return prev.filter(o => o.orderId !== orderId)
+      })
+    }
+    return () => ch.close()
+  }, [])
+
+  // Tự ẩn popup kết quả sau 6 giây (vẫn có thể bấm ✕ để tắt sớm hơn)
+  useEffect(() => {
+    if (!resultToast) return
+    const t = setTimeout(() => setResultToast(null), 6000)
+    return () => clearTimeout(t)
+  }, [resultToast])
+
   const isP2P     = method === 'p2p'
   const canSubmit = parseInt(amount || 0, 10) > 0
 
   // ── MỞ GIAO DỊCH (gọi thẳng URL — đây là phần có thể thay
   // bằng 1 action trong iPhone Shortcuts sau này) ────────────
   const handleCreate = () => {
-    const url = buildTxUrl(method, amount, orderInfo)
+    const finalOrderInfo = (orderInfo || '').trim() || genOrderId()
+    const url = buildTxUrl(method, amount, finalOrderInfo)
     if (!url) return
     setLastUrl(url)
     setCopied(false)
     window.open(url, '_blank')
+    // Ghi nhớ đơn vừa bắn đi — để khi MoMo báo kết quả về (qua BroadcastChannel
+    // từ result.js), trang này nhận ra và hiện popup kết quả ngay tại đây.
+    setPendingOrders(prev => [...prev, { orderId: finalOrderInfo, amount: parseInt(amount, 10) || 0 }])
     setOrderInfo(genOrderId()) // sinh mã mới cho lần tạo tiếp theo
   }
 
@@ -131,6 +163,40 @@ export default function CreateTransactionPage() {
       </Head>
 
       <div className="relative flex min-h-screen w-full items-center justify-center overflow-x-hidden bg-[#f5edf2] p-5 font-[var(--admin-font)] text-[var(--admin-text)]">
+        {/* ── POPUP KẾT QUẢ THANH TOÁN — nổi trên cùng, tự ẩn sau 6s ── */}
+        {resultToast && (
+          <div
+            className={`fixed inset-x-0 top-4 z-50 mx-auto flex w-[92%] max-w-[400px] items-center gap-3 rounded-2xl border px-4 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.14)] ${
+              resultToast.status === 'success'
+                ? 'border-[#bbf7d0] bg-[#f0fdf4]'
+                : 'border-[#fecaca] bg-[#fef2f2]'
+            }`}
+          >
+            <div
+              className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-base font-black ${
+                resultToast.status === 'success' ? 'bg-[#dcfce7] text-[#16a34a]' : 'bg-[#fee2e2] text-[#dc2626]'
+              }`}
+            >
+              {resultToast.status === 'success' ? '✓' : '✗'}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className={`text-[13px] font-extrabold ${resultToast.status === 'success' ? 'text-[#16a34a]' : 'text-[#dc2626]'}`}>
+                {resultToast.status === 'success' ? 'Thanh toán thành công' : 'Thanh toán thất bại'}
+              </div>
+              <div className="truncate text-[11.5px] text-[var(--admin-muted)]">
+                {resultToast.orderId}
+                {resultToast.amount ? ` · ${resultToast.amount.toLocaleString('en-US')}đ` : ''}
+              </div>
+            </div>
+            <button
+              className="flex-shrink-0 px-1 text-sm text-[var(--admin-muted)] hover:text-[var(--admin-text)]"
+              onClick={() => setResultToast(null)}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="w-full max-w-[440px] overflow-hidden rounded-[22px] bg-white/95 shadow-[0_24px_60px_rgba(174,0,112,0.1),0_0_0_1px_rgba(255,255,255,0.8)] backdrop-blur-[30px]">
           {/* Dải gradient thương hiệu — đồng bộ với index.js / result.js */}
           <div className="h-1 w-full bg-gradient-to-r from-[#ff9cb7] via-[var(--mm)] to-[#dfb2ea]" />
@@ -138,10 +204,19 @@ export default function CreateTransactionPage() {
           {/* Header */}
           <div className="flex items-center gap-3 px-6 pb-4 pt-5">
             <img src="/Main.png" alt="" className="h-9 w-9 rounded-lg object-contain" />
-            <div>
+            <div className="flex-1">
               <div className="text-[17px] font-extrabold tracking-[-0.3px] text-[var(--mm)]">TẠO GIAO DỊCH</div>
               <div className="text-[11px] font-medium text-[var(--admin-muted)]">Tạo link / QR thanh toán cho quầy</div>
             </div>
+            {pendingOrders.length > 0 && (
+              <div
+                className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-[#fef3c7] px-2.5 py-1 text-[10.5px] font-bold text-[#d97706]"
+                title="Số đơn đã bắn đi, đang chờ MoMo báo kết quả về"
+              >
+                <span className="h-[6px] w-[6px] animate-pulse rounded-full bg-[#f59e0b]" />
+                Chờ {pendingOrders.length}
+              </div>
+            )}
           </div>
 
           <div className="px-6 pb-6">

@@ -13,6 +13,24 @@ const STATUS_META = {
   EXPIRED: { label: 'Hết hạn',    color: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af' },
 }
 
+// ─── MỞ TRANG "TẠO GIAO DỊCH" DẠNG CỬA SỔ NỔI ──────────────
+// Dùng window.open với kích thước cố định + tên cửa sổ cố định ('momo_ctx')
+// thay vì '_blank' (tab mới) → trình duyệt sẽ mở 1 cửa sổ popup nhỏ nổi
+// TRÊN NỀN tab admin, giống dạng cửa sổ chat/widget. Đặt tên cố định để bấm
+// nút nhiều lần chỉ focus lại đúng 1 cửa sổ đó, không mở tràn lan nhiều popup.
+function openCreateTransactionPopup() {
+  const w = 460
+  const h = 780
+  const left = Math.max(0, (window.screen.width  - w) / 2)
+  const top  = Math.max(0, (window.screen.height - h) / 2)
+  const win = window.open(
+    '/admin/create-transaction',
+    'momo_ctx',
+    `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no,location=no`
+  )
+  win?.focus() // nếu cửa sổ đã mở từ trước, focus lại nó thay vì mở thêm
+}
+
 // ─── UTILS ─────────────────────────────────────────────────
 const fmt      = n  => parseInt(n || 0).toLocaleString('vi-VN')
 const fmtDate  = s  => s ? new Date(s).toLocaleString('vi-VN', { hour12: false }) : '—'
@@ -631,8 +649,8 @@ export default function AdminPage() {
                   {/* ── TẠO GIAO DỊCH BUTTON ── */}
                   <button
                     className="inline-flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[9px] bg-[var(--mm)] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-white shadow-[0_4px_14px_rgba(174,0,112,0.25)] transition-all hover:-translate-y-px hover:bg-[#91005d] max-md:px-2.5 max-md:text-[12px]"
-                    onClick={() => window.open('/admin/create-transaction', '_blank')}
-                    title="Mở trang Tạo giao dịch ở tab mới"
+                    onClick={openCreateTransactionPopup}
+                    title="Mở trang Tạo giao dịch (cửa sổ nổi)"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M12 5v14M5 12h14"/>
