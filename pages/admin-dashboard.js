@@ -496,7 +496,7 @@ export default function AdminDashboardPage() {
         {/* ── MOBILE SIDEBAR OVERLAY ── */}
         {sidebarOpen && (
           <div
-            className="fixed inset-0 z-[250] bg-[rgba(17,7,13,0.45)] backdrop-blur-[2px] lg:hidden"
+            className="fixed inset-y-0 left-[252px] right-0 z-[250] bg-[rgba(17,7,13,0.45)] lg:hidden"
             style={{ animation: 'fadein 0.15s ease' }}
             onClick={() => setSidebarOpen(false)}
           />
@@ -505,7 +505,7 @@ export default function AdminDashboardPage() {
         <div className="relative z-[1] flex min-h-screen">
           {/* ── SIDEBAR ── cố định trên desktop (lg+), trượt ẩn/hiện trên mobile */}
           <aside
-            className={`fixed inset-y-0 left-0 z-[260] flex w-[252px] max-w-[80vw] flex-shrink-0 flex-col border-r border-[var(--border)] bg-white/95 shadow-[4px_0_24px_rgba(174,0,112,0.06)] backdrop-blur-[20px] transition-transform duration-300 ease-out lg:translate-x-0 ${
+            className={`fixed inset-y-0 left-0 z-[260] flex w-[252px] max-w-[80vw] flex-shrink-0 flex-col border-r border-[var(--border)] bg-white shadow-[4px_0_24px_rgba(174,0,112,0.06)] transition-transform duration-300 ease-out lg:translate-x-0 ${
               sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             }`}
           >
