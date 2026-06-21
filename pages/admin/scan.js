@@ -4,18 +4,15 @@ import { useRouter } from 'next/router'
 
 const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
 
-// Định dạng số tiền hiển thị trong input theo kiểu "12.111đ" trong lúc người dùng đang nhập
-// (state amount vẫn lưu chuỗi số thuần, không lưu định dạng, để không ảnh hưởng các logic khác)
-function formatAmountDisplay(raw) {
-  const digits = (raw || '').replace(/\D/g, '')
-  if (!digits) return ''
-  return `${parseInt(digits, 10).toLocaleString('vi-VN')}đ`
-}
-
 function cleanCode(raw) {
   if (!raw) return ''
   return raw.trim()
 }
+
+// Key lưu lại đơn đang quét dở vào sessionStorage — chống mất state khi F5.
+// Đơn thực ra đã tồn tại trên Redis (save-pending), chỉ là React state bị
+// xoá khi reload trang, nên phải tự lưu/khôi phục state ở đây.
+const SCAN_SESSION_KEY = 'momo_scan_session'
 
 export default function ScanPage() {
   const router = useRouter()
@@ -48,7 +45,6 @@ export default function ScanPage() {
 
   const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
   const [showCancelModal, setShowCancelModal] = useState(false)
-  const [showConfirmAmountModal, setShowConfirmAmountModal] = useState(false)
   const [quickToast, setQuickToast] = useState(false)
 
   // Load jsQR
@@ -97,7 +93,6 @@ export default function ScanPage() {
   // cả khi gọi từ luồng link nhanh, lúc đó state amount/orderInfo có thể
   // chưa kịp cập nhật xong (setState là async).
   async function confirmAndProceed(amt, info) {
-    setShowConfirmAmountModal(false)
     const generatedId = `POS${Date.now()}`
     setCurrentOrderId(generatedId)
     submitting.current = true
@@ -132,14 +127,48 @@ export default function ScanPage() {
       setOrderInfo(urlOrderInfo)
     }
 
-    if (quick === 'true' && urlAmount && !currentOrderId && !submitting.current) {
-      // Lấy thông tin từ link nhanh (?quick=true&amount=...) → BỎ QUA popup xác nhận,
-      // tạo đơn nháp ngay luôn. Chỉ hiện 1 toast nhỏ tự ẩn để báo cho thu ngân biết.
+    if (urlAmount && !currentOrderId && !submitting.current) {
+      // Trang này không còn form nhập tay → bất kỳ link nào có ?amount=
+      // hợp lệ đều tự tạo đơn nháp ngay (trước đây chỉ áp dụng cho ?quick=true).
       router.replace('/admin/scan', undefined, { shallow: true })
       confirmAndProceed(urlAmount, urlOrderInfo)
-      setQuickToast(true)
+      if (quick === 'true') setQuickToast(true)
     }
   }, [urlAmount, urlOrderInfo, quick, router.isReady])
+
+  // ── CHỐNG MẤT STATE KHI F5 ────────────────────────────────────────
+  // Nếu đang ở giữa giao dịch (step='scan', đã có currentOrderId) thì lưu
+  // lại toàn bộ context vào sessionStorage. Đơn này đã PENDING trên Redis,
+  // chỉ cần nhớ lại id để admin tiếp tục bắn mã, không phải tạo đơn mới.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (step === 'scan' && currentOrderId) {
+      sessionStorage.setItem(SCAN_SESSION_KEY, JSON.stringify({
+        step, amount, orderInfo, currentOrderId,
+      }))
+    }
+  }, [step, amount, orderInfo, currentOrderId])
+
+  // Khôi phục lại đơn đang quét dở ngay khi vào trang (F5) — chỉ áp dụng khi
+  // KHÔNG đến từ link nhanh (?quick=true, đã có luồng tạo đơn riêng ở effect trên).
+  useEffect(() => {
+    if (typeof window === 'undefined' || !router.isReady) return
+    if (urlAmount || currentOrderId) return // đã có nguồn khác xử lý rồi, không khôi phục đè lên
+
+    try {
+      const saved = sessionStorage.getItem(SCAN_SESSION_KEY)
+      if (!saved) return
+      const s = JSON.parse(saved)
+      if (s?.step === 'scan' && s.currentOrderId) {
+        setAmount(s.amount || '')
+        setOrderInfo(s.orderInfo || '')
+        setCurrentOrderId(s.currentOrderId)
+        setStep('scan')
+      }
+    } catch (e) {
+      console.error('Không khôi phục được session quét trước đó:', e)
+    }
+  }, [router.isReady])
 
   // Tự ẩn toast "đã bỏ qua xác nhận" sau ~2.5s
   useEffect(() => {
@@ -147,20 +176,6 @@ export default function ScanPage() {
     const t = setTimeout(() => setQuickToast(false), 2500)
     return () => clearTimeout(t)
   }, [quickToast])
-
-  // Khi popup xác nhận số tiền (nhập tay) đang mở → Enter cũng xác nhận luôn,
-  // không cần bấm chuột vào nút "Xác nhận"
-  useEffect(() => {
-    if (!showConfirmAmountModal) return
-    const fn = e => {
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        confirmAndProceed(amount, orderInfo)
-      }
-    }
-    window.addEventListener('keydown', fn)
-    return () => window.removeEventListener('keydown', fn)
-  }, [showConfirmAmountModal, amount, orderInfo])
 
   // Thêm đoạn này ở khu vực các useEffect đầu file để tự focus khi nhấn thử lại
   useEffect(() => {
@@ -302,16 +317,7 @@ export default function ScanPage() {
     submitting.current = false
     setManualCode('')
     setManualErr('')
-  }
-
-  const handleEnterKey = (e) => {
-    if (e.key === 'Enter') {
-      if (amount && parseInt(amount) >= 1000) {
-        // Mở popup xác nhận giống nút "Xác nhận →" để luồng tạo
-        // orderId + gọi save-pending luôn được thực hiện trước khi sang step scan
-        setShowConfirmAmountModal(true)
-      }
-    }
+    if (typeof window !== 'undefined') sessionStorage.removeItem(SCAN_SESSION_KEY)
   }
 
   async function submitManualCode() {
@@ -362,6 +368,7 @@ export default function ScanPage() {
       setManualCode('')
       setManualErr('')
       setStep('amount')
+      if (typeof window !== 'undefined') sessionStorage.removeItem(SCAN_SESSION_KEY)
     }
   }
 
@@ -517,36 +524,31 @@ export default function ScanPage() {
 
         <div className={`flex-1 flex flex-col max-w-[480px] w-full mx-auto px-4 pb-10 pt-4 gap-3 ${step === 'amount' ? 'justify-center' : ''}`}>
 
-          {/* STEP 1: AMOUNT */}
+          {/* STEP 1: KHỞI TẠO — không còn form nhập tay, trang này chỉ nhận đơn
+              qua link do create-transaction.js tạo (?amount=&quick=true) */}
           {step === 'amount' && (
-            <div className={card}>
-              <h3 className="text-[13px] font-bold text-gray-700 mb-3.5">💰  Nhập số tiền cần thanh toán</h3>
-              <input
-                type="text" inputMode="numeric" placeholder="Nhập số tiền..."
-                value={formatAmountDisplay(amount)}
-                onChange={e => setAmount(e.target.value.replace(/\D/g, ''))}
-                onKeyDown={handleEnterKey}
-                className={`${inputBase} font-['Outfit',_sans-serif] text-xl font-extrabold tracking-tight text-momo`} autoFocus
-                disabled={quick === 'true'}
-              />
-
-              <div className="pt-3 border-t border-gray-100 mb-3.5">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-2">Nội dung thanh toán</p>
-                <input
-                  placeholder="Nhập mã đơn hàng "
-                  value={orderInfo} onChange={e => setOrderInfo(e.target.value)}
-                  onKeyDown={handleEnterKey}
-                  className={inputBase}
-                  disabled={quick === 'true'}
-                />
-              </div>
-              <button
-                onClick={() => setShowConfirmAmountModal(true)}
-                disabled={!amount || parseInt(amount) < 1000 || submitting.current}
-                className={btnPrimary}
-              >
-                Xác nhận  →
-              </button>
+            <div className={`${card} text-center py-9`}>
+              {(!router.isReady || (urlAmount && !currentOrderId)) ? (
+                <>
+                  <div className="inline-block w-9 h-9 border-4 border-momo/30 border-t-momo rounded-full animate-spin mx-auto mb-3" />
+                  <p className="text-[15px] font-bold text-momo">Đang khởi tạo giao dịch...</p>
+                </>
+              ) : (
+                <>
+                  <div className="text-4xl mb-3">🔗</div>
+                  <h3 className="text-[15px] font-bold text-gray-700 mb-1.5">Chưa có giao dịch nào</h3>
+                  <p className="text-[13px] text-gray-500 mb-5 leading-relaxed">
+                    Trang này chỉ nhận đơn từ link do quầy thu ngân tạo.<br />
+                    Vui lòng tạo giao dịch mới để lấy link/QR.
+                  </p>
+                  <button
+                    onClick={() => router.push('/admin/create-transaction')}
+                    className={btnPrimary}
+                  >
+                    + Tạo giao dịch mới
+                  </button>
+                </>
+              )}
             </div>
           )}
 
@@ -661,55 +663,6 @@ export default function ScanPage() {
                     🔄 Thử lại
                   </button>
                 )}
-              </div>
-            </div>
-          )}
-
-          {/* ─── POPUP XÁC NHẬN SỐ TIỀN & THÔNG TIN ĐƠN HÀNG (render ở mọi step) ─── */}
-          {showConfirmAmountModal && (
-            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
-              <div className="bg-white rounded-2xl w-full max-w-[365px] p-6 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1)]">
-                <div className="text-base font-bold text-slate-800 mb-3.5 text-center uppercase tracking-wide">
-                  🔎 Kiểm tra thông tin đơn hàng
-                </div>
-
-                <div className="bg-slate-50 rounded-xl p-4 mb-5 border border-slate-200">
-                  <div className="flex flex-col gap-2.5">
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500 text-[13px]">Số tiền cần thu:</span>
-                      <span className="text-2xl font-black text-momo">{fmt(amount)} ₫</span>
-                    </div>
-                    <div className="h-px bg-slate-200" />
-                    <div className="flex flex-col gap-1">
-                      <span className="text-slate-500 text-[13px]">Nội dung thanh toán:</span>
-                      <span className="text-sm font-semibold text-gray-900 break-all">
-                        {orderInfo || `iPOS${Date.now()}`}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowConfirmAmountModal(false)
-                      // Nếu đi từ link nhanh bị hủy, trả URL về nguyên bản để thu ngân nhập tay tùy ý
-                      if (quick === 'true') {
-                        router.replace('/admin/scan', undefined, { shallow: true })
-                      }
-                    }}
-                    className="flex-1 py-2.5 bg-white text-slate-500 border border-slate-300 rounded-lg text-[13px] font-semibold cursor-pointer active:opacity-80"
-                  >
-                    Trở lại
-                  </button>
-
-                  <button
-                    onClick={() => confirmAndProceed(amount, orderInfo)}
-                    className="flex-1 py-2.5 bg-momo text-white border-none rounded-lg text-[13px] font-bold cursor-pointer shadow-[0_4px_12px_rgba(174,0,112,0.2)] active:opacity-80"
-                  >
-                    Xác nhận
-                  </button>
-                </div>
               </div>
             </div>
           )}

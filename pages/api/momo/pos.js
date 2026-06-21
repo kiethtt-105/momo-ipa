@@ -69,9 +69,13 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Thiếu thông tin bắt buộc: orderId, amount, paymentCode' })
   }
 
-  // Chuẩn hóa orderId → luôn có tiền tố iPOS
+  // Chuẩn hóa orderId → chỉ thêm tiền tố iPOS khi orderId CHƯA có tiền tố nào.
+  // QUAN TRỌNG: orderId từ scan.js đã có dạng "POS<timestamp>" — nếu cứ thêm
+  // "iPOS" vào trước thì ra "iPOSPOS<timestamp>", khác hẳn id gốc đã lưu ở
+  // save-pending.js/Redis và id hiển thị cho admin → lệch dữ liệu, MoMo nhận
+  // 1 id, hệ thống lưu/hiển thị 1 id khác.
   let orderId = String(rawOrderId).trim()
-  if (!orderId.startsWith('iPOS')) {
+  if (!orderId.startsWith('iPOS') && !orderId.startsWith('POS')) {
     orderId = `iPOS${orderId}`
   }
 

@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
-import Link from 'next/link'
 
 // Bắn tín hiệu sang các tab khác cùng domain (ví dụ /admin/scan đang mở
 // riêng) để báo "đã có kết quả cuối cùng cho đơn hàng này" — tab đó sẽ tự
@@ -24,22 +23,45 @@ function notifyOtherTabs(orderId, status) {
 // Hàm này không throw — nếu lỗi/timeout thì chỉ log, trang vẫn hiển thị
 // được info cơ bản đã có trước đó.
 async function fetchFullInfo(orderId) {
-  try {
-    const res = await fetch('/api/momo/query', {
+  // Gọi ĐỒNG THỜI 2 nguồn:
+  // 1. /api/momo/query  → hỏi MoMo server-to-server (resultCode, transId, payType, responseTime...)
+  // 2. /api/momo/status → đọc Redis của HỆ THỐNG MÌNH (source, orderInfo gốc...)
+  // MoMo KHÔNG biết & KHÔNG trả field "source"/"orderInfo" của hệ thống mình,
+  // nên nếu chỉ dùng (1) thì info.source luôn undefined → buildRetryUrl() ở
+  // dưới không bao giờ nhận ra được đơn là 'pos'/'scan' hay 'p2p', cứ rơi về
+  // nhánh mặc định P2P (đúng lỗi đang gặp).
+  const [momoFull, ourRecord] = await Promise.all([
+    fetch('/api/momo/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      console.error('[result] /api/momo/query lỗi:', data?.message)
-      return null
-    }
-    return data
-  } catch (e) {
-    console.error('[result] Không gọi được /api/momo/query:', e)
-    return null
-  }
+    }).then(r => r.json()).catch(e => { console.error('[result] /api/momo/query lỗi:', e); return null }),
+
+    fetch(`/api/momo/status?orderId=${encodeURIComponent(orderId)}`)
+      .then(r => r.json()).catch(e => { console.error('[result] /api/momo/status lỗi:', e); return null }),
+  ])
+
+  // ourRecord làm NỀN (có source, orderInfo gốc) — đè lên bằng field tươi từ
+  // MoMo (resultCode/transId/message...) vì MoMo là nguồn sự thật cho trạng thái giao dịch.
+  if (!momoFull && !ourRecord) return null
+  return { ...(ourRecord || {}), ...(momoFull || {}) }
+}
+
+// Xây URL "Thử lại" — quay về trang TẠO GIAO DỊCH (admin/create-transaction)
+// kèm sẵn amount/orderInfo/method, để admin xác nhận lại 1 lần rồi bấm gửi —
+// thay vì bắn thẳng vào /api/momo/redirect hay /admin/scan (dễ tạo đơn nháp
+// mới mà admin không kịp nhìn lại thông tin). Đây cũng là cách gộp về
+// "1 cổng vào duy nhất" cho admin, đỡ phải nhớ 2-3 đường dẫn khác nhau.
+function buildRetryUrl(info) {
+  if (!info) return '/admin/create-transaction'
+  const amt = info.amount
+  const orderInfo = info.orderInfo || ''
+  const source = info.source || ''
+
+  if (!amt) return '/admin/create-transaction' // không đủ dữ liệu để tạo lại
+
+  const method = (source === 'pos' || source === 'scan') ? 'scan' : 'p2p'
+  return `/admin/create-transaction?method=${method}&amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
 }
 
 export default function ResultPage() {
@@ -340,13 +362,22 @@ useEffect(() => {
               </div>
             )}
 
-            {status !== 'loading' && (
-              <Link
-                href="/"
+            {status === 'failed' && (
+              <a
+                href={buildRetryUrl(info)}
                 className="flex w-full items-center justify-center rounded-2xl bg-[var(--mm)] py-4 text-center text-base font-bold text-white shadow-[0_8px_24px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[var(--mm-dark)] hover:shadow-[0_12px_28px_rgba(174,0,112,0.3)]"
               >
-                {status === 'failed' ? 'Thử thanh toán lại' : 'Quay lại trang chủ'}
-              </Link>
+                Thử thanh toán lại
+              </a>
+            )}
+
+            {status !== 'loading' && status !== 'failed' && (
+              <button
+                onClick={() => window.close()}
+                className="flex w-full items-center justify-center rounded-2xl bg-[var(--mm)] py-4 text-center text-base font-bold text-white shadow-[0_8px_24px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[var(--mm-dark)] hover:shadow-[0_12px_28px_rgba(174,0,112,0.3)]"
+              >
+                Đóng tab này
+              </button>
             )}
           </div>
         </div>
