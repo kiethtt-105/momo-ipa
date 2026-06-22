@@ -8,6 +8,19 @@ import Head from 'next/head'
 // không cần quay lại trang create-transaction nữa.
 const TX_BASE_URL = 'https://kiehtt.vercel.app'
 
+// Sau khi có kết quả cuối (thành công/thất bại), tự redirect ngược về trang
+// Tạo giao dịch (admin/create-transaction) kèm kết quả qua query string —
+// vì giờ chỉ dùng 1 tab, không còn tab "create-transaction" đứng yên chờ
+// BroadcastChannel nữa.
+const REDIRECT_BACK_DELAY_MS = 3000
+
+function buildBackToCreateTxUrl({ orderId, status, amount, message }) {
+  // Redirect về trang admin dashboard (không phải create-transaction) để không
+  // văng ra khỏi dashboard khi result.js chạy ở top-level tab sau khi MoMo redirect về.
+  // Dashboard tự refresh 1s/lần nên admin thấy kết quả trong bảng ngay, không cần toast.
+  return '/admin'
+}
+
 // Bắn tín hiệu sang các tab khác cùng domain (ví dụ /admin/scan đang mở
 // riêng) để báo "đã có kết quả cuối cùng cho đơn hàng này" — tab đó sẽ tự
 // reload lại để admin thấy trạng thái mới nhất ngay, không cần bấm tay.
@@ -72,7 +85,7 @@ function appendRetrySuffix(orderInfo) {
 // quay lại trang đó xem/sửa rồi bấm thêm 1 lần nữa). Giữ nguyên amount/method
 // của đơn cũ, chỉ đổi orderInfo (thêm hậu tố _N) để không bị lỗi trùng đơn.
 function buildRetryUrl(info) {
-  if (!info || !info.amount) return '/admin/create-transaction' // thiếu dữ liệu → fallback về trang tạo thủ công
+  if (!info || !info.amount) return '/admin' // thiếu dữ liệu → fallback về dashboard
 
   const amt = info.amount
   const source = info.source || ''
@@ -206,6 +219,22 @@ useEffect(() => {
       return () => clearInterval(poll)
     }
   }, [router.isReady, router.query])
+
+  // ── TỰ ĐỘNG QUAY VỀ TRANG TẠO GIAO DỊCH SAU KHI CÓ KẾT QUẢ ──
+  // Cho admin vài giây để đọc kết quả trên màn hình này, sau đó tự redirect
+  // ngược về /admin/create-transaction kèm kết quả qua query string.
+  useEffect(() => {
+    if (status !== 'success' && status !== 'failed') return
+    const t = setTimeout(() => {
+      window.location.href = buildBackToCreateTxUrl({
+        orderId: info?.orderId,
+        status,
+        amount: info?.amount,
+        message: status === 'failed' ? info?.message : null,
+      })
+    }, REDIRECT_BACK_DELAY_MS)
+    return () => clearTimeout(t)
+  }, [status, info])
 
   const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
   const fmtTime = ms => {
@@ -393,21 +422,16 @@ useEffect(() => {
             {status === 'failed' && (
               <a
                 href={buildRetryUrl(info)}
-                target={isDirectRetry(info) ? '_blank' : undefined}
-                rel={isDirectRetry(info) ? 'noopener noreferrer' : undefined}
                 className="flex w-full items-center justify-center rounded-2xl bg-[var(--mm)] py-4 text-center text-base font-bold text-white shadow-[0_8px_24px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[var(--mm-dark)] hover:shadow-[0_12px_28px_rgba(174,0,112,0.3)]"
               >
                 Thử thanh toán lại
               </a>
             )}
 
-            {status !== 'loading' && status !== 'failed' && (
-              <button
-                onClick={() => window.close()}
-                className="flex w-full items-center justify-center rounded-2xl bg-[var(--mm)] py-4 text-center text-base font-bold text-white shadow-[0_8px_24px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[var(--mm-dark)] hover:shadow-[0_12px_28px_rgba(174,0,112,0.3)]"
-              >
-                Xác nhận 
-              </button>
+            {status !== 'loading' && (
+              <p className="mt-3 text-center text-xs text-[var(--muted)]">
+                Tự động quay lại trang tạo giao dịch sau ít giây…
+              </p>
             )}
           </div>
         </div>

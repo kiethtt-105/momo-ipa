@@ -100,11 +100,29 @@ export default function CreateTransactionPage() {
     }
   }, [])
 
-  // ── LẮNG NGHE KẾT QUẢ THANH TOÁN ──────────────────────────
-  // result.js (trang nhận redirect kết quả từ MoMo) bắn tín hiệu qua
-  // BroadcastChannel 'momo-result' ngay khi có kết quả cuối (thành công/thất
-  // bại). Trang Tạo giao dịch này lắng nghe và hiện popup NGAY TẠI ĐÂY, vì
-  // đây là cửa sổ admin đang focus lúc vừa bắn giao dịch đi.
+  // ── NHẬN KẾT QUẢ THANH TOÁN QUA QUERY STRING ──────────────
+  // Vì giờ chỉ dùng 1 tab (không mở tab mới nữa), result.js sau khi xác
+  // nhận xong sẽ tự redirect ngược về đây kèm kết quả qua query string
+  // (?resultOrderId=&resultStatus=&resultAmount=&resultMessage=). Đọc 1 lần
+  // lúc trang load rồi dọn URL cho sạch.
+  useEffect(() => {
+    if (!router.isReady) return
+    const { resultOrderId, resultStatus, resultAmount, resultMessage } = router.query
+    if (!resultOrderId || !resultStatus) return
+
+    setResultToast({
+      orderId: resultOrderId,
+      status: resultStatus,
+      amount: resultAmount ? parseInt(resultAmount, 10) : null,
+      message: resultMessage || null,
+    })
+    setPendingOrders(prev => prev.filter(o => o.orderId !== resultOrderId))
+    router.replace('/admin/create-transaction', undefined, { shallow: true })
+  }, [router.isReady])
+
+  // ── LẮNG NGHE KẾT QUẢ THANH TOÁN QUA BROADCASTCHANNEL ─────
+  // Vẫn giữ lại phòng trường hợp có tab khác (vd /admin/scan) đang mở song
+  // song và bắn tín hiệu — không gây hại gì nếu không có tab nào khác.
   useEffect(() => {
     if (typeof window === 'undefined' || !window.BroadcastChannel) return
     const ch = new BroadcastChannel('momo-result')
@@ -138,11 +156,18 @@ export default function CreateTransactionPage() {
     if (!url) return
     setLastUrl(url)
     setCopied(false)
-    window.open(url, '_blank')
-    // Ghi nhớ đơn vừa bắn đi — để khi MoMo báo kết quả về (qua BroadcastChannel
-    // từ result.js), trang này nhận ra và hiện popup kết quả ngay tại đây.
+    // Ghi nhớ đơn vừa bắn đi — để khi quay lại từ result.js (qua query string
+    // hoặc BroadcastChannel nếu có tab khác), trang này khớp được đơn.
     setPendingOrders(prev => [...prev, { orderId: finalOrderInfo, amount: parseInt(amount, 10) || 0 }])
     setOrderInfo(genOrderId()) // sinh mã mới cho lần tạo tiếp theo
+    // Điều hướng đến URL giao dịch — nếu đang trong iframe (admin dashboard),
+    // mở URL ở top-level window để không văng ra khỏi dashboard.
+    // Nếu đang chạy standalone thì navigate bình thường.
+    if (window.top && window.top !== window.self) {
+      window.top.location.href = url
+    } else {
+      window.location.href = url
+    }
   }
 
   const copyUrl = () => {
