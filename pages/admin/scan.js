@@ -51,6 +51,8 @@ export default function ScanPage() {
 
   const [currentOrderId, setCurrentOrderId] = useState(null)
   const [isServerErr, setIsServerErr] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [checkResult, setCheckResult] = useState(null)
 
   const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -250,6 +252,8 @@ export default function ScanPage() {
   async function onDetected(raw) {
     if (submitting.current) return
     submitting.current = true
+    setIsSubmitting(true)
+    setCheckResult(null)
     stopCamera()
 
     const code = cleanCode(raw)
@@ -310,8 +314,10 @@ export default function ScanPage() {
       window.open(`/result?${qs}`, '_blank')
       window.focus() // Kéo focus quay lại tab scan này — không để trình duyệt tự nhảy sang tab /result mới mở
       submitting.current = false
+      setIsSubmitting(false)
     } catch {
       submitting.current = false
+      setIsSubmitting(false)
       setIsServerErr(true)
       setManualErr('Mất kết nối hoặc cổng thanh toán phản hồi chậm!')
     }
@@ -324,6 +330,8 @@ export default function ScanPage() {
     setCurrentOrderId(null)
     setStep('amount')
     submitting.current = false
+    setIsSubmitting(false)
+    setCheckResult(null)
     setManualCode('')
     setManualErr('')
     if (typeof window !== 'undefined') sessionStorage.removeItem(SCAN_SESSION_KEY)
@@ -348,7 +356,7 @@ export default function ScanPage() {
   // Auto submit khi nhập đủ 18 ký tự
   useEffect(() => {
     const code = cleanCode(manualCode)
-    if (code.length === 18 && !submitting.current && /^(\d{18}|MM\d{16})$/.test(code)) {
+    if ((code.length === 18 || code.length === 20) && !submitting.current && /^(MM)?\d{18}$/.test(code)) {
       submitManualCode()
     }
   }, [manualCode])
@@ -356,6 +364,7 @@ export default function ScanPage() {
   // Hàm ép đơn hàng PENDING thành FAILED khi thực hiện hủy giao dịch
   async function triggerCancelOrderBackend() {
     submitting.current = true
+    setIsSubmitting(true)
     try {
       await fetch('/api/momo/scan', {
         method: 'POST',
@@ -371,6 +380,7 @@ export default function ScanPage() {
       console.error(e)
     } finally {
       submitting.current = false
+      setIsSubmitting(false)
       setAmount('')
       setOrderInfo('')
       setCurrentOrderId(null)
@@ -378,6 +388,19 @@ export default function ScanPage() {
       setManualErr('')
       setStep('amount')
       if (typeof window !== 'undefined') sessionStorage.removeItem(SCAN_SESSION_KEY)
+    }
+  }
+
+  // ── KIỂM TRA TRẠNG THÁI ĐƠN HÀNG ──────────────────────────
+  async function checkOrder() {
+    if (!currentOrderId) return
+    setCheckResult(null)
+    try {
+      const res = await fetch(`/api/momo/status?orderId=${encodeURIComponent(currentOrderId)}`)
+      const data = await res.json()
+      setCheckResult(data)
+    } catch (e) {
+      setCheckResult({ error: 'Không kết nối được server' })
     }
   }
 
@@ -607,7 +630,7 @@ export default function ScanPage() {
                   onChange={e => { setManualCode(e.target.value); setManualErr('') }}
                   onKeyDown={handleManualCodeKey}
                   className={`${inputBase} bg-white ${manualErr ? 'mb-1' : 'mb-2'}`}
-                  disabled={submitting.current}
+                  disabled={isSubmitting}
                 />
                 {manualErr && <p className="text-xs text-red-600 mb-2">⚠ {manualErr}</p>}
                 {/* Chỉ hiện khi server bị đơ hoặc lỗi kết nối mạng */}
@@ -621,15 +644,15 @@ export default function ScanPage() {
                 )}
                 <button
                   onClick={submitManualCode}
-                  disabled={!manualCode.trim() || submitting.current}
+                  disabled={!manualCode.trim() || isSubmitting}
                   className="w-full bg-momo text-white border-none rounded-lg py-2 px-4 text-[13px] font-bold cursor-pointer mt-1 disabled:opacity-40 disabled:cursor-not-allowed active:opacity-80"
                 >
-                  {submitting.current ? 'Đang xử lý...' : '✓ Xác nhận thanh toán'}
+                  {isSubmitting ? 'Đang xử lý...' : '✓ Xác nhận thanh toán'}
                 </button>
               </div>
 
               {/* Camera chạy ngầm không gây vỡ/xấu giao diện */}
-              {!submitting.current && scanning && (
+              {!isSubmitting && scanning && (
                 <div className="absolute w-px h-px opacity-0 overflow-hidden pointer-events-none">
                   <video ref={setVideoRef} playsInline muted className="w-full" />
                   <canvas ref={canvasRef} />
@@ -637,19 +660,40 @@ export default function ScanPage() {
               )}
 
               {/* CỤM NÚT DIỀU HƯỚNG DƯỚI ĐÁY ĐƯỢC THU NHỎ GỌN GÀNG HÀNG NGANG */}
-              {!submitting.current && (
-                <div className="flex gap-3 mt-3 border-t border-gray-100 pt-3.5">
-                  <button
-                    onClick={() => setShowCancelModal(true)}
-                    className="flex-1 bg-white text-slate-500 border border-slate-300 rounded-lg py-2.5 px-3.5 text-[13px] font-semibold cursor-pointer active:opacity-80"
-                  >
-                    ← Hủy & Quay lại
-                  </button>
-                </div>
+              {!isSubmitting && (
+                <>
+                  <div className="flex gap-3 mt-3 border-t border-gray-100 pt-3.5">
+                    <button
+                      onClick={() => setShowCancelModal(true)}
+                      className="flex-1 bg-white text-slate-500 border border-slate-300 rounded-lg py-2.5 px-3.5 text-[13px] font-semibold cursor-pointer active:opacity-80"
+                    >
+                      ← Hủy & Quay lại
+                    </button>
+                    <button
+                      onClick={checkOrder}
+                      disabled={!currentOrderId}
+                      className="flex-1 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg py-2.5 px-3.5 text-[13px] font-semibold cursor-pointer active:opacity-80 disabled:opacity-40"
+                    >
+                      🔍 Kiểm tra
+                    </button>
+                  </div>
+                  {checkResult && (
+                    <div className={`mt-2.5 rounded-xl px-3.5 py-3 text-[13px] border ${checkResult.error ? 'bg-red-50 border-red-200 text-red-700' : checkResult.status === 'PAID' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                      {checkResult.error
+                        ? `⚠ ${checkResult.error}`
+                        : checkResult.status === 'PAID'
+                          ? `✅ Đã thanh toán — Mã GD: ${checkResult.transId || '—'}`
+                          : checkResult.status === 'FAILED'
+                            ? `❌ Giao dịch thất bại — ${checkResult.message || ''}`
+                            : `⏳ ${checkResult.status || 'Đang chờ'} — ${checkResult.message || 'Chưa có kết quả'}`
+                      }
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Trạng thái đang xử lý thanh toán */}
-              {submitting.current && (
+              {isSubmitting && (
                 <div className="py-7 px-5 text-center bg-[#f9f0f5] rounded-xl mt-3">
                   <div className="inline-block w-9 h-9 border-4 border-momo/30 border-t-momo rounded-full animate-spin mx-auto mb-3" />
                   <p className="text-[15px] font-bold text-momo">Đang xử lý thanh toán...</p>
