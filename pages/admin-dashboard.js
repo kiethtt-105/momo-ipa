@@ -1,8 +1,8 @@
+// pages/admin-dashboard.js
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 
-// ─── CONSTANTS ─────────────────────────────────────────────
 const REFRESH_INTERVAL = 1000
 const EXPIRE_MINUTES   = 10
 
@@ -27,7 +27,6 @@ const NAV_ITEMS = [
   { key: 'lookup',  label: 'Tra cứu giao dịch',  sub: 'Theo mã đơn MoMo',    icon: IconSearch  },
 ]
 
-// ─── MỞ TRANG "TẠO GIAO DỊCH" Ở CỬA SỔ RIÊNG (tuỳ chọn, ngoài iframe) ──
 function openCreateTransactionPopup() {
   const w = 460
   const h = 780
@@ -41,7 +40,6 @@ function openCreateTransactionPopup() {
   win?.focus()
 }
 
-// ─── UTILS ─────────────────────────────────────────────────
 const fmt      = n  => parseInt(n || 0).toLocaleString('vi-VN')
 const fmtDate  = s  => s ? new Date(s).toLocaleString('vi-VN', { hour12: false }) : '—'
 const fmtMs    = ms => ms ? new Date(parseInt(ms)).toLocaleString('vi-VN', { hour12: false }) : '—'
@@ -55,10 +53,9 @@ const parseDayStr = s => { const [y, m, d] = s.split('-').map(Number); return ne
 const MONTH_NAMES_VN = ['Một', 'Hai', 'Ba', 'Tư', 'Năm', 'Sáu', 'Bảy', 'Tám', 'Chín', 'Mười', 'Mười một', 'Mười hai']
 const WEEKDAYS_VN = ['H', 'B', 'T', 'N', 'S', 'B', 'C']
 
-// Tạo lưới 6 hàng x 7 cột cho 1 tháng (gồm cả ngày tháng trước/sau để lấp đầy lưới), dùng cho DateRangePicker
 function buildCalendarGrid(year, month) {
   const firstDay = new Date(year, month, 1)
-  const startOffset = (firstDay.getDay() + 6) % 7 // 0 = Thứ 2
+  const startOffset = (firstDay.getDay() + 6) % 7 
   const gridStart = new Date(year, month, 1 - startOffset)
   const days = []
   for (let i = 0; i < 42; i++) {
@@ -133,7 +130,6 @@ const RESULT_CODE_MAP = {
 }
 const getResultDesc = code => RESULT_CODE_MAP[code] !== undefined ? RESULT_CODE_MAP[code] : `Mã lỗi không xác định`
 
-// Xuất danh sách giao dịch (đã áp dụng bộ lọc hiện tại) ra file CSV để tải về, mở được bằng Excel/Sheets
 function exportOrdersToCSV(orders, filterLabel) {
   const headers = ['Mã đơn', 'Trạng thái', 'Số tiền', 'Nội dung', 'Hình thức', 'Result Code', 'Mã GD MoMo', 'Thời gian tạo', 'Thời gian thanh toán']
   const rows = orders.map(o => [
@@ -164,9 +160,7 @@ function exportOrdersToCSV(orders, filterLabel) {
   URL.revokeObjectURL(url)
 }
 
-// ═══════════════════════════════════════════════════════════
-// MAIN COMPONENT
-// ═══════════════════════════════════════════════════════════
+
 export default function AdminDashboardPage() {
   const router = useRouter()
 
@@ -212,7 +206,6 @@ export default function AdminDashboardPage() {
   useEffect(() => { selectedRef.current = selected }, [selected])
   useEffect(() => { detailRef.current   = detail   }, [detail])
 
-  // ── CHECK SESSION ─────────────────────────────────────────
   useEffect(() => {
     fetch('/api/admin/session')
       .then(r => r.json())
@@ -221,7 +214,6 @@ export default function AdminDashboardPage() {
       .finally(() => setCheckingSession(false))
   }, [])
 
-  // ── FETCH ORDERS ──────────────────────────────────────────
   const fetchOrders = useCallback(async ({ force = false } = {}) => {
     if (fetchingRef.current && !force) return
     fetchingRef.current = true
@@ -258,7 +250,6 @@ export default function AdminDashboardPage() {
     return () => clearInterval(iv)
   }, [authed, fetchOrders])
 
-  // ── ESC đóng modal / drawer ────────────────────────────────
   useEffect(() => {
     const fn = e => {
       if (e.key === 'Escape') {
@@ -271,13 +262,11 @@ export default function AdminDashboardPage() {
     return () => window.removeEventListener('keydown', fn)
   }, [])
 
-  // Đóng drawer mobile mỗi khi đổi mục trong sidebar
   const goToSection = (key) => {
     setActiveSection(key)
     setSidebarOpen(false)
   }
 
-  // ── MOMO QUERY API — dùng cho trang "Tra cứu giao dịch" ────
   const doMomoQuery = async (idArg) => {
     const id = (idArg ?? queryOrderId).trim()
     if (!id) return
@@ -300,7 +289,6 @@ export default function AdminDashboardPage() {
     }
   }
 
-  // Mở trang "Tra cứu giao dịch" với orderId đã điền sẵn, tiện cho việc xem chi tiết và thao tác tiếp
   const openQueryForOrder = (orderId) => {
     setQueryOrderId(orderId)
     setQueryResult(null)
@@ -309,7 +297,6 @@ export default function AdminDashboardPage() {
     doMomoQuery(orderId)
   }
 
-  // Mở confirm modal cho đơn có resultCode 9000, với tuỳ chọn capture hoặc cancel
   const openConfirmForOrder = (orderId, amount) => {
     setConfirmOrderId(orderId)
     setConfirmAmount(amount)
@@ -318,7 +305,6 @@ export default function AdminDashboardPage() {
     setConfirmModal(true)
   }
 
-  // Gọi API confirm của MoMo, với requestType là 'capture' hoặc 'cancel' tuỳ theo hành động người dùng chọn
   const doMomoConfirm = async (requestType) => {
     setConfirmLoading(true)
     setConfirmResult(null)
@@ -340,11 +326,8 @@ export default function AdminDashboardPage() {
     }
   }
 
-  // ── XỬ LÝ DỮ LIỆU HIỂN THỊ ─────────────────────────────────
   const displayed = orders.map(normalizeStatus)
 
-  // Áp dụng filter ngày + tìm kiếm (KHÔNG áp dụng filter trạng thái ở đây),
-  // để counts và filtered list luôn khớp với cùng một phạm vi ngày/tìm kiếm.
   const scoped = displayed
     .filter(o => {
       const q = search.trim().toLowerCase()
@@ -366,8 +349,7 @@ export default function AdminDashboardPage() {
       return true
     })
 
-  // Tính toán số lượng theo từng trạng thái (đã áp dụng cùng phạm vi ngày/tìm kiếm với danh sách hiển thị),
-  // để hiển thị ở sidebar và thống kê — tránh lệch số với bảng kết quả thực tế.
+
   const counts = {
     ALL:     scoped.length,
     PAID:    scoped.filter(o => o.status === 'PAID').length,
@@ -376,12 +358,10 @@ export default function AdminDashboardPage() {
     EXPIRED: scoped.filter(o => o.status === 'EXPIRED').length,
   }
 
-  // Tính tổng doanh thu từ các đơn đã thanh toán trong phạm vi đang lọc, để hiển thị ở thống kê
   const totalRevenue = scoped
     .filter(o => o.status === 'PAID')
     .reduce((s, o) => s + parseInt(o.amount || 0), 0)
 
-  // Áp dụng filter trạng thái lên phần dữ liệu đã được lọc theo ngày/tìm kiếm, rồi sắp xếp theo cột được chọn
   const filtered = scoped
     .filter(o => filter === 'ALL' || o.status === filter)
     .sort((a, b) => {
@@ -402,23 +382,19 @@ export default function AdminDashboardPage() {
       return 0
     })
 
-  // Tìm đơn đang xem chi tiết, để truyền vào DetailModal
   const detailOrder = detail ? displayed.find(o => o.orderId === detail) : null
 
-  // Hàm toggle chọn 1 đơn hoặc chọn tất cả, dùng cho checkbox ở HistorySection
   const toggleOne = id => {
     const s = new Set(selected)
     s.has(id) ? s.delete(id) : s.add(id)
     setSelected(s)
   }
 
-  // Nếu đã chọn tất cả thì bỏ chọn hết, còn nếu chưa chọn tất cả thì chọn tất cả (trong phạm vi đang hiển thị sau khi đã lọc)
   const toggleAll = () =>
     selected.size === filtered.length
       ? setSelected(new Set())
       : setSelected(new Set(filtered.map(o => o.orderId)))
 
-  // Hàm toggle sắp xếp: nếu đã đang sắp xếp theo cột đó thì đổi chiều, còn nếu chưa thì bắt đầu sắp xếp theo cột đó với chiều mặc định là giảm dần
   const toggleSort = key => {
     if (sortKey === key) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -428,8 +404,6 @@ export default function AdminDashboardPage() {
     }
   }
 
-  // Hàm xoá đơn, gọi API xoá cho từng đơn được chọn. 
-  // Nếu đơn đang xem chi tiết nằm trong số đó thì cũng đóng modal chi tiết luôn
   const doDelete = async (ids) => {
     if (!confirm(`Xóa ${ids.length} đơn?\nKhông thể hoàn tác!`)) return
     try {
@@ -449,8 +423,6 @@ export default function AdminDashboardPage() {
     }
   }
 
-  // Hàm đăng nhập, gọi API đăng nhập với mật khẩu đã nhập. 
-  // Nếu thành công thì chuyển sang trạng thái đã xác thực, còn nếu thất bại thì hiện lỗi
   async function login() {
     setPwError(false)
     try {
@@ -466,14 +438,11 @@ export default function AdminDashboardPage() {
     }
   }
 
-  // Hàm đăng xuất, gọi API xoá session. 
-  // Dù thành công hay thất bại thì cũng chuyển sang trạng thái chưa xác thực
   function logout() {
     if (!confirm('Đăng xuất khỏi trang quản trị?')) return
     fetch('/api/admin/session', { method: 'DELETE' }).finally(() => setAuthed(false))
   }
 
-  // ── ĐANG KIỂM TRA SESSION ─────────────────────────────────
   if (checkingSession) return (
     <div className="relative min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f5edf2] font-[var(--admin-font)] flex items-center justify-center">
       <Orbs />
@@ -481,7 +450,6 @@ export default function AdminDashboardPage() {
     </div>
   )
 
-  // ── LOGIN SCREEN ──────────────────────────────────────────
   if (!authed) return (
     <>
       <Head>
@@ -521,10 +489,8 @@ export default function AdminDashboardPage() {
     </>
   )
 
-  // Tìm đơn đang xem chi tiết, để truyền vào DetailModal
   const currentNav = NAV_ITEMS.find(n => n.key === activeSection)
 
-  // ── MAIN DASHBOARD ───────────────────────────────────────
   return (
     <>
       <Head>
@@ -700,9 +666,7 @@ export default function AdminDashboardPage() {
   )
 }
 
-// COMPONENT: DATE RANGE PICKER
-// Lịch chọn khoảng ngày custom (thay cho <input type="date"> mặc định của trình duyệt, vốn có màu sắc
-// không đồng bộ với theme). Click ngày đầu → chọn ngày cuối → tự đóng lại.
+
 function DateRangePicker({ dateFrom, setDateFrom, dateTo, setDateTo, setActivePresetKey }) {
   const [open, setOpen]   = useState(false)
   const [view, setView]   = useState(() => { const d = dateFrom ? parseDayStr(dateFrom) : new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
@@ -819,8 +783,6 @@ function DateRangePicker({ dateFrom, setDateFrom, dateTo, setDateTo, setActivePr
   )
 }
 
-// COMPONENT: HISTORY SECTION 
-// Phần hiển thị danh sách đơn hàng, với các bộ lọc, tìm kiếm, sắp xếp, thao tác nhanh trên từng đơn hoặc hàng loạt
 function HistorySection({
   counts, totalRevenue, filter, setFilter, search, setSearch,
   dateFrom, setDateFrom, dateTo, setDateTo,
@@ -1050,8 +1012,7 @@ function HistorySection({
   )
 }
 
-// COMPONENT: CREATE SECTION
-// Phần hiển thị khung tạo giao dịch mới, được load từ trang con /admin/create-transaction qua iframe
+
 function CreateSection() {
   const [reloadKey, setReloadKey] = useState(0)
   return (
@@ -1092,8 +1053,6 @@ function CreateSection() {
   )
 }
 
-// COMPONENT: LOOKUP SECTION
-// Phần hiển thị khung tra cứu giao dịch theo mã đơn hàng (orderId), gọi trực tiếp MoMo API để lấy trạng thái thực tế
 function LookupSection({ orderId, setOrderId, loading, result, error, onQuery }) {
   const copy = text => navigator.clipboard?.writeText(String(text))
   const rc     = result?.resultCode
@@ -1185,7 +1144,6 @@ function LookupSection({ orderId, setOrderId, loading, result, error, onQuery })
 }
 
 
-// COMPONENT: ORBS BACKGROUND
 function Orbs() {
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
@@ -1197,7 +1155,6 @@ function Orbs() {
   )
 }
 
-// COMPONENT: STAT CARD
 function StatCard({ label, value, color, sub }) {
   return (
     <div className="rounded-2xl border border-white/70 bg-[var(--admin-surface)] px-[22px] py-5 shadow-[0_2px_20px_rgba(174,0,112,0.04)] backdrop-blur-[12px] transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(174,0,112,0.08)] max-md:px-4 max-md:py-4">
@@ -1208,7 +1165,6 @@ function StatCard({ label, value, color, sub }) {
   )
 }
 
-// COMPONENT: ORDER CARD (Dành cho mobile, hiển thị dạng card thay vì table)
 function OrderCard({ o, selected, onToggle, onOpenDetail, onQuery, onDelete, onConfirm }) {
   const sm = STATUS_META[o.status] || STATUS_META.PENDING
   return (
@@ -1256,7 +1212,6 @@ function OrderCard({ o, selected, onToggle, onOpenDetail, onQuery, onDelete, onC
   )
 }
 
-// COMPONENT: INFO BIT (Dùng trong OrderCard để hiển thị các thông tin phụ, có thể copy và định dạng mono nếu cần)
 function InfoBit({ label, value, mono }) {
   return (
     <div className="min-w-0 overflow-hidden">
@@ -1266,7 +1221,6 @@ function InfoBit({ label, value, mono }) {
   )
 }
 
-//  COMPONENT: SORTABLE TH (Dùng trong table desktop để hiển thị header có thể sort, hiển thị mũi tên lên xuống và màu sắc khi active)
 function SortableTh({ label, sortKey, currentKey, dir, onSort }) {
   const active = currentKey === sortKey
   return (
@@ -1281,8 +1235,6 @@ function SortableTh({ label, sortKey, currentKey, dir, onSort }) {
   )
 }
 
-// COMPONENT: DETAIL MODAL 
-// (Hiển thị chi tiết giao dịch khi click vào một dòng trong table hoặc một card trong mobile, có thể copy các thông tin quan trọng và gọi các action như tra cứu, xóa, xác nhận)
 function DetailModal({ order, onClose, onDelete, onQuery, onConfirm }) {
   const sm    = STATUS_META[order.status] || STATUS_META.PENDING
   const extra = decodeExtra(order.extraData)
@@ -1367,8 +1319,6 @@ function DetailModal({ order, onClose, onDelete, onQuery, onConfirm }) {
   )
 }
 
-// COMPONENT: CONFIRM MODAL
-// (Hiển thị khi click vào nút xác nhận trên một giao dịch có resultCode = 9000, cho phép chọn Capture để chuyển tiền về ví đối tác hoặc Cancel để hoàn tiền về người dùng)
 function ConfirmModal({ orderId, amount, loading, result, error, onConfirm, onCancel, onClose }) {
   const rc   = result?.resultCode
   const isOk = rc === 0
@@ -1435,7 +1385,6 @@ function ConfirmModal({ orderId, amount, loading, result, error, onConfirm, onCa
   )
 }
 
-// COMPONENT: SECTION (Dùng để chia các phần thông tin trong DetailModal, có title và phần nội dung bên dưới, có thể tái sử dụng cho nhiều mục khác nhau)
 function Section({ title, children }) {
   return (
     <div className="msection-wrap px-[22px]">
@@ -1445,7 +1394,6 @@ function Section({ title, children }) {
   )
 }
 
-// COMPONENT: ROW (Dùng để hiển thị một dòng thông tin trong DetailModal, có label và value, có thể định dạng mono và có nút copy nếu cần)
 function Row({ label, value, mono, copy }) {
   if (!value && value !== 0) return null
   return (
@@ -1463,27 +1411,21 @@ function Row({ label, value, mono, copy }) {
   )
 }
 
-// COMPONENT: ICONS (Các icon SVG được sử dụng trong giao diện, có thể tái sử dụng và nhận props để tuỳ chỉnh kích thước, màu sắc, v.v.)
 function IconHistory(props) {
   return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
 }
-// Các icon SVG được sử dụng trong giao diện, có thể tái sử dụng và nhận props để tuỳ chỉnh kích thước, màu sắc, v.v.
 function IconPlus(props) {
   return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
 }
-// Các icon SVG được sử dụng trong giao diện, có thể tái sử dụng và nhận props để tuỳ chỉnh kích thước, màu sắc, v.v.
 function IconSearch(props) {
   return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
 }
-// Các icon SVG được sử dụng trong giao diện, có thể tái sử dụng và nhận props để tuỳ chỉnh kích thước, màu sắc, v.v.
 function IconLogout(props) {
   return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
 }
-// Các icon SVG được sử dụng trong giao diện, có thể tái sử dụng và nhận props để tuỳ chỉnh kích thước, màu sắc, v.v.
 function IconMenu(props) {
   return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
 }
-// Các icon SVG được sử dụng trong giao diện, có thể tái sử dụng và nhận props để tuỳ chỉnh kích thước, màu sắc, v.v.
 function IconX(props) {
   return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 }

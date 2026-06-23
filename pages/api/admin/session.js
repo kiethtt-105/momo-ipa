@@ -1,6 +1,4 @@
 // pages/api/admin/session.js
-// Dùng để: (a) FE check còn đăng nhập không khi load lại trang,
-//          (b) đăng xuất (xoá cookie).
 
 import { verifySession } from './login'
 

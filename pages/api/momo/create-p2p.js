@@ -6,11 +6,7 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 })
 
-// === API GỘP — thay cho create.js + redirect.js cũ ===
-// Nhận amount + orderInfo (và orderId tùy chọn) qua query (GET) hoặc body (POST).
-// Luôn trả về JSON kết quả giao dịch (payUrl, deeplink, qrCodeUrl...).
-// KHÔNG còn tự redirect (302) sang MoMo như redirect.js cũ — client (web/app/
-// Shortcuts) tự xử lý payUrl nhận được trong JSON (mở link, hiện QR...).
+
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -23,9 +19,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Số tiền không hợp lệ (1.000 – 50.000.000 ₫)' })
   }
 
-  // Ưu tiên orderId client gửi lên, chuẩn hóa về tiền tố iPOS để đồng bộ định
-  // dạng toàn hệ thống. Nếu không có (gọi URL trực tiếp, ví dụ iPhone Shortcuts)
-  // thì tự sinh từ orderInfo, hoặc sinh ngẫu nhiên nếu orderInfo cũng trống.
+
   const rawOrderId = (params.orderId || '').toString().trim()
   const rawOrderInfo = (params.orderInfo || '').toString().trim()
 

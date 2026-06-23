@@ -52,7 +52,6 @@ export default function ScanPage() {
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [quickToast, setQuickToast] = useState(false)
 
-  // Load jsQR — camera luôn chạy ngầm, không phụ thuộc vào trạng thái UI
   useEffect(() => {
     if (window.jsQR) { setReady(true); return }
     const s = document.createElement('script')
@@ -62,11 +61,8 @@ export default function ScanPage() {
     document.head.appendChild(s)
   }, [])
 
-  // ── KHÔNG reload khi nhận BroadcastChannel ──
-  // Bug cũ: reload() xoá toàn bộ state + tắt camera.
-  // Giờ chỉ hiện toast nhỏ thông báo, không reload.
-  // Trang scan tiếp tục sẵn sàng nhận đơn mới.
-  const [resultToast, setResultToast] = useState(null) // { orderId, status }
+
+  const [resultToast, setResultToast] = useState(null) 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.BroadcastChannel) return
     const ch = new BroadcastChannel('momo-result')
@@ -74,7 +70,6 @@ export default function ScanPage() {
       if (e.data?.type === 'momo-result-done') {
         const { orderId, status } = e.data
         setResultToast({ orderId, status })
-        // Reset về trạng thái sẵn sàng đơn mới (không reload)
         submitting.current = false
         setIsSubmitting(false)
         setManualCode('')
@@ -96,7 +91,6 @@ export default function ScanPage() {
     return () => clearTimeout(t)
   }, [resultToast])
 
-  // Auth
   useEffect(() => {
     fetch('/api/admin/session')
       .then(r => r.json())
@@ -104,7 +98,6 @@ export default function ScanPage() {
       .catch(() => setAuthed(false))
   }, [])
 
-  // Tự mở camera khi vào step scan — camera LUÔN bật, kể cả khi đang nhập mã thủ công
   useEffect(() => {
     if (step === 'scan' && ready) {
       setCamError('')
@@ -234,7 +227,6 @@ export default function ScanPage() {
     setScanning(false)
   }
 
-  // Dừng camera khi unmount trang
   useEffect(() => () => stopCamera(), [])
 
   async function onDetected(raw) {
@@ -242,7 +234,6 @@ export default function ScanPage() {
     submitting.current = true
     setIsSubmitting(true)
     setCheckResult(null)
-    // KHÔNG stopCamera() ở đây — camera tiếp tục chạy ngầm
 
     const code = cleanCode(raw)
     console.log('[SCAN] raw QR data:', raw)
@@ -284,7 +275,6 @@ export default function ScanPage() {
         break
       }
 
-      // Mở /result ở TAB MỚI — tab scan tiếp tục sẵn sàng nhận mã mới
       const qs = new URLSearchParams({
         orderId,
         resultCode: data.resultCode,
@@ -297,12 +287,10 @@ export default function ScanPage() {
       window.open(`/result?${qs}`, '_blank')
       window.focus()
 
-      // Reset để sẵn sàng quét tiếp — camera vẫn chạy ngầm
       submitting.current = false
       setIsSubmitting(false)
       setManualCode('')
       setManualErr('')
-      // Restart camera nếu đã bị dừng
       if (!streamRef.current && scanning) setScanning(true)
     } catch {
       submitting.current = false
@@ -340,7 +328,6 @@ export default function ScanPage() {
     if (e.key === 'Enter') submitManualCode()
   }
 
-  // Auto submit khi đủ ký tự hợp lệ
   useEffect(() => {
     const code = cleanCode(manualCode)
     if ((code.length === 18 || code.length === 20) && !submitting.current && /^(MM)?\d{18}$/.test(code)) {
@@ -377,9 +364,6 @@ export default function ScanPage() {
     }
   }
 
-  // ── KIỂM TRA GIAO DỊCH — nếu có kết quả thì redirect sang /result ──
-  // Bug cũ: chỉ setCheckResult hiện inline, không bao giờ đến /result.
-  // Fix: nếu PAID/FAILED → mở /result tab mới; nếu PENDING → hiện inline như cũ.
   async function checkOrder() {
     if (!currentOrderId) return
     setIsChecking(true)
@@ -389,7 +373,6 @@ export default function ScanPage() {
       const data = await res.json()
 
       if (data.status === 'PAID' || data.status === 'FAILED') {
-        // Có kết quả rõ ràng → điều hướng sang /result
         const qs = new URLSearchParams({
           orderId: currentOrderId,
           resultCode: data.status === 'PAID' ? 0 : data.resultCode || 99,
@@ -402,7 +385,6 @@ export default function ScanPage() {
         window.open(`/result?${qs}`, '_blank')
         window.focus()
       } else {
-        // Vẫn PENDING hoặc chưa có dữ liệu → hiện inline
         setCheckResult(data)
       }
     } catch (e) {

@@ -1,3 +1,5 @@
+// pages/admin/create-transaction.js
+import { requireAdmin } from '../../lib/requireAdmin'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
@@ -6,25 +8,23 @@ import Head from 'next/head'
 const TX_BASE_URL = 'https://kiehtt.vercel.app'
 
 // ─── BUILD TARGET URL ──────────────────────────────────────
-// Đây chính là "API" được gọi khi bấm nút — cùng dạng URL này
-// có thể tái sử dụng trực tiếp trong iPhone Shortcuts (action
-// "Get Contents of URL" / "Open URL") để tạo giao dịch nhanh
-// mà không cần mở trang này.
+// Đây chính là "API" được gọi khi bấm nút — cùng dạng URL này có thể tái sử dụng trực tiếp trong iPhone Shortcuts 
+// (action"Get Contents of URL" / "Open URL") để tạo giao dịch nhanh
 function buildTxUrl(method, amount, orderInfo) {
   const amt = parseInt(amount, 10)
   if (!amt || amt <= 0) return null
   const path = method === 'p2p'
-    ? '/api/momo/create-p2p'    // P2P — gọi API tạo đơn, nhận JSON payUrl rồi mới sang MoMo
-    : '/api/momo/scan'         // Scan — admin tự quét thanh toán nhanh (đã gộp pos.js + scan-quick.js)
+    ? '/api/momo/create-p2p'    // gọi API tạo giao dịch P2P (trả JSON có payUrl)
+    : '/api/momo/scan'         // gọi API tạo giao dịch Scan QR (trả redirect 302 trực tiếp)
   return `${TX_BASE_URL}${path}?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
 }
 
-// ─── FORMAT SỐ TIỀN (hiển thị có dấu phẩy ngăn hàng nghìn) ──
 function formatAmount(raw) {
   const digits = (raw || '').replace(/\D/g, '')
   if (!digits) return ''
   return parseInt(digits, 10).toLocaleString('en-US')
 }
+
 function unformatAmount(formatted) {
   return (formatted || '').replace(/\D/g, '')
 }
@@ -37,27 +37,22 @@ function genOrderId() {
 // ─── GỢI Ý SỐ TIỀN NHANH ────────────────────────────────────
 const QUICK_AMOUNTS = [10000, 20000, 50000, 100000, 200000, 500000]
 
-// Lưu draft form (method/amount/orderInfo) vào sessionStorage — chống mất
-// nội dung đang nhập khi lỡ tay F5 trước khi bấm "Xác nhận tạo giao dịch".
+// ─── DRAFT KEY ─────────────────────────────────────────────
 const DRAFT_KEY = 'momo_create_tx_draft'
 
 // ─── MAIN COMPONENT ────────────────────────────────────────
 export default function CreateTransactionPage() {
   const router = useRouter()
-  const [method,    setMethod]    = useState('scan') // 'p2p' | 'scan' — mặc định Scan QR vì đa số dùng tại quầy
+  const [method,    setMethod]    = useState('scan') // 'p2p' | 'scan' — mặc định Scan QR 
   const [amount,     setAmount]     = useState('')
   const [orderInfo,  setOrderInfo]  = useState(() => genOrderId())
   const [lastUrl,    setLastUrl]    = useState('')
   const [copied,     setCopied]     = useState(false)
-  // URL gọi API ẩn theo mặc định — chỉ hiện khi bấm nút (dùng để debug / lấy
-  // mẫu cho iPhone Shortcuts), không cần thấy trong thao tác bình thường.
+  // URL gọi API ẩn theo mặc định — chỉ hiện khi bấm nút (dùng để debug / lấy mẫu cho iPhone Shortcuts)
   const [showUrl,    setShowUrl]    = useState(false)
-  // Các đơn đã bắn đi từ CỬA SỔ NÀY, đang chờ kết quả thanh toán cuối cùng —
-  // dùng để khớp với tín hiệu BroadcastChannel bắn về từ result.js.
+  // Các đơn đã bắn đi từ CỬA SỔ NÀY, đang chờ kết quả thanh toán cuối cùng — dùng để khớp với tín hiệu BroadcastChannel bắn về từ result.js.
   const [pendingOrders, setPendingOrders] = useState([])
-  // Kết quả mới nhất nhận được — hiện popup nổi ngay tại trang này, để admin
-  // (đang xem cửa sổ "Tạo giao dịch") biết luôn thành công/thất bại mà không
-  // cần chuyển qua tab/cửa sổ khác.
+
   const [resultToast,   setResultToast]   = useState(null) // { orderId, status, amount }
   const amountInputRef = useRef(null)
 
@@ -78,8 +73,7 @@ export default function CreateTransactionPage() {
   }, [])
 
   // Đọc ?method=&amount=&orderInfo= từ URL — dùng khi quay lại từ nút
-  // "Thử thanh toán lại" ở result.js. ƯU TIÊN HƠN draft cũ vì đây là ý định
-  // hiện tại của admin (thử lại 1 đơn cụ thể), không phải nháp đang gõ dở.
+  // "Thử thanh toán lại" ở result.js. ƯU TIÊN HƠN draft cũ vì đây là ý định hiện tại của admin (thử lại 1 đơn cụ thể), không phải nháp đang gõ dở.
   useEffect(() => {
     if (!router.isReady) return
     const { method: qMethod, amount: qAmount, orderInfo: qOrderInfo } = router.query
@@ -94,9 +88,7 @@ export default function CreateTransactionPage() {
     sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ method, amount, orderInfo }))
   }, [method, amount, orderInfo])
 
-  // Chỉ tự focus input "Số tiền" trên màn lớn (laptop/desktop).
-  // Trên điện thoại, autoFocus sẽ bật bàn phím ngay khi load
-  // trang → che mất nút "Mở giao dịch" và gây giật layout.
+  // Tự focus vào ô Amount khi mở trang trên desktop (không focus trên mobile vì bàn phím ảo sẽ bật lên che mất form)
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth > 768) {
       amountInputRef.current?.focus()
@@ -104,10 +96,7 @@ export default function CreateTransactionPage() {
   }, [])
 
   // ── NHẬN KẾT QUẢ THANH TOÁN QUA QUERY STRING ──────────────
-  // Vì giờ chỉ dùng 1 tab (không mở tab mới nữa), result.js sau khi xác
-  // nhận xong sẽ tự redirect ngược về đây kèm kết quả qua query string
-  // (?resultOrderId=&resultStatus=&resultAmount=&resultMessage=). Đọc 1 lần
-  // lúc trang load rồi dọn URL cho sạch.
+sạch.
   useEffect(() => {
     if (!router.isReady) return
     const { resultOrderId, resultStatus, resultAmount, resultMessage } = router.query
@@ -123,9 +112,7 @@ export default function CreateTransactionPage() {
     router.replace('/admin/create-transaction', undefined, { shallow: true })
   }, [router.isReady])
 
-  // ── LẮNG NGHE KẾT QUẢ THANH TOÁN QUA BROADCASTCHANNEL ─────
-  // Vẫn giữ lại phòng trường hợp có tab khác (vd /admin/scan) đang mở song
-  // song và bắn tín hiệu — không gây hại gì nếu không có tab nào khác.
+// ── NHẬN KẾT QUẢ THANH TOÁN QUA BROADCAST CHANNEL ─────────
   useEffect(() => {
     if (typeof window === 'undefined' || !window.BroadcastChannel) return
     const ch = new BroadcastChannel('momo-result')
@@ -144,20 +131,15 @@ export default function CreateTransactionPage() {
   // Tự ẩn popup kết quả sau 6 giây (vẫn có thể bấm ✕ để tắt sớm hơn)
   useEffect(() => {
     if (!resultToast) return
-    const t = setTimeout(() => setResultToast(null), 6000)
+    const t = setTimeout(() => setResultToast(null), 60000)
     return () => clearTimeout(t)
   }, [resultToast])
 
   const isP2P     = method === 'p2p'
   const canSubmit = parseInt(amount || 0, 10) > 0
 
-  // ── MỞ GIAO DỊCH ─────────────────────────────────────────────
-  // Luôn mở ở TAB/CỬA SỔ MỚI (không đè lên trang Tạo Giao Dịch) — đồng bộ
-  // cho cả P2P và Scan.
-  // P2P: create-p2p.js trả JSON (không tự redirect 302 nữa) → phải mở cửa sổ
-  // mới NGAY (đồng bộ với click, để khỏi bị popup blocker chặn), sau đó fetch
-  // lấy payUrl rồi mới set location cho cửa sổ đó.
-  // Scan: vẫn là URL điều hướng trực tiếp như cũ → mở tab mới luôn.
+// ── XỬ LÝ TẠO GIAO DỊCH ─────────────────────────────────────
+  // Bấm nút "Xác nhận tạo giao dịch" — gọi API tạo giao dịch, mở tab mới dẫn tới payUrl (P2P) hoặc redirect trực tiếp (Scan QR)  
   const handleCreate = async () => {
     const finalOrderInfo = (orderInfo || '').trim() || genOrderId()
     const url = buildTxUrl(method, amount, finalOrderInfo)
@@ -174,7 +156,7 @@ export default function CreateTransactionPage() {
       return
     }
 
-    const win = window.open('', '_blank') // KHÔNG noopener/noreferrer ở đây — cần giữ tham chiếu để set location sau
+    const win = window.open('', '_blank') 
     try {
       const res = await fetch(url)
       const data = await res.json()
@@ -187,7 +169,6 @@ export default function CreateTransactionPage() {
       if (win) {
         win.location.href = data.payUrl
       } else {
-        // Bị popup blocker chặn ngay từ đầu (win === null thật, không mở tab nào) — fallback mở tab mới trực tiếp
         window.open(data.payUrl, '_blank', 'noopener,noreferrer')
       }
     } catch (e) {
@@ -214,10 +195,6 @@ export default function CreateTransactionPage() {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&display=swap" />
       </Head>
-
-      {/* Reset margin/height mặc định của html,body — nếu không có đoạn này, body có margin 8px
-          mặc định của browser cộng thêm vào ngoài div 100dvh bên dưới, khiến trang luôn dư ra vài
-          px và xuất hiện thanh cuộn dù nội dung đã vừa khít màn hình. */}
       <style jsx global>{`
         html, body, #__next {
           margin: 0;
@@ -225,10 +202,10 @@ export default function CreateTransactionPage() {
           height: 100%;
           overflow: hidden;
         }
-      `}</style>
+      `}
+      </style>
 
       <div className="relative flex h-[100dvh] w-full flex-col items-center justify-center overflow-y-auto overflow-x-hidden bg-[#f5edf2] p-5 font-[var(--admin-font)] text-[var(--admin-text)]">
-        {/* ── POPUP KẾT QUẢ THANH TOÁN — nổi trên cùng, tự ẩn sau 6s ── */}
         {resultToast && (
           <div
             className={`fixed inset-x-0 top-4 z-50 mx-auto flex w-[92%] max-w-[400px] items-center gap-3 rounded-2xl border px-4 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.14)] ${
@@ -263,10 +240,7 @@ export default function CreateTransactionPage() {
         )}
 
         <div className="max-h-full w-full max-w-[440px] overflow-y-auto rounded-[22px] bg-white/95 shadow-[0_24px_60px_rgba(174,0,112,0.1),0_0_0_1px_rgba(255,255,255,0.8)] backdrop-blur-[30px] sm:max-w-[460px]">
-          {/* Dải gradient thương hiệu — đồng bộ với index.js / result.js */}
           <div className="h-1 w-full bg-gradient-to-r from-[#ff9cb7] via-[var(--mm)] to-[#dfb2ea]" />
-
-          {/* Header */}
           <div className="flex items-center gap-3 px-6 pb-4 pt-5">
             <img src="/Main.png" alt="" className="h-9 w-9 rounded-lg object-contain" />
             <div className="flex-1">
@@ -276,7 +250,6 @@ export default function CreateTransactionPage() {
           </div>
 
           <div className="px-6 pb-6">
-            {/* Method selector — tab trượt, thay cho 2 ô vuông cũ */}
             <div className="relative mb-2.5 flex rounded-2xl bg-[#f3edf1] p-1">
               <div
                 className="absolute inset-y-1 rounded-xl bg-white shadow-[0_2px_10px_rgba(174,0,112,0.18)] transition-[left] duration-300 ease-out"
@@ -310,14 +283,6 @@ export default function CreateTransactionPage() {
               </button>
             </div>
 
-            {/* Mô tả ngắn theo phương thức đang chọn */}
-            <p className="mb-5 px-1 text-[11.5px] leading-snug text-[var(--admin-muted)]">
-              {isP2P
-                ? 'Khách tự quét mã QR bằng app MoMo — hệ thống tự xác nhận khi MoMo báo về.'
-                : 'Admin bắn mã thanh toán tại quầy bằng camera hoặc máy quẹt thẻ POS.'}
-            </p>
-
-            {/* Amount */}
             <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Nhập số tiền thanh toán</label>
             <input
               type="text"
@@ -329,7 +294,6 @@ export default function CreateTransactionPage() {
               ref={amountInputRef}
             />
 
-            {/* Gợi ý số tiền nhanh */}
             <div className="mb-4 grid grid-cols-3 gap-2">
               {QUICK_AMOUNTS.map(v => {
                 const active = parseInt(amount || 0, 10) === v
@@ -350,7 +314,6 @@ export default function CreateTransactionPage() {
               })}
             </div>
 
-            {/* Order info — hiện cho cả P2P và Scan */}
             <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Nhập thông tin đơn hàng</label>
             <input
               type="text"
@@ -372,7 +335,6 @@ export default function CreateTransactionPage() {
               Xác nhận tạo giao dịch
             </button>
 
-            {/* URL vừa gọi — ẩn theo mặc định, bấm để xem/copy dùng làm mẫu cho iPhone Shortcuts */}
             {lastUrl && (
               <div className="mt-4">
                 <button

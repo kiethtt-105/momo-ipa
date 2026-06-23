@@ -1,19 +1,11 @@
+// pages/result.js
 import { useEffect, useLayoutEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 
-// ─── CONSTANTS ─────────────────────────────────────────────
-// Phải trùng với TX_BASE_URL trong admin/create-transaction.js — dùng để
-// bắn THẲNG vào API tạo giao dịch khi admin bấm "Thử thanh toán lại",
-// không cần quay lại trang create-transaction nữa.
+
 const TX_BASE_URL = 'https://kiehtt.vercel.app'
 
-// vì giờ P2P mở TAB RIÊNG (không phải tab create-transaction nữa), trang này
-// không tự redirect về /admin/create-transaction sau khi có kết quả nữa —
-// tránh mở thêm 1 bản create-transaction mới mỗi lần thanh toán xong.
-// Admin tự bấm "Xác nhận giao dịch" (success) hoặc "Đóng tab này" (failed/
-// pending/error) để đóng tab, kết quả vẫn được báo về tab create-transaction
-// qua BroadcastChannel (notifyOtherTabs) như cũ.
 
 function notifyOtherTabs(orderId, status) {
   if (typeof window === 'undefined' || !window.BroadcastChannel) return
@@ -26,20 +18,8 @@ function notifyOtherTabs(orderId, status) {
   }
 }
 
-// Gọi API tra cứu chính thức của MoMo (pages/api/momo/query.js) để lấy
-// TOÀN BỘ field có thể có cho 1 đơn hàng — đầy đủ hơn nhiều so với chỉ
-// vài field bắn về qua URL redirect (transId, payType, requestId,
-// orderInfo, orderType, responseTime, extraData, refundTrans...).
-// Hàm này không throw — nếu lỗi/timeout thì chỉ log, trang vẫn hiển thị
-// được info cơ bản đã có trước đó.
 async function fetchFullInfo(orderId) {
-  // Gọi ĐỒNG THỜI 2 nguồn:
-  // 1. /api/momo/query  → hỏi MoMo server-to-server (resultCode, transId, payType, responseTime...)
-  // 2. /api/momo/status → đọc Redis của HỆ THỐNG MÌNH (source, orderInfo gốc...)
-  // MoMo KHÔNG biết & KHÔNG trả field "source"/"orderInfo" của hệ thống mình,
-  // nên nếu chỉ dùng (1) thì info.source luôn undefined → buildRetryUrl() ở
-  // dưới không bao giờ nhận ra được đơn là 'pos'/'scan' hay 'p2p', cứ rơi về
-  // nhánh mặc định P2P (đúng lỗi đang gặp).
+
   const [momoFull, ourRecord] = await Promise.all([
     fetch('/api/momo/query', {
       method: 'POST',
@@ -51,16 +31,12 @@ async function fetchFullInfo(orderId) {
       .then(r => r.json()).catch(e => { console.error('[result] /api/momo/status lỗi:', e); return null }),
   ])
 
-  // ourRecord làm NỀN (có source, orderInfo gốc) — đè lên bằng field tươi từ
-  // MoMo (resultCode/transId/message...) vì MoMo là nguồn sự thật cho trạng thái giao dịch.
+
   if (!momoFull && !ourRecord) return null
   return { ...(ourRecord || {}), ...(momoFull || {}) }
 }
 
-// Sinh orderInfo cho lần thử lại — giữ NGUYÊN gốc của orderInfo cũ, chỉ thêm/
-// tăng hậu tố "_N" ở cuối (vd: iPOS123 → iPOS123_2, lần thử lại tiếp theo của
-// CHÍNH đơn _2 đó → iPOS123_3...). Vẫn tránh trùng đơn nhưng nhìn vào vẫn biết
-// đây là đơn thử lại của đơn nào, không phải sinh 1 mã ngẫu nhiên mới hoàn toàn.
+
 function appendRetrySuffix(orderInfo) {
   const m = orderInfo.match(/^(.*)_(\d+)$/)
   if (m) {
@@ -71,12 +47,8 @@ function appendRetrySuffix(orderInfo) {
   return `${orderInfo}_2`
 }
 
-// Xây URL "Thử lại" — bắn THẲNG vào API tạo giao dịch (giống hệt hành vi của
-// nút "Xác nhận tạo giao dịch" ở trang create-transaction: mở luôn, không cần
-// quay lại trang đó xem/sửa rồi bấm thêm 1 lần nữa). Giữ nguyên amount/method
-// của đơn cũ, chỉ đổi orderInfo (thêm hậu tố _N) để không bị lỗi trùng đơn.
 function buildRetryUrl(info) {
-  if (!info || !info.amount) return '/admin' // thiếu dữ liệu → fallback về dashboard
+  if (!info || !info.amount) return '/admin/create-transaction'
 
   const amt = info.amount
   const source = info.source || ''
@@ -90,8 +62,7 @@ function buildRetryUrl(info) {
   return `${TX_BASE_URL}/api/admin/scan-quick?amount=${amt}&orderInfo=${encodeURIComponent(retryOrderInfo)}`
 }
 
-// True khi buildRetryUrl() trả về URL API thật (mở tab mới ngay), false khi
-// rơi về fallback '/admin/create-transaction' (thiếu dữ liệu, cần admin tự nhập).
+
 function isDirectRetry(info) {
   return !!(info && info.amount)
 }
@@ -100,23 +71,16 @@ export default function ResultPage() {
   const router = useRouter()
   const [status, setStatus] = useState('loading')
   const [info, setInfo] = useState(null)
-  // Đánh dấu đã có kết quả cuối (success/failed) — để effect không xử lý lại
-  // khi cleanUrlBar() đổi router.query và làm effect tự chạy lại lần nữa.
   const resolvedRef = useRef(false)
 
-  // ── TỰ CO/GIÃN CARD CHO VỪA KHÍT MÀN HÌNH (desktop) ────────
-  // Đo kích thước THẬT của card (ở scale 1) so với window.innerWidth/Height,
-  // rồi tự áp transform: scale() nhỏ lại vừa đủ để thấy hết toàn bộ trong 1
-  // màn hình, không cần người dùng tự bấm zoom out trình duyệt. Tự đo lại mỗi
-  // khi đổi kích thước cửa sổ hoặc khi có thêm dữ liệu (info đổi → card cao
-  // thêm do fetchFullInfo trả về nhiều field hơn).
+
   const cardRef = useRef(null)
   const [scale, setScale] = useState(1)
 
   useLayoutEffect(() => {
-    const MARGIN = 32 // chừa lề quanh card
-    const MIN_SCALE = 0.6 // không co nhỏ hơn mức này, đỡ chữ bé khó đọc
-    const MOBILE_BREAKPOINT = 768 // dưới breakpoint này: cho cuộn tự nhiên, không auto-scale
+    const MARGIN = 32 
+    const MIN_SCALE = 0.6 
+    const MOBILE_BREAKPOINT = 768 
 
     const fit = () => {
       const el = cardRef.current
@@ -125,7 +89,7 @@ export default function ResultPage() {
         setScale(1)
         return
       }
-      el.style.transform = 'scale(1)' // reset để đo kích thước thật trước
+      el.style.transform = 'scale(1)' 
       const rect = el.getBoundingClientRect()
       const availW = window.innerWidth - MARGIN * 2
       const availH = window.innerHeight - MARGIN * 2
@@ -140,33 +104,26 @@ export default function ResultPage() {
 
 useEffect(() => {
     if (!router.isReady) return
-    if (resolvedRef.current) return // đã có kết quả cuối — bỏ qua lần effect chạy lại do cleanUrlBar
-
-    // 1. Đọc thông tin từ URL bắn về — lấy TOÀN BỘ query (không chỉ vài field)
-    //    vì save.js cần đủ field (kể cả signature) để xác minh chữ ký MoMo.
+    if (resolvedRef.current) return 
     const fullQuery = { ...router.query }
     let { orderId, resultCode, transId, amount, payType, message, orderInfo } = fullQuery
     const code = parseInt(resultCode)
-
-    // 2. MẸO CHỐNG F5: Nếu URL trống, lục tìm đơn hàng trong bộ nhớ đệm trình duyệt
     if (!orderId && typeof window !== 'undefined') {
       orderId = sessionStorage.getItem('momo_current_order_id')
     }
 
-    // Nếu cả URL và bộ nhớ đều trống thì mới báo lỗi thực sự
     if (!orderId) { setStatus('error'); resolvedRef.current = true; return }
 
-    // Hàm phụ để dọn dẹp thanh địa chỉ URL sau 500ms cho sạch đẹp
     const cleanUrlBar = () => {
       setTimeout(() => {
         router.replace('/result', undefined, { shallow: true })
       }, 500)
     }
 
-    // 3. Nếu có thông tin đơn mới từ URL, tiến hành lưu và ghi nhớ id
+
     if (resultCode !== undefined) {
       if (typeof window !== 'undefined') {
-        sessionStorage.setItem('momo_current_order_id', orderId) // Lưu lại để F5 không bị quên
+        sessionStorage.setItem('momo_current_order_id', orderId) 
       }
 
       if (code === 0) {
@@ -201,7 +158,6 @@ useEffect(() => {
         .catch(() => cleanUrlBar())
       }
     } else {
-      // 4. LUỒNG KHI NHẤN F5: Tự động gọi API hỏi server trạng thái đơn hàng đã lưu ngầm
       let attempts = 0
       const poll = setInterval(async () => {
         try {
@@ -245,7 +201,6 @@ useEffect(() => {
     }
   }, [router.isReady, router.query])
 
-  // (Đã bỏ effect tự redirect ngược về create-transaction — xem comment đầu file)
 
   const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
   const fmtTime = ms => {
@@ -254,10 +209,6 @@ useEffect(() => {
     return isNaN(d.getTime()) ? null : d.toLocaleString('vi-VN')
   }
 
-  // ── HIỂN THỊ TOÀN BỘ FIELD CÓ TRONG `info` ─────────────────
-  // Không liệt kê cứng — bất kể field nào info có (từ MoMo query, từ Redis
-  // hệ thống mình, hay field lạ phát sinh sau này) đều tự hiện ra. Field quen
-  // có nhãn tiếng Việt đẹp; field lạ thì dùng luôn tên field làm nhãn.
   const FIELD_LABELS = {
     orderId: 'Mã đơn hàng',
     orderInfo: 'Nội dung đơn hàng',
@@ -299,9 +250,7 @@ useEffect(() => {
     return String(value)
   }
 
-  // Trả về danh sách [{key, label, value, mono, full}] đã sắp theo FIELD_ORDER,
-  // field lạ không nằm trong danh sách quen thì xếp cuối, sort theo tên.
-  // skipKeys: field không muốn lặp lại (vd 'amount' nếu đã có hero box riêng).
+
   const buildFieldRows = (data, skipKeys = []) => {
     const skip = new Set(skipKeys)
     const keys = Object.keys(data || {}).filter(k => {

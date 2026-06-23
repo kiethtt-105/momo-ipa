@@ -10,9 +10,7 @@ const redis = new Redis({
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
 
-  // Xác thực qua cookie session httpOnly (xem lib/requireAdmin.js + /api/admin/login)
-  // — KHÔNG còn dùng ?key=... vì key truyền qua query string sẽ lưu vào access log,
-  // lịch sử trình duyệt, và phải để public (NEXT_PUBLIC_) ở phía client mới gọi được.
+
   if (!requireAdmin(req, res)) return
 
   const raw = await redis.hgetall('momo:orders')

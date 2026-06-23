@@ -19,7 +19,6 @@ export default async function handler(req, res) {
   const now = new Date().toISOString()
 
   try {
-    // Chỉ lưu trạng thái PENDING vào hệ thống của bạn, hoàn toàn không gọi sang MoMo
     await redis.hset('momo:orders', {
       [orderId]: JSON.stringify({
         orderId,

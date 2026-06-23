@@ -11,7 +11,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  // Xác thực qua cookie session httpOnly — không còn dùng ?key=...
   if (!requireAdmin(req, res)) return
 
   const { orderId } = req.body
