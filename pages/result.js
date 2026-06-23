@@ -8,22 +8,15 @@ import Head from 'next/head'
 // không cần quay lại trang create-transaction nữa.
 const TX_BASE_URL = 'https://kiehtt.vercel.app'
 
-// Sau khi có kết quả cuối (thành công/thất bại), tự redirect ngược về trang
-// Tạo giao dịch (admin/create-transaction) kèm kết quả qua query string —
 // vì giờ chỉ dùng 1 tab, không còn tab "create-transaction" đứng yên chờ
 // BroadcastChannel nữa.
-const REDIRECT_BACK_DELAY_MS = 3000
+const REDIRECT_BACK_DELAY_MS = 1000
 
 function buildBackToCreateTxUrl({ orderId, status, amount, message }) {
-  // Redirect về trang admin dashboard (không phải create-transaction) để không
-  // văng ra khỏi dashboard khi result.js chạy ở top-level tab sau khi MoMo redirect về.
-  // Dashboard tự refresh 1s/lần nên admin thấy kết quả trong bảng ngay, không cần toast.
-  return '/admin'
+  
+  return '/admin/create-transaction'
 }
 
-// Bắn tín hiệu sang các tab khác cùng domain (ví dụ /admin/scan đang mở
-// riêng) để báo "đã có kết quả cuối cùng cho đơn hàng này" — tab đó sẽ tự
-// reload lại để admin thấy trạng thái mới nhất ngay, không cần bấm tay.
 function notifyOtherTabs(orderId, status) {
   if (typeof window === 'undefined' || !window.BroadcastChannel) return
   try {
