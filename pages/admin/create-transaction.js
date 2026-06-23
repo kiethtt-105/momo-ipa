@@ -14,7 +14,7 @@ function buildTxUrl(method, amount, orderInfo) {
   const amt = parseInt(amount, 10)
   if (!amt || amt <= 0) return null
   const path = method === 'p2p'
-    ? '/api/momo/redirect'      // P2P — khách quét QR, trả về trang chuyển hướng MoMo
+    ? '/api/momo/create-p2p'    // P2P — gọi API tạo đơn, nhận JSON payUrl rồi mới sang MoMo
     : '/api/admin/scan-quick'   // Scan — admin tự quét thanh toán nhanh
   return `${TX_BASE_URL}${path}?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
 }
@@ -49,6 +49,9 @@ export default function CreateTransactionPage() {
   const [orderInfo,  setOrderInfo]  = useState(() => genOrderId())
   const [lastUrl,    setLastUrl]    = useState('')
   const [copied,     setCopied]     = useState(false)
+  // URL gọi API ẩn theo mặc định — chỉ hiện khi bấm nút (dùng để debug / lấy
+  // mẫu cho iPhone Shortcuts), không cần thấy trong thao tác bình thường.
+  const [showUrl,    setShowUrl]    = useState(false)
   // Các đơn đã bắn đi từ CỬA SỔ NÀY, đang chờ kết quả thanh toán cuối cùng —
   // dùng để khớp với tín hiệu BroadcastChannel bắn về từ result.js.
   const [pendingOrders, setPendingOrders] = useState([])
@@ -148,9 +151,14 @@ export default function CreateTransactionPage() {
   const isP2P     = method === 'p2p'
   const canSubmit = parseInt(amount || 0, 10) > 0
 
-  // ── MỞ GIAO DỊCH (gọi thẳng URL — đây là phần có thể thay
-  // bằng 1 action trong iPhone Shortcuts sau này) ────────────
-  const handleCreate = () => {
+  // ── MỞ GIAO DỊCH ─────────────────────────────────────────────
+  // Luôn mở ở TAB/CỬA SỔ MỚI (không đè lên trang Tạo Giao Dịch) — đồng bộ
+  // cho cả P2P và Scan.
+  // P2P: create-p2p.js trả JSON (không tự redirect 302 nữa) → phải mở cửa sổ
+  // mới NGAY (đồng bộ với click, để khỏi bị popup blocker chặn), sau đó fetch
+  // lấy payUrl rồi mới set location cho cửa sổ đó.
+  // Scan: vẫn là URL điều hướng trực tiếp như cũ → mở tab mới luôn.
+  const handleCreate = async () => {
     const finalOrderInfo = (orderInfo || '').trim() || genOrderId()
     const url = buildTxUrl(method, amount, finalOrderInfo)
     if (!url) return
@@ -160,13 +168,33 @@ export default function CreateTransactionPage() {
     // hoặc BroadcastChannel nếu có tab khác), trang này khớp được đơn.
     setPendingOrders(prev => [...prev, { orderId: finalOrderInfo, amount: parseInt(amount, 10) || 0 }])
     setOrderInfo(genOrderId()) // sinh mã mới cho lần tạo tiếp theo
-    // Điều hướng đến URL giao dịch — nếu đang trong iframe (admin dashboard),
-    // mở URL ở top-level window để không văng ra khỏi dashboard.
-    // Nếu đang chạy standalone thì navigate bình thường.
-    if (window.top && window.top !== window.self) {
-      window.top.location.href = url
-    } else {
-      window.location.href = url
+
+    if (!isP2P) {
+      window.open(url, '_blank', 'noopener,noreferrer')
+      return
+    }
+
+    const win = window.open('', '_blank', 'noopener,noreferrer')
+    try {
+      const res = await fetch(url)
+      const data = await res.json()
+      if (!res.ok || !data.payUrl) {
+        setPendingOrders(prev => prev.filter(o => o.orderId !== finalOrderInfo))
+        win?.close()
+        alert(data.error || 'Tạo giao dịch thất bại, thử lại sau')
+        return
+      }
+      if (win) {
+        win.location.href = data.payUrl
+      } else {
+        // Bị popup blocker chặn ngay từ đầu — fallback mở tab mới trực tiếp
+        window.open(data.payUrl, '_blank', 'noopener,noreferrer')
+      }
+    } catch (e) {
+      console.error('Lỗi gọi create-p2p:', e)
+      setPendingOrders(prev => prev.filter(o => o.orderId !== finalOrderInfo))
+      win?.close()
+      alert('Lỗi server, thử lại sau')
     }
   }
 
@@ -233,15 +261,6 @@ export default function CreateTransactionPage() {
               <div className="text-[17px] font-extrabold tracking-[-0.3px] text-[var(--mm)]">TẠO GIAO DỊCH</div>
               <div className="text-[11px] font-medium text-[var(--admin-muted)]">Tạo link / QR thanh toán cho quầy</div>
             </div>
-            {pendingOrders.length > 0 && (
-              <div
-                className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-[#fef3c7] px-2.5 py-1 text-[10.5px] font-bold text-[#d97706]"
-                title="Số đơn đã bắn đi, đang chờ MoMo báo kết quả về"
-              >
-                <span className="h-[6px] w-[6px] animate-pulse rounded-full bg-[#f59e0b]" />
-                Chờ {pendingOrders.length}
-              </div>
-            )}
           </div>
 
           <div className="px-6 pb-6">
@@ -341,16 +360,27 @@ export default function CreateTransactionPage() {
               Xác nhận tạo giao dịch
             </button>
 
-            {/* URL vừa gọi — để bạn copy dùng làm mẫu cho iPhone Shortcuts sau */}
+            {/* URL vừa gọi — ẩn theo mặc định, bấm để xem/copy dùng làm mẫu cho iPhone Shortcuts */}
             {lastUrl && (
-              <div className="mt-4 rounded-[10px] border border-[var(--border)] bg-[#fafafa] p-3">
-                <div className="break-all font-mono text-[11px] text-[#374151]">{lastUrl}</div>
+              <div className="mt-4">
                 <button
-                  className="mt-2 rounded-md bg-black/[0.06] px-2.5 py-1 text-[11px] font-semibold text-[#374151] transition-colors hover:bg-black/[0.1]"
-                  onClick={copyUrl}
+                  type="button"
+                  onClick={() => setShowUrl(v => !v)}
+                  className="text-[11px] font-semibold text-[var(--admin-muted)] underline-offset-2 hover:text-[var(--admin-text)] hover:underline"
                 >
-                  {copied ? '✓ Đã copy' : 'Copy URL'}
+                  {showUrl ? 'Ẩn URL' : 'Xem URL vừa gọi'}
                 </button>
+                {showUrl && (
+                  <div className="mt-2 rounded-[10px] border border-[var(--border)] bg-[#fafafa] p-3">
+                    <div className="break-all font-mono text-[11px] text-[#374151]">{lastUrl}</div>
+                    <button
+                      className="mt-2 rounded-md bg-black/[0.06] px-2.5 py-1 text-[11px] font-semibold text-[#374151] transition-colors hover:bg-black/[0.1]"
+                      onClick={copyUrl}
+                    >
+                      {copied ? '✓ Đã copy' : 'Copy URL'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
