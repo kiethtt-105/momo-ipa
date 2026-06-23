@@ -454,15 +454,7 @@ useEffect(() => {
               </a>
             )}
             
-            {status === 'success' && (
-              <button
-                type="button"
-                onClick={() => window.close()}
-                className="mt-3 w-full text-center text-xs font-semibold text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline"
-              >
-                Đóng tab này
-              </button>
-            )}
+
           </div>
         </div>
       </div>
