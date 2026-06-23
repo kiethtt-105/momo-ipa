@@ -174,7 +174,7 @@ export default function CreateTransactionPage() {
       return
     }
 
-    const win = window.open('', '_blank', 'noopener,noreferrer')
+    const win = window.open('', '_blank') // KHÔNG noopener/noreferrer ở đây — cần giữ tham chiếu để set location sau
     try {
       const res = await fetch(url)
       const data = await res.json()
@@ -187,7 +187,7 @@ export default function CreateTransactionPage() {
       if (win) {
         win.location.href = data.payUrl
       } else {
-        // Bị popup blocker chặn ngay từ đầu — fallback mở tab mới trực tiếp
+        // Bị popup blocker chặn ngay từ đầu (win === null thật, không mở tab nào) — fallback mở tab mới trực tiếp
         window.open(data.payUrl, '_blank', 'noopener,noreferrer')
       }
     } catch (e) {
