@@ -215,7 +215,19 @@ export default function CreateTransactionPage() {
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&display=swap" />
       </Head>
 
-      <div className="relative flex min-h-screen w-full items-center justify-center overflow-x-hidden bg-[#f5edf2] p-5 font-[var(--admin-font)] text-[var(--admin-text)]">
+      {/* Reset margin/height mặc định của html,body — nếu không có đoạn này, body có margin 8px
+          mặc định của browser cộng thêm vào ngoài div 100dvh bên dưới, khiến trang luôn dư ra vài
+          px và xuất hiện thanh cuộn dù nội dung đã vừa khít màn hình. */}
+      <style jsx global>{`
+        html, body, #__next {
+          margin: 0;
+          padding: 0;
+          height: 100%;
+          overflow: hidden;
+        }
+      `}</style>
+
+      <div className="relative flex h-[100dvh] w-full flex-col items-center justify-center overflow-y-auto overflow-x-hidden bg-[#f5edf2] p-5 font-[var(--admin-font)] text-[var(--admin-text)]">
         {/* ── POPUP KẾT QUẢ THANH TOÁN — nổi trên cùng, tự ẩn sau 6s ── */}
         {resultToast && (
           <div
@@ -250,7 +262,7 @@ export default function CreateTransactionPage() {
           </div>
         )}
 
-        <div className="w-full max-w-[440px] overflow-hidden rounded-[22px] bg-white/95 shadow-[0_24px_60px_rgba(174,0,112,0.1),0_0_0_1px_rgba(255,255,255,0.8)] backdrop-blur-[30px]">
+        <div className="max-h-full w-full max-w-[440px] overflow-y-auto rounded-[22px] bg-white/95 shadow-[0_24px_60px_rgba(174,0,112,0.1),0_0_0_1px_rgba(255,255,255,0.8)] backdrop-blur-[30px] sm:max-w-[460px]">
           {/* Dải gradient thương hiệu — đồng bộ với index.js / result.js */}
           <div className="h-1 w-full bg-gradient-to-r from-[#ff9cb7] via-[var(--mm)] to-[#dfb2ea]" />
 
