@@ -96,7 +96,6 @@ export default function CreateTransactionPage() {
   }, [])
 
   // ── NHẬN KẾT QUẢ THANH TOÁN QUA QUERY STRING ──────────────
-sạch.
   useEffect(() => {
     if (!router.isReady) return
     const { resultOrderId, resultStatus, resultAmount, resultMessage } = router.query
