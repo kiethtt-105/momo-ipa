@@ -8,14 +8,12 @@ import Head from 'next/head'
 // không cần quay lại trang create-transaction nữa.
 const TX_BASE_URL = 'https://kiehtt.vercel.app'
 
-// vì giờ chỉ dùng 1 tab, không còn tab "create-transaction" đứng yên chờ
-// BroadcastChannel nữa.
-const REDIRECT_BACK_DELAY_MS = 1000
-
-function buildBackToCreateTxUrl({ orderId, status, amount, message }) {
-  
-  return '/admin/create-transaction'
-}
+// vì giờ P2P mở TAB RIÊNG (không phải tab create-transaction nữa), trang này
+// không tự redirect về /admin/create-transaction sau khi có kết quả nữa —
+// tránh mở thêm 1 bản create-transaction mới mỗi lần thanh toán xong.
+// Admin tự bấm "Xác nhận giao dịch" (success) hoặc "Đóng tab này" (failed/
+// pending/error) để đóng tab, kết quả vẫn được báo về tab create-transaction
+// qua BroadcastChannel (notifyOtherTabs) như cũ.
 
 function notifyOtherTabs(orderId, status) {
   if (typeof window === 'undefined' || !window.BroadcastChannel) return
@@ -213,27 +211,83 @@ useEffect(() => {
     }
   }, [router.isReady, router.query])
 
-  // ── TỰ ĐỘNG QUAY VỀ TRANG TẠO GIAO DỊCH SAU KHI CÓ KẾT QUẢ ──
-  // Cho admin vài giây để đọc kết quả trên màn hình này, sau đó tự redirect
-  // ngược về /admin/create-transaction kèm kết quả qua query string.
-  useEffect(() => {
-    if (status !== 'success' && status !== 'failed') return
-    const t = setTimeout(() => {
-      window.location.href = buildBackToCreateTxUrl({
-        orderId: info?.orderId,
-        status,
-        amount: info?.amount,
-        message: status === 'failed' ? info?.message : null,
-      })
-    }, REDIRECT_BACK_DELAY_MS)
-    return () => clearTimeout(t)
-  }, [status, info])
+  // (Đã bỏ effect tự redirect ngược về create-transaction — xem comment đầu file)
 
   const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
   const fmtTime = ms => {
     if (!ms) return null
     const d = new Date(parseInt(ms))
     return isNaN(d.getTime()) ? null : d.toLocaleString('vi-VN')
+  }
+
+  // ── HIỂN THỊ TOÀN BỘ FIELD CÓ TRONG `info` ─────────────────
+  // Không liệt kê cứng — bất kể field nào info có (từ MoMo query, từ Redis
+  // hệ thống mình, hay field lạ phát sinh sau này) đều tự hiện ra. Field quen
+  // có nhãn tiếng Việt đẹp; field lạ thì dùng luôn tên field làm nhãn.
+  const FIELD_LABELS = {
+    orderId: 'Mã đơn hàng',
+    orderInfo: 'Nội dung đơn hàng',
+    transId: 'Mã giao dịch MoMo',
+    requestId: 'Request ID',
+    payType: 'Hình thức thanh toán',
+    orderType: 'Loại đơn hàng',
+    partnerCode: 'Partner Code',
+    resultCode: 'Result Code',
+    message: 'Thông báo từ MoMo',
+    localMessage: 'Thông báo (local)',
+    responseTime: 'Thời gian MoMo phản hồi',
+    extraData: 'Extra Data',
+    signature: 'Signature',
+    lang: 'Ngôn ngữ',
+    source: 'Nguồn tạo đơn (hệ thống)',
+    status: 'Trạng thái lưu (hệ thống)',
+    createdAt: 'Thời gian tạo đơn',
+    paidAt: 'Thời gian thanh toán',
+    refundTrans: 'Số lần hoàn tiền',
+  }
+  const FIELD_ORDER = [
+    'orderId', 'orderInfo', 'transId', 'requestId', 'payType', 'orderType',
+    'partnerCode', 'resultCode', 'message', 'localMessage', 'responseTime',
+    'extraData', 'signature', 'lang', 'source', 'status', 'createdAt', 'paidAt', 'refundTrans',
+  ]
+  const MONO_FIELDS = new Set(['requestId', 'signature', 'extraData', 'transId'])
+  const FULL_FIELDS = new Set(['orderInfo', 'signature', 'extraData', 'message', 'localMessage'])
+
+  const formatFieldValue = (key, value) => {
+    if (Array.isArray(value)) return value.length ? `${value.length} lần` : null
+    if (typeof value === 'object' && value !== null) return JSON.stringify(value)
+    if (key === 'amount') return value > 0 ? `${fmt(value)} ₫` : null
+    if (key === 'responseTime') return fmtTime(value) || String(value)
+    if (key === 'createdAt' || key === 'paidAt') {
+      const d = new Date(value)
+      return isNaN(d.getTime()) ? String(value) : d.toLocaleString('vi-VN')
+    }
+    return String(value)
+  }
+
+  // Trả về danh sách [{key, label, value, mono, full}] đã sắp theo FIELD_ORDER,
+  // field lạ không nằm trong danh sách quen thì xếp cuối, sort theo tên.
+  // skipKeys: field không muốn lặp lại (vd 'amount' nếu đã có hero box riêng).
+  const buildFieldRows = (data, skipKeys = []) => {
+    const skip = new Set(skipKeys)
+    const keys = Object.keys(data || {}).filter(k => {
+      if (skip.has(k)) return false
+      const v = data[k]
+      return v !== undefined && v !== null && v !== ''
+    })
+    const ordered = [
+      ...FIELD_ORDER.filter(k => keys.includes(k)),
+      ...keys.filter(k => !FIELD_ORDER.includes(k)).sort(),
+    ]
+    return ordered
+      .map(key => ({
+        key,
+        label: FIELD_LABELS[key] || key,
+        value: formatFieldValue(key, data[key]),
+        mono: MONO_FIELDS.has(key),
+        full: FULL_FIELDS.has(key),
+      }))
+      .filter(row => row.value)
   }
 
   const META = {
@@ -297,7 +351,7 @@ useEffect(() => {
           style={{ animation: 'om1 6.5s infinite alternate ease-in-out' }}
         />
 
-        <div className="relative z-[2] grid w-full max-w-[clamp(340px,92vw,860px)] grid-cols-1 overflow-hidden rounded-[20px] border border-white/70 bg-[var(--surface)] shadow-[0_30px_60px_rgba(174,0,112,0.1),0_1px_2px_rgba(0,0,0,0.02)] backdrop-blur-[25px] will-change-transform md:grid-cols-[1.1fr_0.9fr] md:rounded-3xl">
+        <div className="relative z-[2] grid w-full max-w-[clamp(340px,94vw,1180px)] grid-cols-1 overflow-hidden rounded-[20px] border border-white/70 bg-[var(--surface)] shadow-[0_30px_60px_rgba(174,0,112,0.1),0_1px_2px_rgba(0,0,0,0.02)] backdrop-blur-[25px] will-change-transform md:grid-cols-[0.8fr_1.2fr] md:rounded-3xl">
           <div className="absolute inset-x-0 top-0 z-[3] h-1 bg-gradient-to-r from-[#ff9cb7] via-[var(--mm)] to-[#dfb2ea]" />
           {/* Status section */}
           <div className="relative flex flex-col items-center justify-center border-b border-dashed border-[rgba(174,0,112,0.15)] bg-white/20 px-6 pb-9 pt-11 text-center md:border-b-0 md:border-r md:border-dashed md:border-[rgba(174,0,112,0.12)] md:px-10 md:py-12">
@@ -352,22 +406,10 @@ useEffect(() => {
                   </div>
                 )}
 
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3">
-                  <InfoTile label="Mã đơn hàng" value={info.orderId} full />
-                  {info.transId && <InfoTile label="Mã GD MoMo" value={info.transId} />}
-                  {info.payType && <InfoTile label="Hình thức" value={info.payType} />}
-                  {info.orderType && <InfoTile label="Loại đơn hàng" value={info.orderType} />}
-                  {info.requestId && <InfoTile label="Request ID" value={info.requestId} mono />}
-                  {fmtTime(info.responseTime) && (
-                    <InfoTile label="Thời gian phản hồi" value={fmtTime(info.responseTime)} />
-                  )}
-                  {info.extraData && info.extraData !== '' && (
-                    <InfoTile label="Extra Data" value={info.extraData} mono full />
-                  )}
-                  {Array.isArray(info.refundTrans) && info.refundTrans.length > 0 && (
-                    <InfoTile label="Giao dịch hoàn tiền" value={`${info.refundTrans.length} lần`} />
-                  )}
-                  {info.orderInfo && <InfoTile label="Nội dung" value={info.orderInfo} full />}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {buildFieldRows(info, ['amount']).map(row => (
+                    <InfoTile key={row.key} label={row.label} value={row.value} mono={row.mono} full={row.full} />
+                  ))}
                 </div>
               </div>
             )}
@@ -392,16 +434,10 @@ useEffect(() => {
                   </div>
                 )}
 
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3">
-                  <InfoTile label="Đơn hàng số" value={info.orderId} full />
-                  {info.amount > 0 && <InfoTile label="Số tiền" value={`${fmt(info.amount)} ₫`} />}
-                  {info.transId && <InfoTile label="Mã GD MoMo" value={info.transId} />}
-                  {info.payType && <InfoTile label="Hình thức" value={info.payType} />}
-                  {info.requestId && <InfoTile label="Request ID" value={info.requestId} mono />}
-                  {fmtTime(info.responseTime) && (
-                    <InfoTile label="Thời gian phản hồi" value={fmtTime(info.responseTime)} />
-                  )}
-                  {info.orderInfo && <InfoTile label="Nội dung" value={info.orderInfo} full />}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {buildFieldRows(info, ['message']).map(row => (
+                    <InfoTile key={row.key} label={row.label} value={row.value} mono={row.mono} full={row.full} />
+                  ))}
                 </div>
               </div>
             )}
@@ -410,6 +446,16 @@ useEffect(() => {
               <div className="px-0 py-5 text-center text-sm text-[var(--muted)]">
                 <p>Đang đồng bộ dữ liệu kết quả từ MoMo...</p>
               </div>
+            )}
+
+            {status === 'success' && (
+              <button
+                type="button"
+                onClick={() => window.close()}
+                className="flex w-full items-center justify-center rounded-2xl bg-[var(--mm)] py-4 text-center text-base font-bold text-white shadow-[0_8px_24px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[var(--mm-dark)] hover:shadow-[0_12px_28px_rgba(174,0,112,0.3)]"
+              >
+                Xác nhận giao dịch
+              </button>
             )}
 
             {status === 'failed' && (
@@ -421,10 +467,14 @@ useEffect(() => {
               </a>
             )}
 
-            {status !== 'loading' && (
-              <p className="mt-3 text-center text-xs text-[var(--muted)]">
-                Tự động quay lại trang tạo giao dịch sau ít giây…
-              </p>
+            {(status === 'failed' || status === 'pending' || status === 'error') && (
+              <button
+                type="button"
+                onClick={() => window.close()}
+                className="mt-3 w-full text-center text-xs font-semibold text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline"
+              >
+                Đóng tab này
+              </button>
             )}
           </div>
         </div>
