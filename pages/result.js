@@ -425,6 +425,38 @@ useEffect(() => {
 
           {/* Details section */}
           <div className="flex flex-col justify-center px-6 py-9 md:px-10 md:py-12">
+            {/* Nút hành động chính — đưa LÊN ĐẦU TIÊN của cột phải, để admin thấy
+                và bấm được ngay (đặc biệt trên mobile khi card xếp dọc và phải
+                cuộn qua hết các ô thông tin mới tới nút như trước đây). */}
+            {status === 'success' && (
+              <button
+                type="button"
+                onClick={() => window.close()}
+                className="mb-6 flex w-full items-center justify-center rounded-2xl bg-[var(--mm)] py-4 text-center text-base font-bold text-white shadow-[0_8px_24px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[var(--mm-dark)] hover:shadow-[0_12px_28px_rgba(174,0,112,0.3)]"
+              >
+                Xác nhận giao dịch
+              </button>
+            )}
+
+            {status === 'failed' && (
+              <a
+                href={buildRetryUrl(info)}
+                className="mb-3 flex w-full items-center justify-center rounded-2xl bg-[var(--mm)] py-4 text-center text-base font-bold text-white shadow-[0_8px_24px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[var(--mm-dark)] hover:shadow-[0_12px_28px_rgba(174,0,112,0.3)]"
+              >
+                Thử thanh toán lại
+              </a>
+            )}
+
+            {(status === 'failed' || status === 'pending' || status === 'error') && (
+              <button
+                type="button"
+                onClick={() => window.close()}
+                className="mb-6 w-full text-center text-xs font-semibold text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline"
+              >
+                Đóng tab này
+              </button>
+            )}
+
             {(status === 'success' || status === 'failed') && (
               <h2 className="mb-5 text-[17px] font-extrabold tracking-[-0.3px] text-[var(--text)]">
                 Thông tin đơn hàng
