@@ -14,6 +14,15 @@ function cleanCode(raw) {
 // xoá khi reload trang, nên phải tự lưu/khôi phục state ở đây.
 const SCAN_SESSION_KEY = 'momo_scan_session'
 
+// Trang này chỉ có ý nghĩa khi chạy ở client (camera, BroadcastChannel, sessionStorage...).
+// Next.js mặc định cố tự động tối ưu (Automatic Static Optimization) trang này thành HTML
+// tĩnh ngay lúc build → gây lỗi "Export encountered an error on /admin/scan" / React error #31.
+// Khai báo getServerSideProps rỗng để ép Next.js BỎ QUA bước prerender tĩnh, chuyển hẳn
+// sang server-render theo từng request — tránh hẳn lỗi build này.
+export async function getServerSideProps() {
+  return { props: {} }
+}
+
 export default function ScanPage() {
   const router = useRouter()
 
