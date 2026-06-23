@@ -15,7 +15,7 @@ function buildTxUrl(method, amount, orderInfo) {
   if (!amt || amt <= 0) return null
   const path = method === 'p2p'
     ? '/api/momo/create-p2p'    // P2P — gọi API tạo đơn, nhận JSON payUrl rồi mới sang MoMo
-    : '/api/admin/scan-quick'   // Scan — admin tự quét thanh toán nhanh
+    : '/api/momo/scan'         // Scan — admin tự quét thanh toán nhanh (đã gộp pos.js + scan-quick.js)
   return `${TX_BASE_URL}${path}?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
 }
 
