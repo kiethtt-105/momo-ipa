@@ -453,8 +453,8 @@ useEffect(() => {
                 Thử thanh toán lại
               </a>
             )}
-
-            {(status === 'failed' || status === 'pending' || status === 'error') && (
+            
+            {status === 'success' && (
               <button
                 type="button"
                 onClick={() => window.close()}
