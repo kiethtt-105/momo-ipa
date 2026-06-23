@@ -51,8 +51,26 @@ const decodeExtra = b64 => {
 }
 
 const toDayStr = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const parseDayStr = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d) }
+const MONTH_NAMES_VN = ['Một', 'Hai', 'Ba', 'Tư', 'Năm', 'Sáu', 'Bảy', 'Tám', 'Chín', 'Mười', 'Mười một', 'Mười hai']
+const WEEKDAYS_VN = ['H', 'B', 'T', 'N', 'S', 'B', 'C']
+
+// Tạo lưới 6 hàng x 7 cột cho 1 tháng (gồm cả ngày tháng trước/sau để lấp đầy lưới), dùng cho DateRangePicker
+function buildCalendarGrid(year, month) {
+  const firstDay = new Date(year, month, 1)
+  const startOffset = (firstDay.getDay() + 6) % 7 // 0 = Thứ 2
+  const gridStart = new Date(year, month, 1 - startOffset)
+  const days = []
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart)
+    d.setDate(gridStart.getDate() + i)
+    days.push(d)
+  }
+  return days
+}
 
 const DATE_PRESETS = [
+  { key: 'allTime',   label: 'Tất cả',  range: () => ['', ''] },
   { key: 'yesterday', label: 'Hôm qua', range: () => { const d = new Date(); d.setDate(d.getDate() - 1); const s = toDayStr(d); return [s, s] } },
   { key: 'today',     label: 'Hôm nay', range: () => { const s = toDayStr(new Date()); return [s, s] } },
   { key: 'thisWeek',  label: 'Tuần này', range: () => {
@@ -114,6 +132,37 @@ const RESULT_CODE_MAP = {
   9000: 'Giao dịch đã được xác nhận thành công',
 }
 const getResultDesc = code => RESULT_CODE_MAP[code] !== undefined ? RESULT_CODE_MAP[code] : `Mã lỗi không xác định`
+
+// Xuất danh sách giao dịch (đã áp dụng bộ lọc hiện tại) ra file CSV để tải về, mở được bằng Excel/Sheets
+function exportOrdersToCSV(orders, filterLabel) {
+  const headers = ['Mã đơn', 'Trạng thái', 'Số tiền', 'Nội dung', 'Hình thức', 'Result Code', 'Mã GD MoMo', 'Thời gian tạo', 'Thời gian thanh toán']
+  const rows = orders.map(o => [
+    o.orderId || '',
+    STATUS_META[o.status]?.label || o.status || '',
+    o.amount || 0,
+    o.orderInfo || '',
+    o.method || (o.orderId?.startsWith('POS') || o.orderId?.startsWith('iPOS') ? 'pos' : 'p2p'),
+    o.resultCode ?? '',
+    o.transId || '',
+    fmtDate(o.createdAt),
+    fmtDate(o.paidAt),
+  ])
+  const escapeCSV = v => {
+    const s = String(v ?? '')
+    return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(',')).join('\r\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+  a.href = url
+  a.download = `giao-dich${filterLabel ? `_${filterLabel}` : ''}_${stamp}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 
 // ═══════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -651,6 +700,125 @@ export default function AdminDashboardPage() {
   )
 }
 
+// COMPONENT: DATE RANGE PICKER
+// Lịch chọn khoảng ngày custom (thay cho <input type="date"> mặc định của trình duyệt, vốn có màu sắc
+// không đồng bộ với theme). Click ngày đầu → chọn ngày cuối → tự đóng lại.
+function DateRangePicker({ dateFrom, setDateFrom, dateTo, setDateTo, setActivePresetKey }) {
+  const [open, setOpen]   = useState(false)
+  const [view, setView]   = useState(() => { const d = dateFrom ? parseDayStr(dateFrom) : new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
+  const [hover, setHover] = useState(null)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    const onDocClick = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    if (open) document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  const today    = toDayStr(new Date())
+  const days     = buildCalendarGrid(view.getFullYear(), view.getMonth())
+  const pendingStart = dateFrom && !dateTo
+
+  const inRange = dayStr => {
+    if (dateFrom && dateTo) return dayStr >= dateFrom && dayStr <= dateTo
+    if (pendingStart && hover) return dayStr >= Math.min(dateFrom, hover) && dayStr <= Math.max(dateFrom, hover)
+    return false
+  }
+
+  const pickDay = d => {
+    const dayStr = toDayStr(d)
+    setActivePresetKey(null)
+    if (!dateFrom || (dateFrom && dateTo)) {
+      setDateFrom(dayStr); setDateTo('')
+    } else {
+      if (dayStr < dateFrom) { setDateTo(dateFrom); setDateFrom(dayStr) } else { setDateTo(dayStr) }
+      setOpen(false)
+    }
+  }
+
+  const shiftMonth = delta => setView(v => new Date(v.getFullYear(), v.getMonth() + delta, 1))
+
+  const summary = !dateFrom && !dateTo
+    ? 'Tất cả thời gian'
+    : dateFrom === dateTo
+      ? new Date(dateFrom).toLocaleDateString('vi-VN')
+      : `${dateFrom ? new Date(dateFrom).toLocaleDateString('vi-VN') : '…'} – ${dateTo ? new Date(dateTo).toLocaleDateString('vi-VN') : '…'}`
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all ${
+          open || dateFrom ? 'border-[var(--mm)] bg-[var(--mm-light)] text-[var(--mm)]' : 'border-[var(--border)] bg-white/70 text-[var(--admin-muted)] hover:bg-[var(--mm-light)] hover:text-[var(--mm)]'
+        }`}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        {summary}
+        {(dateFrom || dateTo) && (
+          <span
+            role="button"
+            onClick={e => { e.stopPropagation(); setDateFrom(''); setDateTo(''); setActivePresetKey(null) }}
+            className="ml-0.5 leading-none text-[var(--admin-muted)] hover:text-[var(--admin-danger)]"
+            title="Xóa lọc ngày"
+          >✕</span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+6px)] z-[200] w-[280px] rounded-[16px] border border-white/70 bg-white p-3.5 shadow-[0_20px_50px_rgba(174,0,112,0.16),0_0_0_1px_rgba(174,0,112,0.06)]">
+          <div className="mb-2 flex items-center justify-between">
+            <button type="button" onClick={() => shiftMonth(-1)} className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--admin-muted)] transition-all hover:bg-[var(--mm-light)] hover:text-[var(--mm)]">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <div className="text-[13px] font-bold text-[var(--admin-text)]">Tháng {MONTH_NAMES_VN[view.getMonth()]} {view.getFullYear()}</div>
+            <button type="button" onClick={() => shiftMonth(1)} className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--admin-muted)] transition-all hover:bg-[var(--mm-light)] hover:text-[var(--mm)]">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-y-1 text-center">
+            {WEEKDAYS_VN.map((w, i) => (
+              <div key={i} className="text-[10px] font-bold uppercase text-[var(--admin-muted)]">{w}</div>
+            ))}
+            {days.map((d, i) => {
+              const dayStr     = toDayStr(d)
+              const inMonth    = d.getMonth() === view.getMonth()
+              const isToday    = dayStr === today
+              const isStart    = dayStr === dateFrom
+              const isEnd      = dayStr === dateTo
+              const isEdge     = isStart || isEnd
+              const isInRange  = inRange(dayStr)
+              return (
+                <button
+                  type="button"
+                  key={i}
+                  onClick={() => pickDay(d)}
+                  onMouseEnter={() => pendingStart && setHover(dayStr)}
+                  className={`relative mx-auto flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-semibold transition-all
+                    ${!inMonth ? 'text-[#d1d5db]' : 'text-[var(--admin-text)]'}
+                    ${isInRange && !isEdge ? 'bg-[var(--mm-light)] rounded-none' : ''}
+                    ${isEdge ? 'bg-[var(--mm)] text-white' : ''}
+                    ${!isEdge && inMonth ? 'hover:bg-[var(--mm-light)] hover:text-[var(--mm)]' : ''}
+                    ${isToday && !isEdge ? 'ring-1 ring-inset ring-[var(--mm)]' : ''}
+                  `}
+                >
+                  {d.getDate()}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between border-t border-[#f3f4f6] pt-2.5">
+            <button type="button" className="text-[11px] font-bold text-[var(--admin-muted)] hover:text-[var(--admin-danger)]" onClick={() => { setDateFrom(''); setDateTo(''); setActivePresetKey(null); setOpen(false) }}>Xóa</button>
+            <button type="button" className="text-[11px] font-bold text-[var(--mm)]" onClick={() => { const s = toDayStr(new Date()); setDateFrom(s); setDateTo(s); setActivePresetKey(null); setView(new Date()); setOpen(false) }}>Hôm nay</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // COMPONENT: HISTORY SECTION 
 // Phần hiển thị danh sách đơn hàng, với các bộ lọc, tìm kiếm, sắp xếp, thao tác nhanh trên từng đơn hoặc hàng loạt
 function HistorySection({
@@ -726,19 +894,11 @@ function HistorySection({
               </button>
             )
           })}
-          <div className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white/70 px-2 py-1">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0 text-[var(--admin-muted)]">
-              <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
-            </svg>
-            <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setActivePresetKey(null) }} max={dateTo || undefined}
-              className="border-none bg-transparent font-[var(--admin-font)] text-xs text-[var(--admin-text)] outline-none" title="Từ ngày" />
-            <span className="text-[var(--admin-muted)]">–</span>
-            <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setActivePresetKey(null) }} min={dateFrom || undefined}
-              className="border-none bg-transparent font-[var(--admin-font)] text-xs text-[var(--admin-text)] outline-none" title="Đến ngày" />
-            {(dateFrom || dateTo) && (
-              <button className="ml-0.5 flex-shrink-0 text-xs leading-none text-[var(--admin-muted)] hover:text-[var(--admin-danger)]" onClick={() => { setDateFrom(''); setDateTo(''); setActivePresetKey(null) }} title="Xóa lọc ngày">✕</button>
-            )}
-          </div>
+          <DateRangePicker
+            dateFrom={dateFrom} setDateFrom={setDateFrom}
+            dateTo={dateTo} setDateTo={setDateTo}
+            setActivePresetKey={setActivePresetKey}
+          />
         </div>
 
         <div className="flex items-center gap-2">
@@ -751,6 +911,15 @@ function HistorySection({
             />
             {search && <button className="absolute right-[10px] text-xs leading-none text-[var(--admin-muted)]" onClick={() => setSearch('')}>✕</button>}
           </div>
+          <button
+            className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[9px] border border-[var(--border)] bg-white/70 px-3 py-[7px] font-[var(--admin-font)] text-[13px] font-semibold text-[var(--admin-text)] transition-all hover:border-[var(--mm)] hover:bg-[var(--mm-light)] hover:text-[var(--mm)]"
+            onClick={() => exportOrdersToCSV(filtered, filter !== 'ALL' ? FILTERS.find(f => f.key === filter)?.label.replace(/\s+/g, '-') : '')}
+            disabled={filtered.length === 0}
+            title="Tải danh sách giao dịch đang hiển thị về máy (CSV)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Tải CSV
+          </button>
           {selected.size > 0 && (
             <button className="flex-shrink-0 whitespace-nowrap rounded-[9px] bg-[var(--admin-danger)] px-3.5 py-[7px] font-[var(--admin-font)] text-[13px] font-bold text-white" onClick={() => doDelete([...selected])}>
               🗑 Xóa ({selected.size})
