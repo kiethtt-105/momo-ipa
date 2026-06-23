@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useLayoutEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 
@@ -103,6 +103,40 @@ export default function ResultPage() {
   // Đánh dấu đã có kết quả cuối (success/failed) — để effect không xử lý lại
   // khi cleanUrlBar() đổi router.query và làm effect tự chạy lại lần nữa.
   const resolvedRef = useRef(false)
+
+  // ── TỰ CO/GIÃN CARD CHO VỪA KHÍT MÀN HÌNH (desktop) ────────
+  // Đo kích thước THẬT của card (ở scale 1) so với window.innerWidth/Height,
+  // rồi tự áp transform: scale() nhỏ lại vừa đủ để thấy hết toàn bộ trong 1
+  // màn hình, không cần người dùng tự bấm zoom out trình duyệt. Tự đo lại mỗi
+  // khi đổi kích thước cửa sổ hoặc khi có thêm dữ liệu (info đổi → card cao
+  // thêm do fetchFullInfo trả về nhiều field hơn).
+  const cardRef = useRef(null)
+  const [scale, setScale] = useState(1)
+
+  useLayoutEffect(() => {
+    const MARGIN = 32 // chừa lề quanh card
+    const MIN_SCALE = 0.6 // không co nhỏ hơn mức này, đỡ chữ bé khó đọc
+    const MOBILE_BREAKPOINT = 768 // dưới breakpoint này: cho cuộn tự nhiên, không auto-scale
+
+    const fit = () => {
+      const el = cardRef.current
+      if (!el) return
+      if (window.innerWidth < MOBILE_BREAKPOINT) {
+        setScale(1)
+        return
+      }
+      el.style.transform = 'scale(1)' // reset để đo kích thước thật trước
+      const rect = el.getBoundingClientRect()
+      const availW = window.innerWidth - MARGIN * 2
+      const availH = window.innerHeight - MARGIN * 2
+      const s = Math.min(1, availW / rect.width, availH / rect.height)
+      setScale(Math.max(MIN_SCALE, s))
+    }
+
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [status, info])
 
 useEffect(() => {
     if (!router.isReady) return
@@ -351,7 +385,11 @@ useEffect(() => {
           style={{ animation: 'om1 6.5s infinite alternate ease-in-out' }}
         />
 
-        <div className="relative z-[2] grid w-full max-w-[clamp(340px,94vw,1180px)] grid-cols-1 overflow-hidden rounded-[20px] border border-white/70 bg-[var(--surface)] shadow-[0_30px_60px_rgba(174,0,112,0.1),0_1px_2px_rgba(0,0,0,0.02)] backdrop-blur-[25px] will-change-transform md:grid-cols-[0.8fr_1.2fr] md:rounded-3xl">
+        <div
+          ref={cardRef}
+          className="relative z-[2] grid w-full max-w-[clamp(340px,94vw,1180px)] grid-cols-1 overflow-hidden rounded-[20px] border border-white/70 bg-[var(--surface)] shadow-[0_30px_60px_rgba(174,0,112,0.1),0_1px_2px_rgba(0,0,0,0.02)] backdrop-blur-[25px] will-change-transform md:grid-cols-[0.8fr_1.2fr] md:rounded-3xl"
+          style={{ transform: `scale(${scale})`, transformOrigin: 'center center', transition: 'transform 0.15s ease-out' }}
+        >
           <div className="absolute inset-x-0 top-0 z-[3] h-1 bg-gradient-to-r from-[#ff9cb7] via-[var(--mm)] to-[#dfb2ea]" />
           {/* Status section */}
           <div className="relative flex flex-col items-center justify-center border-b border-dashed border-[rgba(174,0,112,0.15)] bg-white/20 px-6 pb-9 pt-11 text-center md:border-b-0 md:border-r md:border-dashed md:border-[rgba(174,0,112,0.12)] md:px-10 md:py-12">

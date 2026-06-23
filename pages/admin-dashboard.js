@@ -294,23 +294,9 @@ export default function AdminDashboardPage() {
   // ── XỬ LÝ DỮ LIỆU HIỂN THỊ ─────────────────────────────────
   const displayed = orders.map(normalizeStatus)
 
-  // Tính toán số lượng theo từng trạng thái, để hiển thị ở sidebar và thống kê
-  const counts = {
-    ALL:     displayed.length,
-    PAID:    displayed.filter(o => o.status === 'PAID').length,
-    FAILED:  displayed.filter(o => o.status === 'FAILED').length,
-    PENDING: displayed.filter(o => o.status === 'PENDING').length,
-    EXPIRED: displayed.filter(o => o.status === 'EXPIRED').length,
-  }
-
-  // Tính tổng doanh thu từ các đơn đã thanh toán, để hiển thị ở thống kê
-  const totalRevenue = displayed
-    .filter(o => o.status === 'PAID')
-    .reduce((s, o) => s + parseInt(o.amount || 0), 0)
-
-  // Áp dụng các bộ lọc: trạng thái, tìm kiếm, khoảng ngày, rồi sắp xếp theo cột được chọn
-  const filtered = displayed
-    .filter(o => filter === 'ALL' || o.status === filter)
+  // Áp dụng filter ngày + tìm kiếm (KHÔNG áp dụng filter trạng thái ở đây),
+  // để counts và filtered list luôn khớp với cùng một phạm vi ngày/tìm kiếm.
+  const scoped = displayed
     .filter(o => {
       const q = search.trim().toLowerCase()
       if (!q) return true
@@ -330,6 +316,25 @@ export default function AdminDashboardPage() {
       if (dateTo && dayStr > dateTo) return false
       return true
     })
+
+  // Tính toán số lượng theo từng trạng thái (đã áp dụng cùng phạm vi ngày/tìm kiếm với danh sách hiển thị),
+  // để hiển thị ở sidebar và thống kê — tránh lệch số với bảng kết quả thực tế.
+  const counts = {
+    ALL:     scoped.length,
+    PAID:    scoped.filter(o => o.status === 'PAID').length,
+    FAILED:  scoped.filter(o => o.status === 'FAILED').length,
+    PENDING: scoped.filter(o => o.status === 'PENDING').length,
+    EXPIRED: scoped.filter(o => o.status === 'EXPIRED').length,
+  }
+
+  // Tính tổng doanh thu từ các đơn đã thanh toán trong phạm vi đang lọc, để hiển thị ở thống kê
+  const totalRevenue = scoped
+    .filter(o => o.status === 'PAID')
+    .reduce((s, o) => s + parseInt(o.amount || 0), 0)
+
+  // Áp dụng filter trạng thái lên phần dữ liệu đã được lọc theo ngày/tìm kiếm, rồi sắp xếp theo cột được chọn
+  const filtered = scoped
+    .filter(o => filter === 'ALL' || o.status === filter)
     .sort((a, b) => {
       let av = a[sortKey]
       let bv = b[sortKey]
