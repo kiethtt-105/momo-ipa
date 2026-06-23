@@ -294,9 +294,7 @@ export default function ScanPage() {
         message: data.message || '',
         orderInfo: baseOrderInfo,
       }).toString()
-      window.open(`/result?${qs}`, '_blank')
-      window.focus()
-
+      window.location.href = `/result?${qs}`;
       // Reset để sẵn sàng quét tiếp — camera vẫn chạy ngầm
       submitting.current = false
       setIsSubmitting(false)

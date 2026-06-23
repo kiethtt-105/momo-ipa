@@ -435,15 +435,6 @@ useEffect(() => {
               </div>
             )}
 
-            {status === 'success' && (
-              <button
-                type="button"
-                onClick={() => window.close()}
-                className="flex w-full items-center justify-center rounded-2xl bg-[var(--mm)] py-4 text-center text-base font-bold text-white shadow-[0_8px_24px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[var(--mm-dark)] hover:shadow-[0_12px_28px_rgba(174,0,112,0.3)]"
-              >
-                Xác nhận giao dịch
-              </button>
-            )}
 
             {status === 'failed' && (
               <a
