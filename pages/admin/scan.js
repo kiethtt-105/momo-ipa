@@ -9,16 +9,8 @@ function cleanCode(raw) {
   return raw.trim()
 }
 
-// Key lưu lại đơn đang quét dở vào sessionStorage — chống mất state khi F5.
-// Đơn thực ra đã tồn tại trên Redis (save-pending), chỉ là React state bị
-// xoá khi reload trang, nên phải tự lưu/khôi phục state ở đây.
 const SCAN_SESSION_KEY = 'momo_scan_session'
 
-// Trang này chỉ có ý nghĩa khi chạy ở client (camera, BroadcastChannel, sessionStorage...).
-// Next.js mặc định cố tự động tối ưu (Automatic Static Optimization) trang này thành HTML
-// tĩnh ngay lúc build → gây lỗi "Export encountered an error on /admin/scan" / React error #31.
-// Khai báo getServerSideProps rỗng để ép Next.js BỎ QUA bước prerender tĩnh, chuyển hẳn
-// sang server-render theo từng request — tránh hẳn lỗi build này.
 export async function getServerSideProps() {
   return { props: {} }
 }
@@ -44,7 +36,6 @@ export default function ScanPage() {
 
   const [amount, setAmount] = useState('')
   const [orderInfo, setOrderInfo] = useState('')
-  const [result, setResult] = useState(null)
 
   const [manualCode, setManualCode] = useState('')
   const [manualErr, setManualErr] = useState('')
@@ -52,16 +43,16 @@ export default function ScanPage() {
   const [currentOrderId, setCurrentOrderId] = useState(null)
   const [isServerErr, setIsServerErr] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Kết quả kiểm tra — khi có PAID/FAILED sẽ redirect sang /result thay vì hiện inline
   const [checkResult, setCheckResult] = useState(null)
+  const [isChecking, setIsChecking] = useState(false)
 
   const { amount: urlAmount, orderInfo: urlOrderInfo, quick } = router.query
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [quickToast, setQuickToast] = useState(false)
 
-<<<<<<< HEAD
-=======
-  // Load jsQR
->>>>>>> parent of b23f4eb (Improve scan flow: background camera, no reload)
+  // Load jsQR — camera luôn chạy ngầm, không phụ thuộc vào trạng thái UI
   useEffect(() => {
     if (window.jsQR) { setReady(true); return }
     const s = document.createElement('script')
@@ -71,22 +62,19 @@ export default function ScanPage() {
     document.head.appendChild(s)
   }, [])
 
-<<<<<<< HEAD
-
-  const [resultToast, setResultToast] = useState(null) 
-=======
-  // Lắng nghe tín hiệu từ tab /result (mở riêng khi quét/scan thanh toán)
-  // — khi có kết quả cuối cùng (thành công/thất bại), tự reload lại trang
-  // này để admin thấy ngay trạng thái mới nhất, không cần bấm tay.
->>>>>>> parent of b23f4eb (Improve scan flow: background camera, no reload)
+  // ── KHÔNG reload khi nhận BroadcastChannel ──
+  // Bug cũ: reload() xoá toàn bộ state + tắt camera.
+  // Giờ chỉ hiện toast nhỏ thông báo, không reload.
+  // Trang scan tiếp tục sẵn sàng nhận đơn mới.
+  const [resultToast, setResultToast] = useState(null) // { orderId, status }
   useEffect(() => {
     if (typeof window === 'undefined' || !window.BroadcastChannel) return
     const ch = new BroadcastChannel('momo-result')
     ch.onmessage = (e) => {
       if (e.data?.type === 'momo-result-done') {
-<<<<<<< HEAD
         const { orderId, status } = e.data
         setResultToast({ orderId, status })
+        // Reset về trạng thái sẵn sàng đơn mới (không reload)
         submitting.current = false
         setIsSubmitting(false)
         setManualCode('')
@@ -97,24 +85,18 @@ export default function ScanPage() {
         setOrderInfo('')
         setStep('amount')
         if (typeof window !== 'undefined') sessionStorage.removeItem(SCAN_SESSION_KEY)
-=======
-        window.location.reload()
->>>>>>> parent of b23f4eb (Improve scan flow: background camera, no reload)
       }
     }
     return () => ch.close()
   }, [])
 
-<<<<<<< HEAD
   useEffect(() => {
     if (!resultToast) return
     const t = setTimeout(() => setResultToast(null), 4000)
     return () => clearTimeout(t)
   }, [resultToast])
 
-=======
   // Auth
->>>>>>> parent of b23f4eb (Improve scan flow: background camera, no reload)
   useEffect(() => {
     fetch('/api/admin/session')
       .then(r => r.json())
@@ -122,10 +104,7 @@ export default function ScanPage() {
       .catch(() => setAuthed(false))
   }, [])
 
-<<<<<<< HEAD
-=======
-  // Tự mở camera khi vào scan
->>>>>>> parent of b23f4eb (Improve scan flow: background camera, no reload)
+  // Tự mở camera khi vào step scan — camera LUÔN bật, kể cả khi đang nhập mã thủ công
   useEffect(() => {
     if (step === 'scan' && ready) {
       setCamError('')
@@ -134,17 +113,12 @@ export default function ScanPage() {
     }
   }, [step, ready])
 
-  // Tạo đơn nháp PENDING + chuyển sang step scan.
-  // Nhận amount/orderInfo qua tham số (không đọc từ state) để dùng được ngay
-  // cả khi gọi từ luồng link nhanh, lúc đó state amount/orderInfo có thể
-  // chưa kịp cập nhật xong (setState là async).
   async function confirmAndProceed(amt, info) {
     const generatedId = `POS${Date.now()}`
     setCurrentOrderId(generatedId)
     submitting.current = true
 
     try {
-      // Chính thức tạo Log đơn hàng nháp PENDING lên hệ thống
       await fetch('/api/momo/save-pending', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -155,37 +129,26 @@ export default function ScanPage() {
         }),
       })
     } catch (e) {
-      console.error("Lỗi lưu đơn hàng nháp:", e)
+      console.error('Lỗi lưu đơn hàng nháp:', e)
     } finally {
       submitting.current = false
-      setStep('scan') // Chuyển sang màn hình Step 2 để bắn súng quét mã
+      setStep('scan')
     }
   }
 
-  // Load amount và orderInfo từ query params & Dọn dẹp URL chống lặp logic
   useEffect(() => {
     if (!router.isReady) return
 
-    if (urlAmount) {
-      setAmount(urlAmount)
-    }
-    if (urlOrderInfo) {
-      setOrderInfo(urlOrderInfo)
-    }
+    if (urlAmount) setAmount(urlAmount)
+    if (urlOrderInfo) setOrderInfo(urlOrderInfo)
 
     if (urlAmount && !currentOrderId && !submitting.current) {
-      // Trang này không còn form nhập tay → bất kỳ link nào có ?amount=
-      // hợp lệ đều tự tạo đơn nháp ngay (trước đây chỉ áp dụng cho ?quick=true).
       router.replace('/admin/scan', undefined, { shallow: true })
       confirmAndProceed(urlAmount, urlOrderInfo)
       if (quick === 'true') setQuickToast(true)
     }
   }, [urlAmount, urlOrderInfo, quick, router.isReady])
 
-  // ── CHỐNG MẤT STATE KHI F5 ────────────────────────────────────────
-  // Nếu đang ở giữa giao dịch (step='scan', đã có currentOrderId) thì lưu
-  // lại toàn bộ context vào sessionStorage. Đơn này đã PENDING trên Redis,
-  // chỉ cần nhớ lại id để admin tiếp tục bắn mã, không phải tạo đơn mới.
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (step === 'scan' && currentOrderId) {
@@ -195,11 +158,9 @@ export default function ScanPage() {
     }
   }, [step, amount, orderInfo, currentOrderId])
 
-  // Khôi phục lại đơn đang quét dở ngay khi vào trang (F5) — chỉ áp dụng khi
-  // KHÔNG đến từ link nhanh (?quick=true, đã có luồng tạo đơn riêng ở effect trên).
   useEffect(() => {
     if (typeof window === 'undefined' || !router.isReady) return
-    if (urlAmount || currentOrderId) return // đã có nguồn khác xử lý rồi, không khôi phục đè lên
+    if (urlAmount || currentOrderId) return
 
     try {
       const saved = sessionStorage.getItem(SCAN_SESSION_KEY)
@@ -216,20 +177,11 @@ export default function ScanPage() {
     }
   }, [router.isReady])
 
-  // Tự ẩn toast "đã bỏ qua xác nhận" sau ~2.5s
   useEffect(() => {
     if (!quickToast) return
     const t = setTimeout(() => setQuickToast(false), 2500)
     return () => clearTimeout(t)
   }, [quickToast])
-
-  // Thêm đoạn này ở khu vực các useEffect đầu file để tự focus khi nhấn thử lại
-  useEffect(() => {
-    if (!result && step === 'scan') {
-      const inputEl = document.querySelector('input[placeholder*="Bắn mã"]')
-      if (inputEl) inputEl.focus()
-    }
-  }, [result, step])
 
   function setVideoRef(el) {
     videoRef.current = el
@@ -282,6 +234,7 @@ export default function ScanPage() {
     setScanning(false)
   }
 
+  // Dừng camera khi unmount trang
   useEffect(() => () => stopCamera(), [])
 
   async function onDetected(raw) {
@@ -289,10 +242,7 @@ export default function ScanPage() {
     submitting.current = true
     setIsSubmitting(true)
     setCheckResult(null)
-<<<<<<< HEAD
-=======
-    stopCamera()
->>>>>>> parent of b23f4eb (Improve scan flow: background camera, no reload)
+    // KHÔNG stopCamera() ở đây — camera tiếp tục chạy ngầm
 
     const code = cleanCode(raw)
     console.log('[SCAN] raw QR data:', raw)
@@ -302,7 +252,6 @@ export default function ScanPage() {
     let orderId = currentOrderId || `POS${Date.now()}`
     const baseOrderInfo = orderInfo || `iPOS${orderId.replace(/^POS/, '').replace(/_\d+$/, '')}`
 
-    // Tự động thử lại với orderId mới nếu bị trùng (resultCode 41)
     const MAX_RETRY = 5
     let attempt = 0
     let data = null
@@ -317,7 +266,6 @@ export default function ScanPage() {
         data = await res.json()
 
         if (data.resultCode === 41) {
-          // Trùng orderId → bump suffix _2, _3, ...
           const match = orderId.match(/^(.+)_(\d+)$/)
           orderId = match ? `${match[1]}_${parseInt(match[2]) + 1}` : `${orderId}_2`
           setCurrentOrderId(orderId)
@@ -333,16 +281,10 @@ export default function ScanPage() {
           continue
         }
 
-        break // Không phải lỗi 41 → thoát
+        break
       }
 
-<<<<<<< HEAD
-=======
-      // Mở /result ở TAB MỚI — tab /admin/scan này giữ nguyên y như cũ
-      // (không mất số tiền/nội dung đang nhập). Khi tab /result có kết quả
-      // cuối cùng, nó sẽ tự bắn tín hiệu qua BroadcastChannel để tab này
-      // reload lại (xem listener "momo-result" ở useEffect phía trên).
->>>>>>> parent of b23f4eb (Improve scan flow: background camera, no reload)
+      // Mở /result ở TAB MỚI — tab scan tiếp tục sẵn sàng nhận mã mới
       const qs = new URLSearchParams({
         orderId,
         resultCode: data.resultCode,
@@ -353,19 +295,15 @@ export default function ScanPage() {
         orderInfo: baseOrderInfo,
       }).toString()
       window.open(`/result?${qs}`, '_blank')
-<<<<<<< HEAD
       window.focus()
 
+      // Reset để sẵn sàng quét tiếp — camera vẫn chạy ngầm
       submitting.current = false
       setIsSubmitting(false)
       setManualCode('')
       setManualErr('')
+      // Restart camera nếu đã bị dừng
       if (!streamRef.current && scanning) setScanning(true)
-=======
-      window.focus() // Kéo focus quay lại tab scan này — không để trình duyệt tự nhảy sang tab /result mới mở
-      submitting.current = false
-      setIsSubmitting(false)
->>>>>>> parent of b23f4eb (Improve scan flow: background camera, no reload)
     } catch {
       submitting.current = false
       setIsSubmitting(false)
@@ -375,7 +313,6 @@ export default function ScanPage() {
   }
 
   function resetAll() {
-    setResult(null)
     setAmount('')
     setOrderInfo('')
     setCurrentOrderId(null)
@@ -385,6 +322,7 @@ export default function ScanPage() {
     setCheckResult(null)
     setManualCode('')
     setManualErr('')
+    setIsServerErr(false)
     if (typeof window !== 'undefined') sessionStorage.removeItem(SCAN_SESSION_KEY)
   }
 
@@ -399,15 +337,10 @@ export default function ScanPage() {
   }
 
   const handleManualCodeKey = (e) => {
-    if (e.key === 'Enter') {
-      submitManualCode()
-    }
+    if (e.key === 'Enter') submitManualCode()
   }
 
-<<<<<<< HEAD
-=======
-  // Auto submit khi nhập đủ 18 ký tự
->>>>>>> parent of b23f4eb (Improve scan flow: background camera, no reload)
+  // Auto submit khi đủ ký tự hợp lệ
   useEffect(() => {
     const code = cleanCode(manualCode)
     if ((code.length === 18 || code.length === 20) && !submitting.current && /^(MM)?\d{18}$/.test(code)) {
@@ -415,7 +348,6 @@ export default function ScanPage() {
     }
   }, [manualCode])
 
-  // Hàm ép đơn hàng PENDING thành FAILED khi thực hiện hủy giao dịch
   async function triggerCancelOrderBackend() {
     submitting.current = true
     setIsSubmitting(true)
@@ -427,7 +359,7 @@ export default function ScanPage() {
           orderId: currentOrderId,
           amount: parseInt(amount),
           orderInfo: orderInfo || currentOrderId,
-          paymentCode: '000000000000000000' // Bắn mã ảo để API scan.js (POST) cập nhật trạng thái FAILED
+          paymentCode: '000000000000000000'
         }),
       })
     } catch (e) {
@@ -445,19 +377,19 @@ export default function ScanPage() {
     }
   }
 
-<<<<<<< HEAD
-=======
-  // ── KIỂM TRA TRẠNG THÁI ĐƠN HÀNG ──────────────────────────
->>>>>>> parent of b23f4eb (Improve scan flow: background camera, no reload)
+  // ── KIỂM TRA GIAO DỊCH — nếu có kết quả thì redirect sang /result ──
+  // Bug cũ: chỉ setCheckResult hiện inline, không bao giờ đến /result.
+  // Fix: nếu PAID/FAILED → mở /result tab mới; nếu PENDING → hiện inline như cũ.
   async function checkOrder() {
     if (!currentOrderId) return
+    setIsChecking(true)
     setCheckResult(null)
     try {
       const res = await fetch(`/api/momo/status?orderId=${encodeURIComponent(currentOrderId)}`)
       const data = await res.json()
-<<<<<<< HEAD
 
       if (data.status === 'PAID' || data.status === 'FAILED') {
+        // Có kết quả rõ ràng → điều hướng sang /result
         const qs = new URLSearchParams({
           orderId: currentOrderId,
           resultCode: data.status === 'PAID' ? 0 : data.resultCode || 99,
@@ -470,17 +402,16 @@ export default function ScanPage() {
         window.open(`/result?${qs}`, '_blank')
         window.focus()
       } else {
+        // Vẫn PENDING hoặc chưa có dữ liệu → hiện inline
         setCheckResult(data)
       }
-=======
-      setCheckResult(data)
->>>>>>> parent of b23f4eb (Improve scan flow: background camera, no reload)
     } catch (e) {
       setCheckResult({ error: 'Không kết nối được server' })
+    } finally {
+      setIsChecking(false)
     }
   }
 
-  // Class dùng lại nhiều lần
   const inputBase = 'w-full px-3.5 py-[11px] border-[1.5px] border-momo/15 rounded-[10px] text-sm bg-[#f5edf2]/40 text-gray-900 mb-2 outline-none focus:border-momo/40 transition-colors'
   const btnPrimary = 'w-full bg-momo text-white border-none rounded-xl py-[13px] px-6 text-sm font-bold cursor-pointer shadow-[0_4px_16px_rgba(174,0,112,0.25)] disabled:opacity-40 disabled:cursor-not-allowed active:opacity-80'
   const card = 'bg-white/96 rounded-2xl px-4 py-[18px] shadow-[0_2px_16px_rgba(174,0,112,0.06)] border border-white/80'
@@ -524,62 +455,8 @@ export default function ScanPage() {
     )
   }
 
-  if (result) {
-    const isSuccess = result.success
-
-    return (
-      <>
-        <Head><title>Kết quả thanh toán</title></Head>
-        <div className="min-h-[100dvh] bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
-          <div className="flex items-center justify-center min-h-[100dvh] p-5">
-            <div className={`${card} max-w-[420px] w-full text-center px-6 py-10`}>
-              <div className="text-5xl mb-3">{isSuccess ? '✅' : '❌'}</div>
-
-              <h2 className={`text-xl font-extrabold mb-2 ${isSuccess ? 'text-green-600' : 'text-red-600'}`}>
-                {isSuccess ? 'Thanh toán thành công' : 'Thanh toán thất bại'}
-              </h2>
-
-              <div className="text-2xl font-extrabold text-momo mb-2">
-                {fmt(result.amount)} ₫
-              </div>
-
-              <p className="text-sm text-gray-500 mb-1">{result.data.message}</p>
-              {result.data.transId && (
-                <p className="text-xs font-mono text-gray-700 mt-1">
-                  Mã GD: {result.data.transId}
-                </p>
-              )}
-
-              <div className="flex flex-col gap-3 mt-8">
-                {!isSuccess && (
-                  <button
-                    onClick={() => {
-                      setResult(null)
-                      setManualCode('')
-                      setManualErr('')
-                      setIsServerErr(false)
-                      submitting.current = false
-                      setScanning(true)
-                      setStep('scan')
-                    }}
-                    className="w-full bg-amber-500 text-white border-none rounded-xl py-[13px] px-6 text-sm font-bold cursor-pointer shadow-[0_4px_16px_rgba(245,158,11,0.25)] active:opacity-80"
-                  >
-                    🔄 Thử lại giao dịch
-                  </button>
-                )}
-                <button onClick={resetAll} className={btnPrimary}>
-                  {isSuccess ? 'Giao Dịch Mới' : 'Tạo Giao Dịch Mới'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </>
-    )
-  }
-
   const stepIdx = step === 'amount' ? 0 : 1
-  const STEPS = ['Thông tin ', 'Scan QR']
+  const STEPS = ['Thông tin', 'Scan QR']
 
   return (
     <>
@@ -592,23 +469,33 @@ export default function ScanPage() {
       </Head>
       <div className="min-h-[100dvh] flex flex-col bg-gradient-to-br from-[#fff0f7] via-[#fce4f0] to-[#f5edf2]">
 
-        {/* Header */}
+        {/* Header — nút reload giờ = Kiểm tra giao dịch khi đang ở step scan */}
         <div className="sticky top-0 z-[100] flex-shrink-0 bg-white/92 backdrop-blur-xl border-b border-momo/10 px-4 py-3 flex items-center justify-between">
-
           <div className="flex items-center gap-2">
             <img src="/Main.png" alt="" className="w-[26px] h-[26px] rounded-md" />
             <span className="font-extrabold text-momo text-base">MoMo POS SCAN</span>
           </div>
-          <button
-            onClick={() => window.location.reload()}
-            title="Tải lại trang (dùng khi bị đơ)"
-            className="w-[34px] h-[34px] rounded-lg border border-momo/15 bg-white cursor-pointer text-momo flex items-center justify-center active:opacity-80 active:rotate-180 transition-transform duration-300"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M3 12a9 9 0 0 1 15.5-6.36M21 12a9 9 0 0 1-15.5 6.36" />
-              <path d="M3 3v6h6M21 21v-6h-6" />
-            </svg>
-          </button>
+
+          {/* Nút góc phải: khi step=scan → Kiểm tra GD (không reload nữa); khi step=amount → nút trống */}
+          {step === 'scan' ? (
+            <button
+              onClick={checkOrder}
+              disabled={!currentOrderId || isChecking}
+              title="Kiểm tra trạng thái giao dịch hiện tại"
+              className="h-[34px] px-3 rounded-lg border border-blue-200 bg-blue-50 cursor-pointer text-blue-600 flex items-center gap-1.5 text-[12px] font-bold active:opacity-80 disabled:opacity-40"
+            >
+              {isChecking ? (
+                <span className="inline-block w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+              )}
+              Kiểm tra GD
+            </button>
+          ) : (
+            <div className="w-[34px]" />
+          )}
         </div>
 
         {/* Step bar */}
@@ -632,8 +519,7 @@ export default function ScanPage() {
 
         <div className={`flex-1 flex flex-col max-w-[480px] w-full mx-auto px-4 pb-10 pt-4 gap-3 ${step === 'amount' ? 'justify-center' : ''}`}>
 
-          {/* STEP 1: KHỞI TẠO — không còn form nhập tay, trang này chỉ nhận đơn
-              qua link do create-transaction.js tạo (?amount=&quick=true) */}
+          {/* STEP 1: CHỜ ĐƠN TỪ LINK */}
           {step === 'amount' && (
             <div className={`${card} text-center py-9`}>
               {(!router.isReady || (urlAmount && !currentOrderId)) ? (
@@ -665,25 +551,22 @@ export default function ScanPage() {
             <div className={card}>
               <h3 className="text-[13px] font-bold text-gray-700 mb-3">📷 Quy trình nhận mã thanh toán MoMo</h3>
 
-              {/* TÓM TẮT ĐƠN HÀNG ĐẦY ĐỦ */}
+              {/* Tóm tắt đơn hàng */}
               {(amount || orderInfo || currentOrderId) && (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5">
                   <div className="text-xs font-bold text-slate-500 mb-3 uppercase">
                     THÔNG TIN ĐƠN HÀNG TẠI QUẦY
                   </div>
-
                   <div className="flex justify-between items-center mb-2.5">
                     <span className="text-slate-600 text-[13px]">Mã đơn hàng (Log ID):</span>
                     <span className="font-bold font-mono text-gray-900 bg-slate-200 px-1.5 py-0.5 rounded">
                       {currentOrderId || 'Chưa khởi tạo'}
                     </span>
                   </div>
-
                   <div className="flex justify-between items-center">
                     <span className="text-slate-600">Số tiền thanh toán</span>
                     <span className="text-[28px] font-extrabold text-momo">{fmt(amount)} ₫</span>
                   </div>
-
                   <div className="h-px bg-slate-200 my-3" />
                   <div>
                     <div className="text-xs text-slate-500 mb-1">Nội dung thanh toán</div>
@@ -694,14 +577,14 @@ export default function ScanPage() {
                 </div>
               )}
 
-              {/* Input mã thủ công & Súng Quét */}
+              {/* Input mã + Nút xác nhận */}
               <div className="mb-4 p-3.5 bg-[#f9f0f5] rounded-[10px] border border-momo/15">
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-2">
                   MÃ THANH TOÁN MOMO
                 </p>
                 <input
                   autoFocus
-                  placeholder="Scan mã QR Trên MoMo "
+                  placeholder="Scan mã QR trên MoMo"
                   value={manualCode}
                   onChange={e => { setManualCode(e.target.value); setManualErr('') }}
                   onKeyDown={handleManualCodeKey}
@@ -709,15 +592,7 @@ export default function ScanPage() {
                   disabled={isSubmitting}
                 />
                 {manualErr && <p className="text-xs text-red-600 mb-2">⚠ {manualErr}</p>}
-                {/* Chỉ hiện khi server bị đơ hoặc lỗi kết nối mạng */}
-                {isServerErr && !submitting.current && (
-                  <button
-                    onClick={submitManualCode}
-                    className="w-full bg-amber-500 text-white border-none rounded-lg py-2.5 px-4 text-[13px] font-bold cursor-pointer mt-1.5 shadow-[0_4px_12px_rgba(245,158,11,0.2)] active:opacity-80"
-                  >
-                    ⚡ Gửi lại dữ liệu (Kiểm tra giao dịch)
-                  </button>
-                )}
+
                 <button
                   onClick={submitManualCode}
                   disabled={!manualCode.trim() || isSubmitting}
@@ -725,50 +600,41 @@ export default function ScanPage() {
                 >
                   {isSubmitting ? 'Đang xử lý...' : '✓ Xác nhận thanh toán'}
                 </button>
+
+                {/* Nút gửi lại khi server lỗi */}
+                {isServerErr && !submitting.current && (
+                  <button
+                    onClick={submitManualCode}
+                    className="w-full bg-amber-500 text-white border-none rounded-lg py-2.5 px-4 text-[13px] font-bold cursor-pointer mt-1.5 shadow-[0_4px_12px_rgba(245,158,11,0.2)] active:opacity-80"
+                  >
+                    ⚡ Gửi lại dữ liệu
+                  </button>
+                )}
               </div>
 
-              {/* Camera chạy ngầm không gây vỡ/xấu giao diện */}
-              {!isSubmitting && scanning && (
+              {/* Camera chạy ngầm LUÔN LUÔN — ẩn khỏi UI nhưng vẫn quét */}
+              {scanning && (
                 <div className="absolute w-px h-px opacity-0 overflow-hidden pointer-events-none">
                   <video ref={setVideoRef} playsInline muted className="w-full" />
                   <canvas ref={canvasRef} />
                 </div>
               )}
 
-              {/* CỤM NÚT DIỀU HƯỚNG DƯỚI ĐÁY ĐƯỢC THU NHỎ GỌN GÀNG HÀNG NGANG */}
-              {!isSubmitting && (
-                <>
-                  <div className="flex gap-3 mt-3 border-t border-gray-100 pt-3.5">
-                    <button
-                      onClick={() => setShowCancelModal(true)}
-                      className="flex-1 bg-white text-slate-500 border border-slate-300 rounded-lg py-2.5 px-3.5 text-[13px] font-semibold cursor-pointer active:opacity-80"
-                    >
-                      ← Hủy & Quay lại
-                    </button>
-                    <button
-                      onClick={checkOrder}
-                      disabled={!currentOrderId}
-                      className="flex-1 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg py-2.5 px-3.5 text-[13px] font-semibold cursor-pointer active:opacity-80 disabled:opacity-40"
-                    >
-                      🔍 Kiểm tra
-                    </button>
-                  </div>
-                  {checkResult && (
-                    <div className={`mt-2.5 rounded-xl px-3.5 py-3 text-[13px] border ${checkResult.error ? 'bg-red-50 border-red-200 text-red-700' : checkResult.status === 'PAID' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                      {checkResult.error
-                        ? `⚠ ${checkResult.error}`
-                        : checkResult.status === 'PAID'
-                          ? `✅ Đã thanh toán — Mã GD: ${checkResult.transId || '—'}`
-                          : checkResult.status === 'FAILED'
-                            ? `❌ Giao dịch thất bại — ${checkResult.message || ''}`
-                            : `⏳ ${checkResult.status || 'Đang chờ'} — ${checkResult.message || 'Chưa có kết quả'}`
-                      }
-                    </div>
-                  )}
-                </>
+              {/* Kết quả kiểm tra inline (chỉ hiện khi PENDING) */}
+              {checkResult && (
+                <div className={`mb-3 rounded-xl px-3.5 py-3 text-[13px] border ${
+                  checkResult.error
+                    ? 'bg-red-50 border-red-200 text-red-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-700'
+                }`}>
+                  {checkResult.error
+                    ? `⚠ ${checkResult.error}`
+                    : `⏳ ${checkResult.status || 'Đang chờ'} — ${checkResult.message || 'Chưa có kết quả từ MoMo'}`
+                  }
+                </div>
               )}
 
-              {/* Trạng thái đang xử lý thanh toán */}
+              {/* Trạng thái đang xử lý */}
               {isSubmitting && (
                 <div className="py-7 px-5 text-center bg-[#f9f0f5] rounded-xl mt-3">
                   <div className="inline-block w-9 h-9 border-4 border-momo/30 border-t-momo rounded-full animate-spin mx-auto mb-3" />
@@ -777,34 +643,30 @@ export default function ScanPage() {
                 </div>
               )}
 
-              <div className="flex gap-2.5 mt-2.5">
-                {result && !result.success && (
+              {/* Nút hủy — chỉ hiện khi không đang submit */}
+              {!isSubmitting && (
+                <div className="flex gap-3 mt-3 border-t border-gray-100 pt-3.5">
                   <button
-                    onClick={() => {
-                      setResult(null)
-                      setManualCode('')
-                      setManualErr('')
-                      submitting.current = false
-                      setScanning(true)
-                    }}
-                    className="w-full bg-amber-500 text-white border-none rounded-[10px] py-2.5 cursor-pointer font-semibold active:opacity-80"
+                    onClick={() => setShowCancelModal(true)}
+                    className="flex-1 bg-white text-slate-500 border border-slate-300 rounded-lg py-2.5 px-3.5 text-[13px] font-semibold cursor-pointer active:opacity-80"
                   >
-                    🔄 Thử lại
+                    ← Hủy & Quay lại
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* POPUP MODAL XÁC NHẬN HỦY GIAO DỊCH CHẶN TREO ĐƠN (render ở mọi step) */}
+          {/* POPUP XÁC NHẬN HỦY */}
           {showCancelModal && (
             <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
               <div className="bg-white rounded-2xl w-full max-w-[350px] p-[22px] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1)]">
                 <div className="text-[15px] font-bold text-slate-800 mb-1.5 text-center">
                   Xác nhận hủy giao dịch?
                 </div>
-                <p className="text-[13px] text-slate-500 text-center mb-4.5 leading-relaxed">
-                  Hành động này sẽ hủy bỏ và đánh dấu thất bại cho đơn hàng <span className="font-mono font-semibold">{currentOrderId}</span>.
+                <p className="text-[13px] text-slate-500 text-center mb-4 leading-relaxed">
+                  Hành động này sẽ hủy bỏ và đánh dấu thất bại cho đơn hàng{' '}
+                  <span className="font-mono font-semibold">{currentOrderId}</span>.
                 </p>
                 <div className="flex gap-2.5">
                   <button
@@ -828,7 +690,22 @@ export default function ScanPage() {
             </div>
           )}
 
-          {/* TOAST: thông báo nhỏ khi bỏ qua bước xác nhận vì lấy từ link nhanh */}
+          {/* TOAST kết quả từ tab /result (thay vì reload) */}
+          {resultToast && (
+            <div
+              className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-[13px] font-semibold"
+              style={{
+                background: resultToast.status === 'success' ? '#16a34a' : '#dc2626',
+                color: '#fff',
+                animation: 'fadein 0.2s ease',
+              }}
+            >
+              {resultToast.status === 'success' ? '✅' : '❌'}
+              {resultToast.status === 'success' ? 'Thanh toán thành công' : 'Thanh toán thất bại'} — {resultToast.orderId}
+            </div>
+          )}
+
+          {/* TOAST link nhanh */}
           {quickToast && (
             <div
               className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-slate-900 text-white text-[13px] font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2"
