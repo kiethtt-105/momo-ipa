@@ -1,10 +1,9 @@
 // pages/result.js
-import { useEffect, useLayoutEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 
-const TX_BASE_URL = 'https://kiehtt.vercel.app'
-const AUTO_CLOSE_SEC = 8 // giây tự đóng sau khi có kết quả
+const AUTO_CLOSE_SEC = 15
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -33,24 +32,6 @@ async function fetchFullInfo(orderId) {
   return { ...(ourRecord || {}), ...(momoFull || {}) }
 }
 
-function appendRetrySuffix(orderInfo) {
-  const m = orderInfo.match(/^(.*)_(\d+)$/)
-  if (m) return `${m[1]}_${parseInt(m[2], 10) + 1}`
-  return `${orderInfo}_2`
-}
-
-function buildRetryUrl(info) {
-  if (!info?.amount) return '/admin/create-transaction'
-  const amt = info.amount
-  const source = info.source || ''
-  const method = (source === 'pos' || source === 'scan') ? 'scan' : 'p2p'
-  const retryOrderInfo = appendRetrySuffix(info.orderInfo || `iPOS${Date.now()}`)
-  if (method === 'p2p') {
-    return `${TX_BASE_URL}/api/momo/redirect?amount=${amt}&orderInfo=${encodeURIComponent(retryOrderInfo)}`
-  }
-  return `${TX_BASE_URL}/api/admin/scan-quick?amount=${amt}&orderInfo=${encodeURIComponent(retryOrderInfo)}`
-}
-
 const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
 
 const fmtTime = val => {
@@ -71,9 +52,11 @@ export default function ResultPage() {
   const resolvedRef = useRef(false)
   const countdownRef = useRef(null)
 
-  // ── Auto-close countdown khi có kết quả ──
+  // ── Auto-close countdown cho mọi trạng thái đã xử lý xong (trừ loading) ──
+  // Đây là trang dành cho KHÁCH (không phải admin), nên không cần CTA dẫn về
+  // các trang quản trị — chỉ cần tự đóng tab sau khi hiển thị kết quả.
   useEffect(() => {
-    if (status !== 'success' && status !== 'failed') return
+    if (status === 'loading') return
     setCountdown(AUTO_CLOSE_SEC)
     countdownRef.current = setInterval(() => {
       setCountdown(prev => {
@@ -146,7 +129,6 @@ export default function ResultPage() {
 
   const isSuccess = status === 'success'
   const isFailed  = status === 'failed'
-  const isDone    = isSuccess || isFailed
 
   const accentColor = isSuccess ? '#16a34a' : isFailed ? '#dc2626' : status === 'pending' ? '#d97706' : '#ae0070'
 
@@ -171,44 +153,35 @@ export default function ResultPage() {
 
           .page   { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 20px; position: relative; overflow: hidden; }
           .blob   { position: absolute; border-radius: 50%; filter: blur(55px); pointer-events: none; z-index: 0; }
-          .card   { position: relative; z-index: 2; width: 100%; max-width: 440px; background: rgba(255,255,255,0.92); border-radius: 24px; border: 1px solid rgba(255,255,255,0.8); box-shadow: 0 24px 60px rgba(174,0,112,0.1), 0 1px 3px rgba(0,0,0,0.04); backdrop-filter: blur(20px); overflow: hidden; animation: pop .35s cubic-bezier(.34,1.56,.64,1) both; }
-          .topbar { height: 3px; background: linear-gradient(90deg, #ff9cb7, #ae0070, #dfb2ea); }
-          .body   { padding: 32px 28px 28px; }
+          .card   { position: relative; z-index: 1; width: 100%; max-width: 420px; background: #fff; border-radius: 24px; box-shadow: 0 20px 60px rgba(174,0,112,.18); overflow: hidden; animation: pop .35s ease both; }
+          .topbar { height: 4px; background: linear-gradient(90deg, #ae0070, #d6409f); }
+          .body   { padding: 28px 24px 24px; }
 
-          /* status icon */
-          .icon-wrap { width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; animation: pop .4s cubic-bezier(.34,1.56,.64,1) .1s both; }
-          .spin-ring  { width: 64px; height: 64px; border-radius: 50%; border: 5px solid rgba(174,0,112,.12); border-top-color: #ae0070; animation: rot .8s linear infinite; margin: 0 auto 20px; }
+          .spin-ring { width: 44px; height: 44px; border: 4px solid #f0d6e8; border-top-color: #ae0070; border-radius: 50%; margin: 0 auto 16px; animation: rot .8s linear infinite; }
 
-          /* amount hero */
-          .amount-box { background: linear-gradient(135deg, #fff0f6, #ffe0ee); border-radius: 16px; padding: 20px; text-align: center; margin: 20px 0 18px; }
-          .amount-box .label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9b4470; margin-bottom: 6px; }
-          .amount-box .value { font-size: 36px; font-weight: 900; color: #ae0070; letter-spacing: -1px; line-height: 1; }
-          .amount-box .value span { font-size: 22px; font-weight: 700; margin-left: 2px; }
+          .icon-wrap { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
 
-          /* info rows */
-          .info-list  { display: flex; flex-direction: column; gap: 1px; border-radius: 14px; overflow: hidden; border: 1px solid rgba(174,0,112,.08); margin-bottom: 20px; }
-          .info-row   { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 11px 14px; background: #fff; }
-          .info-row:nth-child(even) { background: #fdf8fb; }
-          .info-row .k { font-size: 12px; color: #9b4470; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
-          .info-row .v { font-size: 13px; color: #1a0413; font-weight: 700; text-align: right; word-break: break-all; }
-          .info-row .v.mono { font-family: monospace; font-size: 11px; }
+          .amount-box { background: #faf4f8; border-radius: 16px; padding: 16px; text-align: center; margin: 16px 0; }
+          .amount-box .label { font-size: 12px; color: #9b4470; font-weight: 600; margin-bottom: 4px; }
+          .amount-box .value { font-size: 28px; font-weight: 900; color: #1a0413; }
+          .amount-box .value span { font-size: 16px; font-weight: 700; margin-left: 2px; }
 
-          /* error box */
-          .err-box  { background: #fff5f5; border: 1px solid #fecaca; border-radius: 14px; padding: 16px; margin-bottom: 18px; }
-          .err-code { font-size: 28px; font-weight: 900; color: #dc2626; text-align: center; margin-bottom: 8px; }
-          .err-msg  { font-size: 13px; color: #7f1d1d; line-height: 1.5; text-align: center; }
+          .info-list { margin: 16px 0; }
+          .info-row  { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f4e6ee; font-size: 13px; }
+          .info-row:last-child { border-bottom: none; }
+          .info-row .k { color: #9b4470; flex-shrink: 0; }
+          .info-row .v { color: #1a0413; font-weight: 600; text-align: right; word-break: break-all; }
+          .info-row .v.mono { font-family: monospace; font-size: 12px; }
+
+          .err-box { background: #fef2f2; border-radius: 14px; padding: 14px; margin: 16px 0; }
+          .err-box .err-code { font-size: 12px; font-weight: 700; color: #dc2626; margin-bottom: 4px; }
+          .err-box .err-msg  { font-size: 13px; color: #7f1d1d; line-height: 1.5; }
 
           /* countdown bar */
           .cdown-wrap { margin-bottom: 16px; }
           .cdown-text { font-size: 12px; color: #9b4470; text-align: center; margin-bottom: 6px; font-weight: 600; }
           .cdown-bar  { height: 3px; border-radius: 2px; background: #f0d6e8; overflow: hidden; }
           .cdown-fill { height: 100%; background: #ae0070; border-radius: 2px; }
-
-          /* buttons */
-          .btn-primary { display: block; width: 100%; padding: 14px; border-radius: 14px; background: #ae0070; color: #fff; font-size: 15px; font-weight: 800; text-align: center; border: none; cursor: pointer; text-decoration: none; transition: background .15s, transform .1s; }
-          .btn-primary:hover { background: #91005d; transform: translateY(-1px); }
-          .btn-ghost   { display: block; width: 100%; padding: 12px; border-radius: 14px; background: transparent; color: #9b4470; font-size: 13px; font-weight: 600; text-align: center; border: 1px solid rgba(174,0,112,.2); cursor: pointer; margin-top: 8px; text-decoration: none; transition: background .15s; }
-          .btn-ghost:hover { background: #fdf0f6; }
 
           /* pending/error/loading */
           .center-msg { text-align: center; padding: 24px 0 8px; }
@@ -306,11 +279,6 @@ export default function ResultPage() {
                 </div>
 
                 <Countdown sec={countdown} total={AUTO_CLOSE_SEC} />
-
-                <a href={buildRetryUrl(info)} className="btn-primary" style={{ background: '#dc2626' }}>
-                  Thử thanh toán lại
-                </a>
-                <a href="/admin/create-transaction" className="btn-ghost">← Tạo đơn mới</a>
               </div>
             )}
 
@@ -320,7 +288,7 @@ export default function ResultPage() {
                 <div className="icon">⏳</div>
                 <h2>Đang chờ xác nhận</h2>
                 <p>MoMo chưa phản hồi.<br />Vui lòng kiểm tra lại sau.</p>
-                <a href="/admin" className="btn-ghost" style={{ marginTop: 24 }}>← Quay về trang quản lý</a>
+                <Countdown sec={countdown} total={AUTO_CLOSE_SEC} />
               </div>
             )}
 
@@ -330,7 +298,7 @@ export default function ResultPage() {
                 <div className="icon">❗</div>
                 <h2>Không tìm thấy đơn hàng</h2>
                 <p>Link không hợp lệ hoặc đã hết hạn.</p>
-                <a href="/admin/create-transaction" className="btn-primary" style={{ marginTop: 24 }}>+ Tạo đơn mới</a>
+                <Countdown sec={countdown} total={AUTO_CLOSE_SEC} />
               </div>
             )}
 
@@ -356,7 +324,6 @@ function Countdown({ sec, total }) {
   const pct = (sec / total) * 100
   return (
     <div className="cdown-wrap">
-      <div className="cdown-text">Tự đóng sau {sec}s</div>
       <div className="cdown-bar">
         <div
           className="cdown-fill"
