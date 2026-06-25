@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     orderId = `iPOS${Date.now()}${Math.random().toString(36).slice(2, 6)}`
   }
 
-  const orderInfo = rawOrderInfo || `Thanh toan DH ${orderId}`
+  const orderInfo = rawOrderInfo || `${orderId}`
   const now = new Date().toISOString()
 
   try {

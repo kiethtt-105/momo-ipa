@@ -35,7 +35,6 @@ function genOrderId() {
 }
 
 // ─── GỢI Ý SỐ TIỀN NHANH ────────────────────────────────────
-const QUICK_AMOUNTS = [10000, 20000, 50000, 100000, 200000, 500000]
 
 // ─── DRAFT KEY ─────────────────────────────────────────────
 const DRAFT_KEY = 'momo_create_tx_draft'
@@ -293,30 +292,12 @@ export default function CreateTransactionPage() {
               ref={amountInputRef}
             />
 
-            <div className="mb-4 grid grid-cols-3 gap-2">
-              {QUICK_AMOUNTS.map(v => {
-                const active = parseInt(amount || 0, 10) === v
-                return (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => setAmount(String(v))}
-                    className={`rounded-[9px] border-[1.5px] py-2 text-[13px] font-bold transition-all ${
-                      active
-                        ? 'border-[var(--mm)] bg-[var(--mm)] text-white'
-                        : 'border-[var(--border)] bg-white text-[#495057] hover:border-[var(--mm)] hover:bg-[#fff0f7] hover:text-[var(--mm)]'
-                    }`}
-                  >
-                    {v >= 1_000_000 ? `${v / 1_000_000}tr` : `${v / 1_000}k`}
-                  </button>
-                )
-              })}
-            </div>
 
             <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Nhập thông tin đơn hàng</label>
             <input
               type="text"
               value={orderInfo}
+              readOnly
               onChange={e => setOrderInfo(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreate()}
               className="mb-1 w-full rounded-[10px] border-[1.5px] border-[var(--border)] bg-[#fafafa] px-3.5 py-2.5 font-mono text-sm text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.1)]"

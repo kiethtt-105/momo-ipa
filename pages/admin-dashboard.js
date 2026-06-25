@@ -1067,7 +1067,7 @@ export default function AdminDashboardPage() {
             <div className="mx-auto mb-[18px] flex h-[60px] w-[60px] items-center justify-center rounded-2xl border border-[rgba(174,0,112,0.1)] bg-white shadow-[0_4px_12px_rgba(174,0,112,0.08)]">
               <img src="/Main.png" alt="Logo" className="h-11 w-11 object-contain" />
             </div>
-            <h1 className="mb-5 text-[22px] font-extrabold tracking-[-0.5px] text-[#111827]">Quản trị Giao dịch</h1>
+            <h1 className="mb-5 text-[22px] font-extrabold tracking-[-0.5px] text-[#111827]">Nhập mật khẩu để tiếp tục</h1>
             <div className="text-left">
               <input
                 type="password" value={password} autoFocus
