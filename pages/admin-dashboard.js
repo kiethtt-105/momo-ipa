@@ -29,12 +29,7 @@ const NAV_ITEMS = [
 ]
 
 function openCreateTransactionPopup() {
-  const w = 460, h = 780
-  const left = Math.max(0, (window.screen.width  - w) / 2)
-  const top  = Math.max(0, (window.screen.height - h) / 2)
-  const win  = window.open('/admin/create-transaction', 'momo_ctx',
-    `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no,location=no`)
-  win?.focus()
+  window.open('/admin/create-transaction', '_blank');
 }
 
 const fmt     = n  => parseInt(n || 0).toLocaleString('vi-VN')
@@ -727,7 +722,7 @@ function CreateSection() {
             className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[9px] bg-[#ae0070] px-3.5 py-[7px] text-[13px] font-bold text-white shadow-[0_4px_14px_rgba(174,0,112,0.25)] transition-all hover:-translate-y-px hover:bg-[#91005d]"
             onClick={openCreateTransactionPopup}
           >
-            Mở cửa sổ riêng ↗
+            Mở trang tạo giao dịch ↗
           </button>
         </div>
       </div>
