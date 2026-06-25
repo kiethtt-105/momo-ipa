@@ -44,7 +44,9 @@ export default async function handler(req, res) {
 }
 
 async function handleQuickRedirect(req, res) {
-  const { amount, orderInfo = 'Thanh toán tại quầy' } = req.query
+  //const { amount, orderInfo = 'Thanh toán tại quầy' } = req.query
+  const { amount, orderInfo = '' } = req.query
+
   const amt = parseInt(amount)
 
   if (!amt || isNaN(amt) || amt < 1000 || amt > 50_000_000) {

@@ -118,6 +118,8 @@ export default function ScanPage() {
     setCurrentOrderId(generatedId)
     submitting.current = true
 
+    const finalOrderInfo = info || `Thanh toan DH iPOS${generatedId.replace('POS', '')}`
+
     try {
       await fetch('/api/momo/save-pending', {
         method: 'POST',
@@ -125,7 +127,7 @@ export default function ScanPage() {
         body: JSON.stringify({
           orderId: generatedId,
           amount: parseInt(amt),
-          orderInfo: info || `iPOS${generatedId.replace('POS', '')}`
+          orderInfo: finalOrderInfo
         }),
       })
     } catch (e) {
@@ -135,7 +137,6 @@ export default function ScanPage() {
       setStep('scan')
     }
   }
-
   useEffect(() => {
     if (!router.isReady) return
 
