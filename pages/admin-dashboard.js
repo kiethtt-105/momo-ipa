@@ -24,7 +24,7 @@ const FILTERS = [
 
 const NAV_ITEMS = [
   { key: 'history', label: 'Lịch sử giao dịch', sub: 'Toàn bộ đơn hàng',  icon: IconHistory },
-  { key: 'create',  label: 'Tạo giao dịch',     sub: 'P2P / Scan',        icon: IconPlus   },
+  { key: 'create',  label: 'Tạo giao dịch',     sub: 'P2P / Scan / ATM',  icon: IconPlus   },
   { key: 'lookup',  label: 'Tra cứu giao dịch', sub: 'Theo mã đơn MoMo',  icon: IconSearch },
 ]
 
@@ -683,7 +683,7 @@ function CreateSection() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-[19px] font-extrabold tracking-[-0.3px] text-[#111827]">Tạo giao dịch</h1>
-          <p className="mt-0.5 text-xs text-[#6b7280]">Tạo thanh toán mới qua P2P hoặc quét mã QR (Scan)</p>
+          <p className="mt-0.5 text-xs text-[#6b7280]">Tạo thanh toán mới qua P2P, quét mã QR (Scan) hoặc thẻ ATM</p>
         </div>
         <div className="flex items-center gap-2">
           <button

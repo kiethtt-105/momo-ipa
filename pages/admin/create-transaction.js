@@ -13,9 +13,10 @@ const TX_BASE_URL = 'https://kiehtt.vercel.app'
 function buildTxUrl(method, amount, orderInfo) {
   const amt = parseInt(amount, 10)
   if (!amt || amt <= 0) return null
-  const path = method === 'p2p'
-    ? '/api/momo/create-p2p'    // gọi API tạo giao dịch P2P (trả JSON có payUrl)
-    : '/api/momo/scan'         // gọi API tạo giao dịch Scan QR (trả redirect 302 trực tiếp)
+  const path =
+    method === 'p2p' ? '/api/momo/create-p2p'   // gọi API tạo giao dịch P2P (trả JSON có payUrl)
+    : method === 'atm' ? '/api/momo/create-atm' // ATM hosted — cũng trả JSON có payUrl, khách nhập thẻ trên trang MoMo
+    : '/api/momo/scan'                          // gọi API tạo giao dịch Scan QR (trả redirect 302 trực tiếp)
   return `${TX_BASE_URL}${path}?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
 }
 
@@ -42,7 +43,7 @@ const DRAFT_KEY = 'momo_create_tx_draft'
 // ─── MAIN COMPONENT ────────────────────────────────────────
 export default function CreateTransactionPage() {
   const router = useRouter()
-  const [method,    setMethod]    = useState('scan') // 'p2p' | 'scan' — mặc định Scan QR 
+  const [method,    setMethod]    = useState('scan') // 'p2p' | 'scan' | 'atm' — mặc định Scan QR
   const [amount,     setAmount]     = useState('')
   const [orderInfo,  setOrderInfo]  = useState(() => genOrderId())
   const [lastUrl,    setLastUrl]    = useState('')
@@ -76,7 +77,7 @@ export default function CreateTransactionPage() {
   useEffect(() => {
     if (!router.isReady) return
     const { method: qMethod, amount: qAmount, orderInfo: qOrderInfo } = router.query
-    if (qMethod === 'p2p' || qMethod === 'scan') setMethod(qMethod)
+    if (qMethod === 'p2p' || qMethod === 'scan' || qMethod === 'atm') setMethod(qMethod)
     if (qAmount) setAmount(String(parseInt(qAmount, 10) || ''))
     if (qOrderInfo) setOrderInfo(String(qOrderInfo))
   }, [router.isReady])
@@ -134,12 +135,16 @@ export default function CreateTransactionPage() {
   }, [resultToast])
 
   const isP2P     = method === 'p2p'
+  const isATM     = method === 'atm'
   const canSubmit = parseInt(amount || 0, 10) > 0
 
 // ── XỬ LÝ TẠO GIAO DỊCH ─────────────────────────────────────
-  // Bấm nút "Xác nhận tạo giao dịch" — gọi API tạo giao dịch, mở tab mới dẫn tới payUrl (P2P) hoặc redirect trực tiếp (Scan QR)  
+  // Bấm nút "Xác nhận tạo giao dịch" — gọi API tạo giao dịch, mở tab mới dẫn tới payUrl (P2P/ATM) hoặc redirect trực tiếp (Scan QR)
   const handleCreate = async () => {
     const finalOrderInfo = (orderInfo || '').trim() || genOrderId()
+
+    // ── P2P & ATM hosted: cả hai đều trả JSON có payUrl, cần fetch trước khi
+    // mở tab. Scan QR thì server trả redirect 302 trực tiếp nên mở thẳng url.
     const url = buildTxUrl(method, amount, finalOrderInfo)
     if (!url) return
     setLastUrl(url)
@@ -149,12 +154,12 @@ export default function CreateTransactionPage() {
     setPendingOrders(prev => [...prev, { orderId: finalOrderInfo, amount: parseInt(amount, 10) || 0 }])
     setOrderInfo(genOrderId()) // sinh mã mới cho lần tạo tiếp theo
 
-    if (!isP2P) {
+    if (!isP2P && !isATM) {
       window.open(url, '_blank', 'noopener,noreferrer')
       return
     }
 
-    const win = window.open('', '_blank') 
+    const win = window.open('', '_blank')
     try {
       const res = await fetch(url)
       const data = await res.json()
@@ -170,7 +175,7 @@ export default function CreateTransactionPage() {
         window.open(data.payUrl, '_blank', 'noopener,noreferrer')
       }
     } catch (e) {
-      console.error('Lỗi gọi create-p2p:', e)
+      console.error(`Lỗi gọi create-${method}:`, e)
       setPendingOrders(prev => prev.filter(o => o.orderId !== finalOrderInfo))
       win?.close()
       alert('Lỗi server, thử lại sau')
@@ -251,7 +256,10 @@ export default function CreateTransactionPage() {
             <div className="relative mb-2.5 flex rounded-2xl bg-[#f3edf1] p-1">
               <div
                 className="absolute inset-y-1 rounded-xl bg-white shadow-[0_2px_10px_rgba(174,0,112,0.18)] transition-[left] duration-300 ease-out"
-                style={{ left: isP2P ? '4px' : '50%', width: 'calc(50% - 4px)' }}
+                style={{
+                  left: isP2P ? '4px' : isATM ? '66.666%' : '33.333%',
+                  width: 'calc(33.333% - 4px)',
+                }}
               />
               <button
                 type="button"
@@ -264,13 +272,13 @@ export default function CreateTransactionPage() {
                   <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
                   <rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM21 17v4h-4M14 21h3"/>
                 </svg>
-                Giao dịch P2P
+                P2P
               </button>
               <button
                 type="button"
                 onClick={() => setMethod('scan')}
                 className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold transition-colors ${
-                  !isP2P ? 'text-[var(--mm)]' : 'text-[#9a8a93] hover:text-[#6b5c64]'
+                  method === 'scan' ? 'text-[var(--mm)]' : 'text-[#9a8a93] hover:text-[#6b5c64]'
                 }`}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -278,6 +286,18 @@ export default function CreateTransactionPage() {
                   <path d="M12 11v4M9 14h6"/>
                 </svg>
                 Scan QR
+              </button>
+              <button
+                type="button"
+                onClick={() => setMethod('atm')}
+                className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold transition-colors ${
+                  isATM ? 'text-[var(--mm)]' : 'text-[#9a8a93] hover:text-[#6b5c64]'
+                }`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 9h20"/>
+                </svg>
+                Thẻ ATM
               </button>
             </div>
 
@@ -300,10 +320,18 @@ export default function CreateTransactionPage() {
               readOnly
               onChange={e => setOrderInfo(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreate()}
-              className="mb-1 w-full rounded-[10px] border-[1.5px] border-[var(--border)] bg-[#fafafa] px-3.5 py-2.5 font-mono text-sm text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.1)]"
+              className="mb-3 w-full rounded-[10px] border-[1.5px] border-[var(--border)] bg-[#fafafa] px-3.5 py-2.5 font-mono text-sm text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.1)]"
             />
 
-            {/* Submit */}
+            {/* ATM hosted: khách sẽ tự nhập thẻ trên trang của MoMo sau khi
+                bấm xác nhận — server không nhận/lưu thông tin thẻ. */}
+            {isATM && (
+              <p className="mb-3 text-[10.5px] leading-relaxed text-[var(--admin-muted)]">
+                Khách sẽ nhập số thẻ, tên chủ thẻ và xác thực OTP ngay trên trang thanh toán của MoMo sau khi bấm xác nhận.
+              </p>
+            )}
+
+
             <button
               className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--mm)] py-[13px] font-[var(--admin-font)] text-[15px] font-bold text-white shadow-[0_6px_20px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-px hover:bg-[#91005d] disabled:cursor-not-allowed disabled:opacity-50"
               onClick={handleCreate}
