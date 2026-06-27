@@ -8,6 +8,7 @@ const redis = new Redis({
 
 const STORE_ID = process.env.MOMO_STORE_ID || ''
 const STORE_NAME = process.env.MOMO_STORE_NAME || ''
+const PARTNER_NAME = process.env.MOMO_PARTNER_NAME || ''
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -36,9 +37,10 @@ export default async function handler(req, res) {
 
   const orderInfo = rawOrderInfo || `${orderId}`
 
-  // Cho phép override storeId/storeName theo request, fallback về env
+  // Cho phép override storeId/storeName/partnerName theo request, fallback về env
   const storeId = (params.storeId || STORE_ID || '').toString().trim()
   const storeName = (params.storeName || STORE_NAME || '').toString().trim()
+  const partnerName = (params.partnerName || PARTNER_NAME || '').toString().trim()
 
   const now = new Date().toISOString()
 
@@ -56,6 +58,7 @@ export default async function handler(req, res) {
         source: 'create-p2p',
         storeId,
         storeName,
+        partnerName,
       }),
     })
 
@@ -65,6 +68,7 @@ export default async function handler(req, res) {
       orderInfo,
       storeId,
       storeName,
+      partnerName,
     })
 
     if (result.resultCode !== 0) {
