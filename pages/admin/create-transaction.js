@@ -742,7 +742,6 @@ export default function CreateTransactionPage() {
             <img src="/Main.png" alt="" className="header-logo" />
             <div>
               <div className="header-text-title">Tạo Giao Dịch</div>
-              <div className="header-text-sub">Tạo link &amp; QR thanh toán MoMo</div>
             </div>
           </div>
 
