@@ -1,5 +1,4 @@
 // pages/admin/create-transaction.js
-import { requireAdmin } from '../../lib/requireAdmin'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
@@ -7,16 +6,13 @@ import Head from 'next/head'
 // ─── CONSTANTS ─────────────────────────────────────────────
 const TX_BASE_URL = 'https://kiehtt.vercel.app'
 
-// ─── BUILD TARGET URL ──────────────────────────────────────
-// Đây chính là "API" được gọi khi bấm nút — cùng dạng URL này có thể tái sử dụng trực tiếp trong iPhone Shortcuts 
-// (action"Get Contents of URL" / "Open URL") để tạo giao dịch nhanh
 function buildTxUrl(method, amount, orderInfo) {
   const amt = parseInt(amount, 10)
   if (!amt || amt <= 0) return null
   const path =
-    method === 'p2p' ? '/api/momo/create-p2p'   // gọi API tạo giao dịch P2P (trả JSON có payUrl)
-    : method === 'atm' ? '/api/momo/create-atm' // ATM hosted — cũng trả JSON có payUrl, khách nhập thẻ trên trang MoMo
-    : '/api/momo/scan'                          // gọi API tạo giao dịch Scan QR (trả redirect 302 trực tiếp)
+    method === 'p2p' ? '/api/momo/create-p2p'
+    : method === 'atm' ? '/api/momo/create-atm'
+    : '/api/momo/scan'
   return `${TX_BASE_URL}${path}?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
 }
 
@@ -30,33 +26,64 @@ function unformatAmount(formatted) {
   return (formatted || '').replace(/\D/g, '')
 }
 
-// ─── SINH MÃ ĐƠN MẶC ĐỊNH — đồng bộ định dạng iPOS+... trên toàn hệ thống ──
 function genOrderId() {
   return `iPOS${Date.now()}`
 }
 
-// ─── GỢI Ý SỐ TIỀN NHANH ────────────────────────────────────
-
-// ─── DRAFT KEY ─────────────────────────────────────────────
 const DRAFT_KEY = 'momo_create_tx_draft'
+
+const QUICK_AMOUNTS = [50000, 100000, 200000, 500000]
+
+// ─── ICONS ─────────────────────────────────────────────────
+const IconP2P = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+    <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+    <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+    <path d="M14 14h3v3h-3zM21 17v4h-4M14 21h3"/>
+  </svg>
+)
+const IconScan = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <path d="M3 9V5a2 2 0 0 1 2-2h2M21 9V5a2 2 0 0 0-2-2h-2M3 15v4a2 2 0 0 0 2 2h2M21 15v4a2 2 0 0 1-2 2h-2"/>
+    <line x1="12" y1="8" x2="12" y2="16"/>
+    <line x1="8" y1="12" x2="16" y2="12"/>
+  </svg>
+)
+const IconATM = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <rect x="2" y="5" width="20" height="14" rx="2"/>
+    <path d="M2 9h20M6 14h2M10 14h4"/>
+  </svg>
+)
+const IconSend = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+    <path d="M15 3h6v6"/>
+    <path d="M10 14 21 3"/>
+  </svg>
+)
+const IconRefresh = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+    <path d="M3 3v5h5"/>
+  </svg>
+)
 
 // ─── MAIN COMPONENT ────────────────────────────────────────
 export default function CreateTransactionPage() {
   const router = useRouter()
-  const [method,    setMethod]    = useState('scan') // 'p2p' | 'scan' | 'atm' — mặc định Scan QR
-  const [amount,     setAmount]     = useState('')
-  const [orderInfo,  setOrderInfo]  = useState(() => genOrderId())
-  const [lastUrl,    setLastUrl]    = useState('')
-  const [copied,     setCopied]     = useState(false)
-  // URL gọi API ẩn theo mặc định — chỉ hiện khi bấm nút (dùng để debug / lấy mẫu cho iPhone Shortcuts)
-  const [showUrl,    setShowUrl]    = useState(false)
-  // Các đơn đã bắn đi từ CỬA SỔ NÀY, đang chờ kết quả thanh toán cuối cùng — dùng để khớp với tín hiệu BroadcastChannel bắn về từ result.js.
-  const [pendingOrders, setPendingOrders] = useState([])
+  const [method,       setMethod]       = useState('scan')
+  const [amount,       setAmount]       = useState('')
+  const [orderInfo,    setOrderInfo]    = useState(() => genOrderId())
 
-  const [resultToast,   setResultToast]   = useState(null) // { orderId, status, amount }
+  const [copied,       setCopied]       = useState(false)
+
+  const [pendingOrders, setPendingOrders] = useState([])
+  const [resultToast,  setResultToast]  = useState(null)
+  const [loading,      setLoading]      = useState(false)
   const amountInputRef = useRef(null)
 
-  // Khôi phục draft đã nhập trước đó (nếu lỡ F5)
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -67,13 +94,9 @@ export default function CreateTransactionPage() {
         if (d.amount) setAmount(d.amount)
         if (d.orderInfo) setOrderInfo(d.orderInfo)
       }
-    } catch (e) {
-      console.error('Không khôi phục được draft tạo giao dịch:', e)
-    }
+    } catch (e) {}
   }, [])
 
-  // Đọc ?method=&amount=&orderInfo= từ URL — dùng khi quay lại từ nút
-  // "Thử thanh toán lại" ở result.js. ƯU TIÊN HƠN draft cũ vì đây là ý định hiện tại của admin (thử lại 1 đơn cụ thể), không phải nháp đang gõ dở.
   useEffect(() => {
     if (!router.isReady) return
     const { method: qMethod, amount: qAmount, orderInfo: qOrderInfo } = router.query
@@ -82,25 +105,21 @@ export default function CreateTransactionPage() {
     if (qOrderInfo) setOrderInfo(String(qOrderInfo))
   }, [router.isReady])
 
-  // Tự lưu lại draft mỗi khi admin thay đổi method/amount/orderInfo
   useEffect(() => {
     if (typeof window === 'undefined') return
     sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ method, amount, orderInfo }))
   }, [method, amount, orderInfo])
 
-  // Tự focus vào ô Amount khi mở trang trên desktop (không focus trên mobile vì bàn phím ảo sẽ bật lên che mất form)
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth > 768) {
       amountInputRef.current?.focus()
     }
   }, [])
 
-  // ── NHẬN KẾT QUẢ THANH TOÁN QUA QUERY STRING ──────────────
   useEffect(() => {
     if (!router.isReady) return
     const { resultOrderId, resultStatus, resultAmount, resultMessage } = router.query
     if (!resultOrderId || !resultStatus) return
-
     setResultToast({
       orderId: resultOrderId,
       status: resultStatus,
@@ -111,7 +130,6 @@ export default function CreateTransactionPage() {
     router.replace('/admin/create-transaction', undefined, { shallow: true })
   }, [router.isReady])
 
-// ── NHẬN KẾT QUẢ THANH TOÁN QUA BROADCAST CHANNEL ─────────
   useEffect(() => {
     if (typeof window === 'undefined' || !window.BroadcastChannel) return
     const ch = new BroadcastChannel('momo-result')
@@ -127,7 +145,6 @@ export default function CreateTransactionPage() {
     return () => ch.close()
   }, [])
 
-  // Tự ẩn popup kết quả sau 6 giây (vẫn có thể bấm ✕ để tắt sớm hơn)
   useEffect(() => {
     if (!resultToast) return
     const t = setTimeout(() => setResultToast(null), 60000)
@@ -136,32 +153,29 @@ export default function CreateTransactionPage() {
 
   const isP2P     = method === 'p2p'
   const isATM     = method === 'atm'
-  const canSubmit = parseInt(amount || 0, 10) > 0
+  const canSubmit  = parseInt(amount || 0, 10) > 0
+  // URL preview — realtime theo method/amount/orderInfo
+  const previewUrl = buildTxUrl(method, amount, orderInfo) || ''
 
-// ── XỬ LÝ TẠO GIAO DỊCH ─────────────────────────────────────
-  // Bấm nút "Xác nhận tạo giao dịch" — gọi API tạo giao dịch, mở tab mới dẫn tới payUrl (P2P/ATM) hoặc redirect trực tiếp (Scan QR)
   const handleCreate = async () => {
     const finalOrderInfo = (orderInfo || '').trim() || genOrderId()
-
-    // ── P2P & ATM hosted: cả hai đều trả JSON có payUrl, cần fetch trước khi
-    // mở tab. Scan QR thì server trả redirect 302 trực tiếp nên mở thẳng url.
     const url = buildTxUrl(method, amount, finalOrderInfo)
     if (!url) return
-    setLastUrl(url)
-    setCopied(false)
-    // Ghi nhớ đơn vừa bắn đi — để khi quay lại từ result.js (qua query string
-    // hoặc BroadcastChannel nếu có tab khác), trang này khớp được đơn.
+
+
+    setLoading(true)
     setPendingOrders(prev => [...prev, { orderId: finalOrderInfo, amount: parseInt(amount, 10) || 0 }])
-    setOrderInfo(genOrderId()) // sinh mã mới cho lần tạo tiếp theo
+    setOrderInfo(genOrderId())
 
     if (!isP2P && !isATM) {
       window.open(url, '_blank', 'noopener,noreferrer')
+      setLoading(false)
       return
     }
 
     const win = window.open('', '_blank')
     try {
-      const res = await fetch(url)
+      const res  = await fetch(url)
       const data = await res.json()
       if (!res.ok || !data.payUrl) {
         setPendingOrders(prev => prev.filter(o => o.orderId !== finalOrderInfo))
@@ -175,19 +189,26 @@ export default function CreateTransactionPage() {
         window.open(data.payUrl, '_blank', 'noopener,noreferrer')
       }
     } catch (e) {
-      console.error(`Lỗi gọi create-${method}:`, e)
       setPendingOrders(prev => prev.filter(o => o.orderId !== finalOrderInfo))
       win?.close()
       alert('Lỗi server, thử lại sau')
+    } finally {
+      setLoading(false)
     }
   }
 
   const copyUrl = () => {
-    if (!lastUrl) return
-    navigator.clipboard?.writeText(lastUrl)
+    if (!previewUrl) return
+    navigator.clipboard?.writeText(previewUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
+
+  const methodConfig = [
+    { key: 'p2p',  label: 'P2P',     icon: <IconP2P />,  desc: 'QR chuyển tiền' },
+    { key: 'scan', label: 'Scan QR', icon: <IconScan />, desc: 'Quét mã nhanh'   },
+    { key: 'atm',  label: 'Thẻ ATM', icon: <IconATM />,  desc: 'Nhập thẻ nội địa' },
+  ]
 
   return (
     <>
@@ -196,178 +217,663 @@ export default function CreateTransactionPage() {
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" />
       </Head>
+
       <style jsx global>{`
+        *, *::before, *::after { box-sizing: border-box; }
         html, body, #__next {
-          margin: 0;
-          padding: 0;
-          height: 100%;
+          margin: 0; padding: 0;
+          height: 100%; width: 100%;
           overflow: hidden;
+          font-family: 'Outfit', -apple-system, sans-serif;
         }
-      `}
-      </style>
+        :root {
+          --mm: #ae0070;
+          --mm-light: rgba(174,0,112,0.08);
+          --mm-mid: rgba(174,0,112,0.15);
+          --mm-glow: rgba(174,0,112,0.22);
+          --surface: #ffffff;
+          --bg: #f7eff5;
+          --border: #ede0e9;
+          --text: #1a0f16;
+          --muted: #9c8094;
+          --subtle: #f2eaf0;
+        }
 
-      <div className="relative flex h-[100dvh] w-full flex-col items-center justify-center overflow-y-auto overflow-x-hidden bg-[#f5edf2] p-5 font-[var(--admin-font)] text-[var(--admin-text)]">
-        {resultToast && (
-          <div
-            className={`fixed inset-x-0 top-4 z-50 mx-auto flex w-[92%] max-w-[400px] items-center gap-3 rounded-2xl border px-4 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.14)] ${
-              resultToast.status === 'success'
-                ? 'border-[#bbf7d0] bg-[#f0fdf4]'
-                : 'border-[#fecaca] bg-[#fef2f2]'
-            }`}
-          >
-            <div
-              className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-base font-black ${
-                resultToast.status === 'success' ? 'bg-[#dcfce7] text-[#16a34a]' : 'bg-[#fee2e2] text-[#dc2626]'
-              }`}
-            >
-              {resultToast.status === 'success' ? '✓' : '✗'}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className={`text-[13px] font-extrabold ${resultToast.status === 'success' ? 'text-[#16a34a]' : 'text-[#dc2626]'}`}>
-                {resultToast.status === 'success' ? 'Thanh toán thành công' : 'Thanh toán thất bại'}
-              </div>
-              <div className="truncate text-[11.5px] text-[var(--admin-muted)]">
-                {resultToast.orderId}
-                {resultToast.amount ? ` · ${resultToast.amount.toLocaleString('en-US')}đ` : ''}
-              </div>
-            </div>
-            <button
-              className="flex-shrink-0 px-1 text-sm text-[var(--admin-muted)] hover:text-[var(--admin-text)]"
-              onClick={() => setResultToast(null)}
-            >
-              ✕
-            </button>
+        /* ── LAYOUT ROOT ── */
+        .page-root {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          height: 100dvh;
+          background: var(--bg);
+          padding: 0;
+        }
+
+        /* ── CARD ── */
+        .card {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          max-width: 100%;
+          max-height: 100%;
+          background: var(--surface);
+          overflow-y: auto;
+          overflow-x: hidden;
+          display: flex;
+          flex-direction: column;
+        }
+
+        /* Tablet+ → centered card with border-radius */
+        @media (min-width: 600px) {
+          .page-root { padding: 24px; }
+          .card {
+            max-width: 480px;
+            max-height: calc(100dvh - 48px);
+            border-radius: 24px;
+            box-shadow: 0 32px 80px rgba(174,0,112,0.12), 0 0 0 1px rgba(174,0,112,0.06);
+          }
+        }
+        @media (min-width: 900px) {
+          .page-root { padding: 32px; }
+          .card {
+            max-width: 500px;
+            max-height: calc(100dvh - 64px);
+          }
+        }
+
+        /* ── TOP STRIPE ── */
+        .top-stripe {
+          flex-shrink: 0;
+          height: 3px;
+          background: linear-gradient(90deg, #f9a8c9 0%, var(--mm) 50%, #c084d4 100%);
+        }
+
+        /* ── HEADER ── */
+        .card-header {
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 18px 20px 0;
+        }
+        .header-logo {
+          width: 40px; height: 40px;
+          border-radius: 12px;
+          object-fit: contain;
+          background: var(--subtle);
+          flex-shrink: 0;
+        }
+        .header-text-title {
+          font-size: 18px;
+          font-weight: 900;
+          letter-spacing: -0.5px;
+          color: var(--mm);
+          line-height: 1.1;
+        }
+        .header-text-sub {
+          font-size: 11.5px;
+          font-weight: 500;
+          color: var(--muted);
+          margin-top: 1px;
+        }
+
+        /* ── BODY ── */
+        .card-body {
+          flex: 1;
+          padding: 16px 20px 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+        }
+
+        /* ── SECTION LABEL ── */
+        .field-label {
+          font-size: 10.5px;
+          font-weight: 700;
+          letter-spacing: 0.7px;
+          text-transform: uppercase;
+          color: var(--muted);
+          margin-bottom: 8px;
+        }
+
+        /* ── METHOD TABS ── */
+        .method-tabs {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+          margin-bottom: 20px;
+        }
+        .method-tab {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          padding: 11px 4px 10px;
+          border-radius: 12px;
+          border: 1.5px solid var(--border);
+          background: var(--subtle);
+          cursor: pointer;
+          transition: all 0.18s ease;
+          font-family: inherit;
+          outline: none;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .method-tab:hover {
+          border-color: rgba(174,0,112,0.3);
+          background: var(--mm-light);
+        }
+        .method-tab.active {
+          border-color: var(--mm);
+          background: var(--mm-light);
+          box-shadow: 0 0 0 3px var(--mm-mid);
+        }
+        .method-tab-icon {
+          color: var(--muted);
+          transition: color 0.18s;
+          line-height: 0;
+        }
+        .method-tab.active .method-tab-icon { color: var(--mm); }
+        .method-tab-label {
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--muted);
+          transition: color 0.18s;
+        }
+        .method-tab.active .method-tab-label { color: var(--mm); }
+        .method-tab-desc {
+          font-size: 9.5px;
+          font-weight: 500;
+          color: var(--muted);
+          transition: color 0.18s;
+          text-align: center;
+          line-height: 1.3;
+        }
+        .method-tab.active .method-tab-desc { color: rgba(174,0,112,0.7); }
+
+        /* ── AMOUNT SECTION ── */
+        .amount-section { margin-bottom: 18px; }
+        .amount-input-wrap {
+          position: relative;
+          margin-bottom: 10px;
+        }
+        .amount-input {
+          width: 100%;
+          border: 1.5px solid var(--border);
+          border-radius: 14px;
+          background: var(--subtle);
+          padding: 12px 14px 12px 42px;
+          font-family: 'Outfit', sans-serif;
+          font-size: 24px;
+          font-weight: 800;
+          letter-spacing: -0.5px;
+          color: var(--text);
+          outline: none;
+          transition: all 0.18s ease;
+          -webkit-appearance: none;
+        }
+        .amount-input::placeholder { color: #d0b8c8; font-weight: 600; font-size: 20px; }
+        .amount-input:focus {
+          border-color: var(--mm);
+          background: #fff;
+          box-shadow: 0 0 0 3px var(--mm-mid);
+        }
+        .amount-input.has-value { color: var(--mm); }
+        .amount-prefix {
+          position: absolute;
+          left: 16px;
+          top: 50%;
+          transform: translateY(-50%);
+          font-size: 18px;
+          font-weight: 700;
+          color: var(--muted);
+          pointer-events: none;
+        }
+        .amount-input.has-value + .amount-prefix,
+        .amount-input:focus + .amount-prefix {
+          color: var(--mm);
+        }
+        /* ── Fix: prefix before input in DOM, use sibling trick ── */
+        .amount-input-wrap .prefix-label {
+          position: absolute;
+          left: 16px;
+          top: 50%; transform: translateY(-50%);
+          font-size: 16px;
+          font-weight: 800;
+          color: var(--muted);
+          pointer-events: none;
+          transition: color 0.18s;
+        }
+
+        /* ── QUICK AMOUNTS ── */
+        .quick-amounts {
+          display: flex;
+          gap: 7px;
+          flex-wrap: wrap;
+        }
+        .quick-btn {
+          flex: 1;
+          min-width: 0;
+          padding: 7px 4px;
+          border-radius: 10px;
+          border: 1.5px solid var(--border);
+          background: transparent;
+          font-family: inherit;
+          font-size: 11.5px;
+          font-weight: 700;
+          color: var(--muted);
+          cursor: pointer;
+          transition: all 0.15s ease;
+          white-space: nowrap;
+          text-align: center;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .quick-btn:hover, .quick-btn:active {
+          border-color: var(--mm);
+          color: var(--mm);
+          background: var(--mm-light);
+        }
+
+        /* ── ORDER INFO ── */
+        .order-section { margin-bottom: 20px; }
+        .order-input-wrap {
+          display: flex;
+          gap: 8px;
+          align-items: stretch;
+        }
+        .order-input {
+          flex: 1;
+          min-width: 0;
+          border: 1.5px solid var(--border);
+          border-radius: 12px;
+          background: var(--subtle);
+          padding: 11px 13px;
+          font-family: 'SF Mono', 'Fira Code', monospace;
+          font-size: 12.5px;
+          font-weight: 500;
+          color: var(--text);
+          outline: none;
+          transition: all 0.18s ease;
+        }
+        .order-input:focus {
+          border-color: var(--mm);
+          background: #fff;
+          box-shadow: 0 0 0 3px var(--mm-mid);
+        }
+        .refresh-btn {
+          flex-shrink: 0;
+          width: 42px;
+          border-radius: 12px;
+          border: 1.5px solid var(--border);
+          background: var(--subtle);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: var(--muted);
+          transition: all 0.15s;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .refresh-btn:hover { border-color: var(--mm); color: var(--mm); background: var(--mm-light); }
+
+        /* ── ATM NOTICE ── */
+        .atm-notice {
+          display: flex;
+          gap: 8px;
+          align-items: flex-start;
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: #fff8f0;
+          border: 1px solid #fde8c8;
+          margin-bottom: 16px;
+        }
+        .atm-notice-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+        .atm-notice-text { font-size: 11px; line-height: 1.5; color: #9a6a2a; font-weight: 500; }
+
+        /* ── SUBMIT BTN ── */
+        .submit-btn {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 15px;
+          border-radius: 16px;
+          border: none;
+          background: linear-gradient(135deg, var(--mm) 0%, #c0006a 100%);
+          color: #fff;
+          font-family: inherit;
+          font-size: 15px;
+          font-weight: 800;
+          letter-spacing: 0.1px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 8px 24px rgba(174,0,112,0.28);
+          position: relative;
+          overflow: hidden;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .submit-btn::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+          pointer-events: none;
+        }
+        .submit-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 12px 30px rgba(174,0,112,0.35);
+        }
+        .submit-btn:active:not(:disabled) {
+          transform: translateY(0);
+          box-shadow: 0 4px 12px rgba(174,0,112,0.25);
+        }
+        .submit-btn:disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+          box-shadow: none;
+        }
+        .submit-btn.loading { opacity: 0.8; }
+
+        /* ── SPINNER ── */
+        .spinner {
+          width: 16px; height: 16px;
+          border: 2px solid rgba(255,255,255,0.4);
+          border-top-color: #fff;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── URL PREVIEW ROW ── */
+        .url-preview-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 12px;
+          padding: 9px 12px;
+          border-radius: 11px;
+          border: 1px solid var(--border);
+          background: var(--subtle);
+        }
+        .url-preview-text {
+          flex: 1;
+          min-width: 0;
+          font-family: 'SF Mono', 'Fira Code', monospace;
+          font-size: 10px;
+          color: var(--muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.4;
+        }
+        .url-copy-btn {
+          flex-shrink: 0;
+          width: 28px; height: 28px;
+          border-radius: 7px;
+          border: 1px solid var(--border);
+          background: #fff;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer;
+          color: var(--muted);
+          font-size: 11px; font-weight: 800;
+          transition: all 0.15s;
+          font-family: inherit;
+        }
+        .url-copy-btn:hover { border-color: var(--mm); color: var(--mm); background: var(--mm-light); }
+        .url-copy-btn.done { background: #dcfce7; border-color: #86efac; color: #16a34a; }
+
+        /* ── RESULT TOAST ── */
+        .toast {
+          position: fixed;
+          top: 16px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 100;
+          width: calc(100% - 32px);
+          max-width: 400px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 13px 14px;
+          border-radius: 18px;
+          border: 1px solid;
+          box-shadow: 0 16px 40px rgba(0,0,0,0.15);
+          animation: toastIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
+        }
+        @keyframes toastIn {
+          from { opacity: 0; transform: translateX(-50%) translateY(-12px) scale(0.95); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+        }
+        .toast.success { background: #f0fdf4; border-color: #bbf7d0; }
+        .toast.fail    { background: #fef2f2; border-color: #fecaca; }
+        .toast-icon {
+          width: 34px; height: 34px;
+          border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 15px; font-weight: 900;
+          flex-shrink: 0;
+        }
+        .toast.success .toast-icon { background: #dcfce7; color: #16a34a; }
+        .toast.fail    .toast-icon { background: #fee2e2; color: #dc2626; }
+        .toast-body { flex: 1; min-width: 0; }
+        .toast-title {
+          font-size: 13px; font-weight: 800;
+          line-height: 1.2;
+        }
+        .toast.success .toast-title { color: #16a34a; }
+        .toast.fail    .toast-title { color: #dc2626; }
+        .toast-sub { font-size: 11px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .toast-close {
+          flex-shrink: 0;
+          width: 26px; height: 26px;
+          border-radius: 50%;
+          background: none; border: none;
+          font-size: 13px; cursor: pointer;
+          color: var(--muted);
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.15s;
+        }
+        .toast-close:hover { background: rgba(0,0,0,0.07); color: var(--text); }
+
+        /* ── DIVIDER ── */
+        .divider {
+          height: 1px;
+          background: var(--border);
+          margin: 0 0 18px;
+        }
+
+        /* ── PENDING BADGE ── */
+        .pending-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 3px 10px 3px 7px;
+          border-radius: 20px;
+          background: var(--mm-light);
+          border: 1px solid rgba(174,0,112,0.18);
+          font-size: 10.5px;
+          font-weight: 700;
+          color: var(--mm);
+          margin-bottom: 14px;
+        }
+        .pending-dot {
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          background: var(--mm);
+          animation: pulse 1.2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+          0%,100% { opacity: 1; transform: scale(1); }
+          50%      { opacity: 0.5; transform: scale(0.75); }
+        }
+      `}</style>
+
+      {/* RESULT TOAST */}
+      {resultToast && (
+        <div className={`toast ${resultToast.status === 'success' ? 'success' : 'fail'}`}>
+          <div className="toast-icon">
+            {resultToast.status === 'success' ? '✓' : '✗'}
           </div>
-        )}
+          <div className="toast-body">
+            <div className="toast-title">
+              {resultToast.status === 'success' ? 'Thanh toán thành công' : 'Thanh toán thất bại'}
+            </div>
+            <div className="toast-sub">
+              {resultToast.orderId}
+              {resultToast.amount ? ` · ${resultToast.amount.toLocaleString('en-US')}đ` : ''}
+            </div>
+          </div>
+          <button className="toast-close" onClick={() => setResultToast(null)}>✕</button>
+        </div>
+      )}
 
-        <div className="max-h-full w-full max-w-[440px] overflow-y-auto rounded-[22px] bg-white/95 shadow-[0_24px_60px_rgba(174,0,112,0.1),0_0_0_1px_rgba(255,255,255,0.8)] backdrop-blur-[30px] sm:max-w-[460px]">
-          <div className="h-1 w-full bg-gradient-to-r from-[#ff9cb7] via-[var(--mm)] to-[#dfb2ea]" />
-          <div className="flex items-center gap-3 px-6 pb-4 pt-5">
-            <img src="/Main.png" alt="" className="h-9 w-9 rounded-lg object-contain" />
-            <div className="flex-1">
-              <div className="text-[17px] font-extrabold tracking-[-0.3px] text-[var(--mm)]">TẠO GIAO DỊCH</div>
-              <div className="text-[11px] font-medium text-[var(--admin-muted)]">Tạo link / QR thanh toán cho quầy</div>
+      <div className="page-root">
+        <div className="card">
+          {/* TOP STRIPE */}
+          <div className="top-stripe" />
+
+          {/* HEADER */}
+          <div className="card-header">
+            <img src="/Main.png" alt="" className="header-logo" />
+            <div>
+              <div className="header-text-title">Tạo Giao Dịch</div>
+              <div className="header-text-sub">Tạo link &amp; QR thanh toán MoMo</div>
             </div>
           </div>
 
-          <div className="px-6 pb-6">
-            <div className="relative mb-2.5 flex rounded-2xl bg-[#f3edf1] p-1">
-              <div
-                className="absolute inset-y-1 rounded-xl bg-white shadow-[0_2px_10px_rgba(174,0,112,0.18)] transition-[left] duration-300 ease-out"
-                style={{
-                  left: isP2P ? '4px' : isATM ? '66.666%' : '33.333%',
-                  width: 'calc(33.333% - 4px)',
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setMethod('p2p')}
-                className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold transition-colors ${
-                  isP2P ? 'text-[var(--mm)]' : 'text-[#9a8a93] hover:text-[#6b5c64]'
-                }`}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-                  <rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM21 17v4h-4M14 21h3"/>
-                </svg>
-                P2P
-              </button>
-              <button
-                type="button"
-                onClick={() => setMethod('scan')}
-                className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold transition-colors ${
-                  method === 'scan' ? 'text-[var(--mm)]' : 'text-[#9a8a93] hover:text-[#6b5c64]'
-                }`}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 9V5a2 2 0 0 1 2-2h2M21 9V5a2 2 0 0 0-2-2h-2M3 15v4a2 2 0 0 0 2 2h2M21 15v4a2 2 0 0 1-2 2h-2"/>
-                  <path d="M12 11v4M9 14h6"/>
-                </svg>
-                Scan QR
-              </button>
-              <button
-                type="button"
-                onClick={() => setMethod('atm')}
-                className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold transition-colors ${
-                  isATM ? 'text-[var(--mm)]' : 'text-[#9a8a93] hover:text-[#6b5c64]'
-                }`}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 9h20"/>
-                </svg>
-                Thẻ ATM
-              </button>
-            </div>
+          {/* BODY */}
+          <div className="card-body">
 
-            <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Nhập số tiền thanh toán</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={formatAmount(amount)}
-              onChange={e => setAmount(unformatAmount(e.target.value))}
-              onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreate()}
-              className="mb-3 w-full rounded-[10px] border-[1.5px] border-[var(--border)] bg-[#fafafa] px-3.5 py-2.5 font-['Outfit',_sans-serif] text-xl font-extrabold tracking-tight text-[var(--mm)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.1)]"
-              ref={amountInputRef}
-            />
-
-
-            <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">Nhập thông tin đơn hàng</label>
-            <input
-              type="text"
-              value={orderInfo}
-              readOnly
-              onChange={e => setOrderInfo(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreate()}
-              className="mb-3 w-full rounded-[10px] border-[1.5px] border-[var(--border)] bg-[#fafafa] px-3.5 py-2.5 font-mono text-sm text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.1)]"
-            />
-
-            {/* ATM hosted: khách sẽ tự nhập thẻ trên trang của MoMo sau khi
-                bấm xác nhận — server không nhận/lưu thông tin thẻ. */}
-            {isATM && (
-              <p className="mb-3 text-[10.5px] leading-relaxed text-[var(--admin-muted)]">
-                Khách sẽ nhập số thẻ, tên chủ thẻ và xác thực OTP ngay trên trang thanh toán của MoMo sau khi bấm xác nhận.
-              </p>
+            {/* Pending badge */}
+            {pendingOrders.length > 0 && (
+              <div className="pending-badge">
+                <div className="pending-dot" />
+                {pendingOrders.length} đơn đang chờ kết quả
+              </div>
             )}
 
+            {/* METHOD */}
+            <div className="field-label">Phương thức</div>
+            <div className="method-tabs">
+              {methodConfig.map(m => (
+                <button
+                  key={m.key}
+                  type="button"
+                  className={`method-tab${method === m.key ? ' active' : ''}`}
+                  onClick={() => setMethod(m.key)}
+                >
+                  <span className="method-tab-icon">{m.icon}</span>
+                  <span className="method-tab-label">{m.label}</span>
+                  <span className="method-tab-desc">{m.desc}</span>
+                </button>
+              ))}
+            </div>
 
-            <button
-              className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--mm)] py-[13px] font-[var(--admin-font)] text-[15px] font-bold text-white shadow-[0_6px_20px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-px hover:bg-[#91005d] disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={handleCreate}
-              disabled={!canSubmit}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/>
-              </svg>
-              Xác nhận tạo giao dịch
-            </button>
+            {/* AMOUNT */}
+            <div className="amount-section">
+              <div className="field-label">Số tiền thanh toán</div>
+              <div className="amount-input-wrap">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0"
+                  ref={amountInputRef}
+                  value={formatAmount(amount)}
+                  onChange={e => setAmount(unformatAmount(e.target.value))}
+                  onKeyDown={e => e.key === 'Enter' && canSubmit && !loading && handleCreate()}
+                  className={`amount-input${amount ? ' has-value' : ''}`}
+                  style={{ paddingLeft: '44px' }}
+                />
+                <span className="prefix-label" style={{
+                  color: amount ? 'var(--mm)' : 'var(--muted)'
+                }}>₫</span>
+              </div>
 
-            {lastUrl && (
-              <div className="mt-4">
+              {/* Quick amounts */}
+              <div className="quick-amounts">
+                {QUICK_AMOUNTS.map(v => (
+                  <button
+                    key={v}
+                    type="button"
+                    className="quick-btn"
+                    onClick={() => setAmount(String(v))}
+                  >
+                    {v >= 1000 ? `${v / 1000}K` : v.toLocaleString()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ORDER INFO */}
+            <div className="order-section">
+              <div className="field-label">Mã đơn hàng</div>
+              <div className="order-input-wrap">
+                <input
+                  type="text"
+                  value={orderInfo}
+                  onChange={e => setOrderInfo(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && canSubmit && !loading && handleCreate()}
+                  className="order-input"
+                />
                 <button
                   type="button"
-                  onClick={() => setShowUrl(v => !v)}
-                  className="text-[11px] font-semibold text-[var(--admin-muted)] underline-offset-2 hover:text-[var(--admin-text)] hover:underline"
+                  className="refresh-btn"
+                  title="Tạo mã mới"
+                  onClick={() => setOrderInfo(genOrderId())}
                 >
-                  {showUrl ? 'Ẩn URL' : 'Xem URL vừa gọi'}
+                  <IconRefresh />
                 </button>
-                {showUrl && (
-                  <div className="mt-2 rounded-[10px] border border-[var(--border)] bg-[#fafafa] p-3">
-                    <div className="break-all font-mono text-[11px] text-[#374151]">{lastUrl}</div>
-                    <button
-                      className="mt-2 rounded-md bg-black/[0.06] px-2.5 py-1 text-[11px] font-semibold text-[#374151] transition-colors hover:bg-black/[0.1]"
-                      onClick={copyUrl}
-                    >
-                      {copied ? '✓ Đã copy' : 'Copy URL'}
-                    </button>
-                  </div>
-                )}
+              </div>
+            </div>
+
+            {/* ATM NOTICE */}
+            {isATM && (
+              <div className="atm-notice">
+                <span className="atm-notice-icon">ℹ</span>
+                <p className="atm-notice-text">
+                  Khách sẽ nhập số thẻ, tên chủ thẻ và xác thực OTP trực tiếp trên trang thanh toán MoMo.
+                </p>
               </div>
             )}
-          </div>
-        </div>
-      </div>
+
+            {/* SUBMIT */}
+            <button
+              className={`submit-btn${loading ? ' loading' : ''}`}
+              onClick={handleCreate}
+              disabled={!canSubmit || loading}
+            >
+              {loading
+                ? <><div className="spinner" /> Đang tạo…</>
+                : <><IconSend /> Xác nhận tạo giao dịch</>
+              }
+            </button>
+
+            {/* URL PREVIEW — realtime */}
+            {previewUrl && (
+              <div className="url-preview-row">
+                <div className="url-preview-text">{previewUrl}</div>
+                <button
+                  className={`url-copy-btn${copied ? ' done' : ''}`}
+                  onClick={copyUrl}
+                  title="Copy URL"
+                >
+                  {copied ? '✓' : (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
+            )}
+
+          </div>{/* /card-body */}
+        </div>{/* /card */}
+      </div>{/* /page-root */}
     </>
   )
 }
