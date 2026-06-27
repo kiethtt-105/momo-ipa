@@ -57,6 +57,7 @@ export default async function handler(req, res) {
         paidAt: null,
         transId: '',
         payType: '',
+        paymentOption: '',
         source: 'create-p2p',
         storeId,
         storeName,

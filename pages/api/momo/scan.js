@@ -178,6 +178,7 @@ async function handlePosCharge(req, res) {
         paidAt: null,
         transId: '',
         payType: '',
+        paymentOption: '',
         source: 'pos',
       }),
     })
@@ -205,6 +206,7 @@ async function handlePosCharge(req, res) {
       paidAt: data.resultCode === 0 ? new Date().toISOString() : null,
       transId: data.transId?.toString() || '',
       payType: data.payType || 'pos',
+      paymentOption: data.paymentOption || '',
       resultCode: data.resultCode,
       message: data.message || 'Không có thông báo',
       responseTime: data.responseTime,

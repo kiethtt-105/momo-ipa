@@ -797,11 +797,10 @@ function LookupSection({ orderId, setOrderId, loading, result, error, onQuery })
               <Row label="requestId"    value={result.requestId} mono copy={() => copy(result.requestId)} />
               <Row label="transId"      value={result.transId?.toString()||'—'} mono />
               <Row label="partnerCode"  value={result.partnerCode} mono />
-              <Row label="orderInfo"    value={result.orderInfo || '—'} />
-              <Row label="amount"       value={result.amount !== undefined ? `${fmt(result.amount)} ₫` : '—'} />
-              <Row label="payType"      value={result.payType || '—'} />
-              <Row label="responseTime" value={result.responseTime ? fmtMs(result.responseTime) : '—'} />
-              <Row label="promotionInfo" value={result.promotionInfo || '—'} />
+              <Row label="amount"        value={result.amount !== undefined ? `${fmt(result.amount)} ₫` : '—'} />
+              <Row label="payType"       value={result.payType || '—'} />
+              <Row label="paymentOption" value={result.paymentOption || '—'} />
+              <Row label="responseTime"  value={result.responseTime ? fmtMs(result.responseTime) : '—'} />
             </Section>
 
             <Section title="Raw Response">
