@@ -830,7 +830,7 @@ export default function CreateTransactionPage() {
               <div className="atm-notice">
                 <span className="atm-notice-icon">ℹ</span>
                 <p className="atm-notice-text">
-                  Khách sẽ nhập số thẻ, tên chủ thẻ và xác thực OTP trực tiếp trên trang thanh toán MoMo.
+                  Khi tạo giao dịch thẻ ATM, khách hàng sẽ được chuyển hướng sang trang thanh toán của MoMo. Sau khi thanh toán xong, MoMo sẽ gửi kết quả về server của bạn (callback) và hiển thị thông báo thành công/thất bại cho khách hàng.
                 </p>
               </div>
             )}
