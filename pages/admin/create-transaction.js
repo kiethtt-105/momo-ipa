@@ -297,7 +297,7 @@ export default function CreateTransactionPage() {
             <input
               type="text"
               value={orderInfo}
-              
+              readOnly
               onChange={e => setOrderInfo(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreate()}
               className="mb-1 w-full rounded-[10px] border-[1.5px] border-[var(--border)] bg-[#fafafa] px-3.5 py-2.5 font-mono text-sm text-[var(--admin-text)] transition-all focus:border-[var(--mm)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.1)]"
