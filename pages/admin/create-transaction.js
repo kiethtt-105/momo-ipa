@@ -749,13 +749,7 @@ export default function CreateTransactionPage() {
           {/* BODY */}
           <div className="card-body">
 
-            {/* Pending badge */}
-            {pendingOrders.length > 0 && (
-              <div className="pending-badge">
-                <div className="pending-dot" />
-                {pendingOrders.length} đơn đang chờ kết quả
-              </div>
-            )}
+
 
             {/* METHOD */}
             <div className="field-label">Phương thức</div>
