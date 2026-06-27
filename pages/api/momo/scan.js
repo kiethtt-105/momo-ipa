@@ -143,9 +143,10 @@ async function handlePosCharge(req, res) {
 
   const body = {
     partnerCode: PARTNER_CODE,
-    orderId,
+    partnerName: process.env.MOMO_PARTNER_NAME || '',
     requestId,
     amount: amt,
+    orderId,
     orderInfo,
     paymentCode: encryptedCode,
     extraData,
@@ -154,9 +155,7 @@ async function handlePosCharge(req, res) {
     signature: sign(rawSignature),
   }
 
-  // Thử nghiệm: storeId/storeName không nằm trong rawSignature của API POS,
-  // thêm vào body để xem MoMo có đọc/hiển thị ở "Nhà cung cấp" hay không.
-  if (STORE_ID) body.storeId = STORE_ID
+  if (STORE_ID)   body.storeId   = STORE_ID
   if (STORE_NAME) body.storeName = STORE_NAME
 
   console.log('[scan][POST] Debug storeId/storeName:', {
