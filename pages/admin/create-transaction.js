@@ -1,5 +1,5 @@
 // pages/admin/create-transaction.js
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 
@@ -31,8 +31,44 @@ function genOrderId() {
 }
 
 const DRAFT_KEY = 'momo_create_tx_draft'
-
 const QUICK_AMOUNTS = [50000, 100000, 200000, 500000]
+
+// ─── AI AMOUNT PARSER ───────────────────────────────────────
+// Gọi Anthropic API để parse ngôn ngữ tự nhiên → số tiền VNĐ
+async function parseAmountWithAI(userInput) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      system: `Bạn là AI trợ lý tài chính chuyên parse số tiền Việt Nam từ ngôn ngữ tự nhiên.
+Nhiệm vụ: Đọc input của người dùng và trả về JSON với format sau (KHÔNG có markdown, KHÔNG có text khác):
+{
+  "amount": <số nguyên bằng đồng VNĐ hoặc null nếu không rõ>,
+  "display": "<chuỗi hiển thị thân thiện, ví dụ: 500.000đ>",
+  "suggestions": [<tối đa 3 số nguyên gợi ý liên quan>],
+  "confidence": <0.0-1.0>,
+  "note": "<giải thích ngắn gọn, tối đa 10 từ>"
+}
+
+Quy tắc parse:
+- "50k" / "50 nghìn" / "50,000" → 50000
+- "1 triệu" / "1M" / "1tr" → 1000000  
+- "2 rưỡi" / "2.5 triệu" → 2500000
+- "nửa triệu" → 500000
+- "ăn trưa" / "cà phê" → gợi ý 25000, 35000, 50000
+- "tiền điện" → gợi ý 200000, 300000, 500000
+- "tiền nhà" / "thuê nhà" → gợi ý 3000000, 5000000, 8000000
+- Nếu không có số và không đoán được context → amount: null, suggestions: []`,
+      messages: [{ role: 'user', content: userInput }],
+    }),
+  })
+  const data = await res.json()
+  const text = data.content?.map(b => b.text || '').join('') || ''
+  const clean = text.replace(/```json|```/g, '').trim()
+  return JSON.parse(clean)
+}
 
 // ─── ICONS ─────────────────────────────────────────────────
 const IconP2P = () => (
@@ -69,6 +105,210 @@ const IconRefresh = () => (
     <path d="M3 3v5h5"/>
   </svg>
 )
+const IconSparkle = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+  </svg>
+)
+const IconClose = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <path d="M18 6 6 18M6 6l12 12"/>
+  </svg>
+)
+const IconArrow = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <path d="M5 12h14M12 5l7 7-7 7"/>
+  </svg>
+)
+
+// ─── AI AMOUNT WIDGET ───────────────────────────────────────
+function AiAmountWidget({ onAmountSelect }) {
+  const [open,        setOpen]        = useState(false)
+  const [inputValue,  setInputValue]  = useState('')
+  const [loading,     setLoading]     = useState(false)
+  const [result,      setResult]      = useState(null)
+  const [error,       setError]       = useState(null)
+  const textInputRef  = useRef(null)
+  const isMobile      = useRef(false)
+
+  // Detect mobile once
+  useEffect(() => {
+    isMobile.current = window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent)
+  }, [])
+
+  // Khi mở panel → focus text input (không phải number input)
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => textInputRef.current?.focus(), 80)
+      setResult(null)
+      setError(null)
+      setInputValue('')
+    }
+  }, [open])
+
+  const handleAsk = useCallback(async (overrideInput) => {
+    const q = (overrideInput ?? inputValue).trim()
+    if (!q) return
+    setLoading(true)
+    setError(null)
+    setResult(null)
+    try {
+      const parsed = await parseAmountWithAI(q)
+      setResult(parsed)
+    } catch (e) {
+      setError('Không kết nối được AI. Thử lại sau.')
+    } finally {
+      setLoading(false)
+    }
+  }, [inputValue])
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleAsk()
+  }
+
+  const applyAmount = (amt) => {
+    onAmountSelect(String(amt))
+    setOpen(false)
+    setResult(null)
+    setInputValue('')
+  }
+
+  const EXAMPLE_PROMPTS = ['50k', '2 triệu rưỡi', 'tiền điện tháng này', 'ăn trưa']
+
+  return (
+    <>
+      {/* FAB TRIGGER */}
+      <button
+        className="ai-fab"
+        onClick={() => setOpen(v => !v)}
+        title="Gợi ý số tiền bằng AI"
+        aria-label="AI gợi ý số tiền"
+      >
+        <IconSparkle />
+        <span className="ai-fab-label">AI</span>
+      </button>
+
+      {/* BACKDROP */}
+      {open && <div className="ai-backdrop" onClick={() => setOpen(false)} />}
+
+      {/* PANEL */}
+      <div className={`ai-panel${open ? ' open' : ''}`}>
+        {/* Panel header */}
+        <div className="ai-panel-header">
+          <div className="ai-panel-title">
+            <span className="ai-panel-icon"><IconSparkle /></span>
+            Gợi ý số tiền
+          </div>
+          <button className="ai-panel-close" onClick={() => setOpen(false)}>
+            <IconClose />
+          </button>
+        </div>
+
+        {/* Text input — luôn là text để tránh bàn phím số trên mobile */}
+        <div className="ai-input-row">
+          <input
+            ref={textInputRef}
+            type="text"
+            inputMode="text"
+            className="ai-text-input"
+            placeholder='Nhập như "2 triệu", "50k", "tiền điện"…'
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <button
+            className={`ai-send-btn${loading ? ' loading' : ''}`}
+            onClick={() => handleAsk()}
+            disabled={!inputValue.trim() || loading}
+          >
+            {loading ? <div className="ai-spinner" /> : <IconArrow />}
+          </button>
+        </div>
+
+        {/* Example chips */}
+        {!result && !loading && (
+          <div className="ai-examples">
+            {EXAMPLE_PROMPTS.map(p => (
+              <button
+                key={p}
+                className="ai-example-chip"
+                onClick={() => {
+                  setInputValue(p)
+                  handleAsk(p)
+                }}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Error */}
+        {error && <div className="ai-error">{error}</div>}
+
+        {/* Result */}
+        {result && (
+          <div className="ai-result">
+            {result.amount ? (
+              <>
+                <div className="ai-result-label">Số tiền được nhận diện</div>
+                <button
+                  className="ai-result-main"
+                  onClick={() => applyAmount(result.amount)}
+                >
+                  <span className="ai-result-amount">{result.display}</span>
+                  <span className="ai-result-apply">Dùng ngay ↗</span>
+                </button>
+                {result.note && (
+                  <div className="ai-result-note">💡 {result.note}</div>
+                )}
+              </>
+            ) : (
+              <div className="ai-result-note" style={{ marginTop: 0 }}>
+                ⚠️ Không nhận diện được số tiền. Thử mô tả cụ thể hơn.
+              </div>
+            )}
+
+            {result.suggestions?.length > 0 && (
+              <>
+                <div className="ai-result-label" style={{ marginTop: 10 }}>
+                  Gợi ý liên quan
+                </div>
+                <div className="ai-suggestions">
+                  {result.suggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      className="ai-suggestion-chip"
+                      onClick={() => applyAmount(s)}
+                    >
+                      {s >= 1000000
+                        ? `${(s / 1000000).toFixed(s % 1000000 === 0 ? 0 : 1)}tr`
+                        : s >= 1000
+                        ? `${s / 1000}k`
+                        : s.toLocaleString('en-US')}
+                      <span className="ai-chip-full">{s.toLocaleString('en-US')}đ</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="ai-skeleton-wrap">
+            <div className="ai-skeleton" style={{ width: '60%' }} />
+            <div className="ai-skeleton" style={{ width: '40%', marginTop: 8 }} />
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
 
 // ─── MAIN COMPONENT ────────────────────────────────────────
 export default function CreateTransactionPage() {
@@ -78,7 +318,6 @@ export default function CreateTransactionPage() {
   const [orderInfo,    setOrderInfo]    = useState(() => genOrderId())
 
   const [copied,       setCopied]       = useState(false)
-
   const [pendingOrders, setPendingOrders] = useState([])
   const [resultToast,  setResultToast]  = useState(null)
   const [loading,      setLoading]      = useState(false)
@@ -99,7 +338,7 @@ export default function CreateTransactionPage() {
 
   useEffect(() => {
     if (!router.isReady) return
-    const { method: qMethod, amount: qAmount, orderInfo: qOrderInfo, auto } = router.query
+    const { method: qMethod, amount: qAmount, orderInfo: qOrderInfo } = router.query
     const validMethod = (qMethod === 'p2p' || qMethod === 'scan' || qMethod === 'atm') ? qMethod : null
     const validAmount = qAmount ? String(parseInt(qAmount, 10) || '') : null
 
@@ -107,7 +346,6 @@ export default function CreateTransactionPage() {
     if (validAmount) setAmount(validAmount)
     if (qOrderInfo) setOrderInfo(String(qOrderInfo))
 
-    // Nếu có đủ method + amount từ URL → tự submit luôn, không cần bấm tay
     if (validMethod && validAmount && parseInt(validAmount, 10) > 0) {
       const finalOrderInfo = qOrderInfo || genOrderId()
       if (qOrderInfo) setOrderInfo(finalOrderInfo)
@@ -182,17 +420,15 @@ export default function CreateTransactionPage() {
     return () => clearTimeout(t)
   }, [resultToast])
 
-  const isP2P     = method === 'p2p'
-  const isATM     = method === 'atm'
-  const canSubmit  = parseInt(amount || 0, 10) > 0
-  // URL preview — realtime theo method/amount/orderInfo
+  const isP2P    = method === 'p2p'
+  const isATM    = method === 'atm'
+  const canSubmit = parseInt(amount || 0, 10) > 0
   const previewUrl = buildTxUrl(method, amount, orderInfo) || ''
 
   const handleCreate = async () => {
     const finalOrderInfo = (orderInfo || '').trim() || genOrderId()
     const url = buildTxUrl(method, amount, finalOrderInfo)
     if (!url) return
-
 
     setLoading(true)
     setPendingOrders(prev => [...prev, { orderId: finalOrderInfo, amount: parseInt(amount, 10) || 0 }])
@@ -297,7 +533,6 @@ export default function CreateTransactionPage() {
           flex-direction: column;
         }
 
-        /* Tablet+ → centered card with border-radius */
         @media (min-width: 600px) {
           .page-root { padding: 24px; }
           .card {
@@ -315,14 +550,12 @@ export default function CreateTransactionPage() {
           }
         }
 
-        /* ── TOP STRIPE ── */
         .top-stripe {
           flex-shrink: 0;
           height: 3px;
           background: linear-gradient(90deg, #f9a8c9 0%, var(--mm) 50%, #c084d4 100%);
         }
 
-        /* ── HEADER ── */
         .card-header {
           flex-shrink: 0;
           display: flex;
@@ -351,7 +584,6 @@ export default function CreateTransactionPage() {
           margin-top: 1px;
         }
 
-        /* ── BODY ── */
         .card-body {
           flex: 1;
           padding: 16px 20px 20px;
@@ -360,7 +592,6 @@ export default function CreateTransactionPage() {
           gap: 0;
         }
 
-        /* ── SECTION LABEL ── */
         .field-label {
           font-size: 10.5px;
           font-weight: 700;
@@ -370,7 +601,6 @@ export default function CreateTransactionPage() {
           margin-bottom: 8px;
         }
 
-        /* ── METHOD TABS ── */
         .method-tabs {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
@@ -394,44 +624,21 @@ export default function CreateTransactionPage() {
           outline: none;
           -webkit-tap-highlight-color: transparent;
         }
-        .method-tab:hover {
-          border-color: rgba(174,0,112,0.3);
-          background: var(--mm-light);
-        }
+        .method-tab:hover { border-color: rgba(174,0,112,0.3); background: var(--mm-light); }
         .method-tab.active {
           border-color: var(--mm);
           background: var(--mm-light);
           box-shadow: 0 0 0 3px var(--mm-mid);
         }
-        .method-tab-icon {
-          color: var(--muted);
-          transition: color 0.18s;
-          line-height: 0;
-        }
+        .method-tab-icon { color: var(--muted); transition: color 0.18s; line-height: 0; }
         .method-tab.active .method-tab-icon { color: var(--mm); }
-        .method-tab-label {
-          font-size: 12px;
-          font-weight: 700;
-          color: var(--muted);
-          transition: color 0.18s;
-        }
+        .method-tab-label { font-size: 12px; font-weight: 700; color: var(--muted); transition: color 0.18s; }
         .method-tab.active .method-tab-label { color: var(--mm); }
-        .method-tab-desc {
-          font-size: 9.5px;
-          font-weight: 500;
-          color: var(--muted);
-          transition: color 0.18s;
-          text-align: center;
-          line-height: 1.3;
-        }
+        .method-tab-desc { font-size: 9.5px; font-weight: 500; color: var(--muted); transition: color 0.18s; text-align: center; line-height: 1.3; }
         .method-tab.active .method-tab-desc { color: rgba(174,0,112,0.7); }
 
-        /* ── AMOUNT SECTION ── */
         .amount-section { margin-bottom: 18px; }
-        .amount-input-wrap {
-          position: relative;
-          margin-bottom: 10px;
-        }
+        .amount-input-wrap { position: relative; margin-bottom: 10px; }
         .amount-input {
           width: 100%;
           border: 1.5px solid var(--border);
@@ -454,163 +661,86 @@ export default function CreateTransactionPage() {
           box-shadow: 0 0 0 3px var(--mm-mid);
         }
         .amount-input.has-value { color: var(--mm); }
-        .amount-prefix {
-          position: absolute;
-          left: 16px;
-          top: 50%;
-          transform: translateY(-50%);
-          font-size: 18px;
-          font-weight: 700;
-          color: var(--muted);
-          pointer-events: none;
-        }
-        .amount-input.has-value + .amount-prefix,
-        .amount-input:focus + .amount-prefix {
-          color: var(--mm);
-        }
-        /* ── Fix: prefix before input in DOM, use sibling trick ── */
         .amount-input-wrap .prefix-label {
           position: absolute;
-          left: 16px;
-          top: 50%; transform: translateY(-50%);
-          font-size: 16px;
-          font-weight: 800;
+          left: 16px; top: 50%; transform: translateY(-50%);
+          font-size: 16px; font-weight: 800;
           color: var(--muted);
           pointer-events: none;
           transition: color 0.18s;
         }
 
-        /* ── QUICK AMOUNTS ── */
-        .quick-amounts {
-          display: flex;
-          gap: 7px;
-          flex-wrap: wrap;
-        }
+        .quick-amounts { display: flex; gap: 7px; flex-wrap: wrap; }
         .quick-btn {
-          flex: 1;
-          min-width: 0;
+          flex: 1; min-width: 0;
           padding: 7px 4px;
           border-radius: 10px;
           border: 1.5px solid var(--border);
           background: transparent;
-          font-family: inherit;
-          font-size: 11.5px;
-          font-weight: 700;
+          font-family: inherit; font-size: 11.5px; font-weight: 700;
           color: var(--muted);
-          cursor: pointer;
-          transition: all 0.15s ease;
-          white-space: nowrap;
-          text-align: center;
+          cursor: pointer; transition: all 0.15s ease;
+          white-space: nowrap; text-align: center;
           -webkit-tap-highlight-color: transparent;
         }
         .quick-btn:hover, .quick-btn:active {
-          border-color: var(--mm);
-          color: var(--mm);
-          background: var(--mm-light);
+          border-color: var(--mm); color: var(--mm); background: var(--mm-light);
         }
 
-        /* ── ORDER INFO ── */
         .order-section { margin-bottom: 20px; }
-        .order-input-wrap {
-          display: flex;
-          gap: 8px;
-          align-items: stretch;
-        }
+        .order-input-wrap { display: flex; gap: 8px; align-items: stretch; }
         .order-input {
-          flex: 1;
-          min-width: 0;
+          flex: 1; min-width: 0;
           border: 1.5px solid var(--border);
           border-radius: 12px;
           background: var(--subtle);
           padding: 11px 13px;
-          font-family: 'SF Mono', 'Fira Code', monospace;
-          font-size: 12.5px;
-          font-weight: 500;
+          font-family: 'SF Mono','Fira Code', monospace;
+          font-size: 12.5px; font-weight: 500;
           color: var(--text);
-          outline: none;
-          transition: all 0.18s ease;
+          outline: none; transition: all 0.18s ease;
         }
-        .order-input:focus {
-          border-color: var(--mm);
-          background: #fff;
-          box-shadow: 0 0 0 3px var(--mm-mid);
-        }
+        .order-input:focus { border-color: var(--mm); background: #fff; box-shadow: 0 0 0 3px var(--mm-mid); }
         .refresh-btn {
-          flex-shrink: 0;
-          width: 42px;
-          border-radius: 12px;
-          border: 1.5px solid var(--border);
+          flex-shrink: 0; width: 42px;
+          border-radius: 12px; border: 1.5px solid var(--border);
           background: var(--subtle);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          color: var(--muted);
-          transition: all 0.15s;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; color: var(--muted); transition: all 0.15s;
           -webkit-tap-highlight-color: transparent;
         }
         .refresh-btn:hover { border-color: var(--mm); color: var(--mm); background: var(--mm-light); }
 
-        /* ── ATM NOTICE ── */
         .atm-notice {
-          display: flex;
-          gap: 8px;
-          align-items: flex-start;
-          padding: 10px 12px;
-          border-radius: 10px;
-          background: #fff8f0;
-          border: 1px solid #fde8c8;
+          display: flex; gap: 8px; align-items: flex-start;
+          padding: 10px 12px; border-radius: 10px;
+          background: #fff8f0; border: 1px solid #fde8c8;
           margin-bottom: 16px;
         }
         .atm-notice-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
         .atm-notice-text { font-size: 11px; line-height: 1.5; color: #9a6a2a; font-weight: 500; }
 
-        /* ── SUBMIT BTN ── */
         .submit-btn {
           width: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 15px;
-          border-radius: 16px;
-          border: none;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          padding: 15px; border-radius: 16px; border: none;
           background: linear-gradient(135deg, var(--mm) 0%, #c0006a 100%);
-          color: #fff;
-          font-family: inherit;
-          font-size: 15px;
-          font-weight: 800;
-          letter-spacing: 0.1px;
-          cursor: pointer;
-          transition: all 0.2s ease;
+          color: #fff; font-family: inherit; font-size: 15px; font-weight: 800;
+          letter-spacing: 0.1px; cursor: pointer; transition: all 0.2s ease;
           box-shadow: 0 8px 24px rgba(174,0,112,0.28);
-          position: relative;
-          overflow: hidden;
+          position: relative; overflow: hidden;
           -webkit-tap-highlight-color: transparent;
         }
         .submit-btn::after {
-          content: '';
-          position: absolute;
-          inset: 0;
+          content: ''; position: absolute; inset: 0;
           background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
           pointer-events: none;
         }
-        .submit-btn:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 12px 30px rgba(174,0,112,0.35);
-        }
-        .submit-btn:active:not(:disabled) {
-          transform: translateY(0);
-          box-shadow: 0 4px 12px rgba(174,0,112,0.25);
-        }
-        .submit-btn:disabled {
-          opacity: 0.45;
-          cursor: not-allowed;
-          box-shadow: none;
-        }
+        .submit-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(174,0,112,0.35); }
+        .submit-btn:active:not(:disabled) { transform: translateY(0); box-shadow: 0 4px 12px rgba(174,0,112,0.25); }
+        .submit-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
         .submit-btn.loading { opacity: 0.8; }
 
-        /* ── SPINNER ── */
         .spinner {
           width: 16px; height: 16px;
           border: 2px solid rgba(255,255,255,0.4);
@@ -620,59 +750,36 @@ export default function CreateTransactionPage() {
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ── URL PREVIEW ROW ── */
         .url-preview-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-top: 12px;
-          padding: 9px 12px;
-          border-radius: 11px;
-          border: 1px solid var(--border);
+          display: flex; align-items: center; gap: 8px;
+          margin-top: 12px; padding: 9px 12px;
+          border-radius: 11px; border: 1px solid var(--border);
           background: var(--subtle);
         }
         .url-preview-text {
-          flex: 1;
-          min-width: 0;
-          font-family: 'SF Mono', 'Fira Code', monospace;
-          font-size: 10px;
-          color: var(--muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          flex: 1; min-width: 0;
+          font-family: 'SF Mono','Fira Code', monospace;
+          font-size: 10px; color: var(--muted);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
           line-height: 1.4;
         }
         .url-copy-btn {
-          flex-shrink: 0;
-          width: 28px; height: 28px;
-          border-radius: 7px;
-          border: 1px solid var(--border);
+          flex-shrink: 0; width: 28px; height: 28px;
+          border-radius: 7px; border: 1px solid var(--border);
           background: #fff;
           display: flex; align-items: center; justify-content: center;
-          cursor: pointer;
-          color: var(--muted);
+          cursor: pointer; color: var(--muted);
           font-size: 11px; font-weight: 800;
-          transition: all 0.15s;
-          font-family: inherit;
+          transition: all 0.15s; font-family: inherit;
         }
         .url-copy-btn:hover { border-color: var(--mm); color: var(--mm); background: var(--mm-light); }
         .url-copy-btn.done { background: #dcfce7; border-color: #86efac; color: #16a34a; }
 
-        /* ── RESULT TOAST ── */
         .toast {
-          position: fixed;
-          top: 16px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 100;
-          width: calc(100% - 32px);
-          max-width: 400px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 13px 14px;
-          border-radius: 18px;
-          border: 1px solid;
+          position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+          z-index: 100; width: calc(100% - 32px); max-width: 400px;
+          display: flex; align-items: center; gap: 12px;
+          padding: 13px 14px; border-radius: 18px; border: 1px solid;
           box-shadow: 0 16px 40px rgba(0,0,0,0.15);
           animation: toastIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
         }
@@ -683,64 +790,350 @@ export default function CreateTransactionPage() {
         .toast.success { background: #f0fdf4; border-color: #bbf7d0; }
         .toast.fail    { background: #fef2f2; border-color: #fecaca; }
         .toast-icon {
-          width: 34px; height: 34px;
-          border-radius: 50%;
+          width: 34px; height: 34px; border-radius: 50%;
           display: flex; align-items: center; justify-content: center;
-          font-size: 15px; font-weight: 900;
-          flex-shrink: 0;
+          font-size: 15px; font-weight: 900; flex-shrink: 0;
         }
         .toast.success .toast-icon { background: #dcfce7; color: #16a34a; }
         .toast.fail    .toast-icon { background: #fee2e2; color: #dc2626; }
         .toast-body { flex: 1; min-width: 0; }
-        .toast-title {
-          font-size: 13px; font-weight: 800;
-          line-height: 1.2;
-        }
+        .toast-title { font-size: 13px; font-weight: 800; line-height: 1.2; }
         .toast.success .toast-title { color: #16a34a; }
         .toast.fail    .toast-title { color: #dc2626; }
         .toast-sub { font-size: 11px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .toast-close {
-          flex-shrink: 0;
-          width: 26px; height: 26px;
-          border-radius: 50%;
-          background: none; border: none;
-          font-size: 13px; cursor: pointer;
+          flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+          background: none; border: none; font-size: 13px; cursor: pointer;
           color: var(--muted);
           display: flex; align-items: center; justify-content: center;
           transition: all 0.15s;
         }
         .toast-close:hover { background: rgba(0,0,0,0.07); color: var(--text); }
 
-        /* ── DIVIDER ── */
-        .divider {
-          height: 1px;
-          background: var(--border);
-          margin: 0 0 18px;
-        }
-
-        /* ── PENDING BADGE ── */
         .pending-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 3px 10px 3px 7px;
-          border-radius: 20px;
-          background: var(--mm-light);
-          border: 1px solid rgba(174,0,112,0.18);
-          font-size: 10.5px;
-          font-weight: 700;
-          color: var(--mm);
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 3px 10px 3px 7px; border-radius: 20px;
+          background: var(--mm-light); border: 1px solid rgba(174,0,112,0.18);
+          font-size: 10.5px; font-weight: 700; color: var(--mm);
           margin-bottom: 14px;
         }
         .pending-dot {
-          width: 6px; height: 6px;
-          border-radius: 50%;
+          width: 6px; height: 6px; border-radius: 50%;
           background: var(--mm);
           animation: pulse 1.2s ease-in-out infinite;
         }
         @keyframes pulse {
           0%,100% { opacity: 1; transform: scale(1); }
           50%      { opacity: 0.5; transform: scale(0.75); }
+        }
+
+        /* ══════════════════════════════════════════════
+           AI WIDGET STYLES
+           ══════════════════════════════════════════════ */
+
+        /* FAB button — bottom-right */
+        .ai-fab {
+          position: fixed;
+          bottom: 24px;
+          right: 20px;
+          z-index: 50;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          padding: 10px 14px 10px 11px;
+          border-radius: 50px;
+          border: none;
+          background: linear-gradient(135deg, #7c3aed 0%, #ae0070 100%);
+          color: #fff;
+          font-family: inherit;
+          font-size: 12px;
+          font-weight: 800;
+          cursor: pointer;
+          box-shadow: 0 8px 24px rgba(124,58,237,0.35), 0 2px 8px rgba(0,0,0,0.15);
+          transition: all 0.2s ease;
+          -webkit-tap-highlight-color: transparent;
+          letter-spacing: 0.2px;
+        }
+        .ai-fab:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 32px rgba(124,58,237,0.45), 0 4px 12px rgba(0,0,0,0.18);
+        }
+        .ai-fab:active {
+          transform: translateY(0);
+          box-shadow: 0 4px 12px rgba(124,58,237,0.3);
+        }
+        .ai-fab-label { line-height: 1; }
+
+        /* BACKDROP */
+        .ai-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 55;
+          background: rgba(0,0,0,0.25);
+          backdrop-filter: blur(2px);
+          -webkit-backdrop-filter: blur(2px);
+          animation: fadeIn 0.18s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* PANEL — slides up from bottom */
+        .ai-panel {
+          position: fixed;
+          bottom: 0;
+          left: 50%;
+          transform: translateX(-50%) translateY(110%);
+          z-index: 60;
+          width: 100%;
+          max-width: 480px;
+          background: #fff;
+          border-radius: 24px 24px 0 0;
+          box-shadow: 0 -16px 60px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06);
+          padding: 0 0 env(safe-area-inset-bottom, 16px);
+          transition: transform 0.35s cubic-bezier(0.34,1.2,0.64,1);
+          overflow: hidden;
+        }
+        .ai-panel.open {
+          transform: translateX(-50%) translateY(0);
+        }
+        @media (min-width: 600px) {
+          .ai-panel {
+            bottom: 24px;
+            right: 20px;
+            left: auto;
+            transform: translateY(110%);
+            border-radius: 20px;
+            max-width: 340px;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06);
+          }
+          .ai-panel.open { transform: translateY(0); }
+        }
+
+        /* Gradient top bar on panel */
+        .ai-panel::before {
+          content: '';
+          display: block;
+          height: 3px;
+          background: linear-gradient(90deg, #7c3aed 0%, #ae0070 100%);
+          border-radius: 24px 24px 0 0;
+        }
+
+        .ai-panel-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 14px 16px 10px;
+        }
+        .ai-panel-title {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          font-size: 13px;
+          font-weight: 800;
+          color: #1a0f16;
+          letter-spacing: -0.2px;
+        }
+        .ai-panel-icon {
+          display: flex;
+          align-items: center;
+          color: #7c3aed;
+        }
+        .ai-panel-close {
+          width: 28px; height: 28px;
+          border-radius: 50%;
+          border: 1.5px solid var(--border);
+          background: var(--subtle);
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer;
+          color: var(--muted);
+          transition: all 0.15s;
+        }
+        .ai-panel-close:hover { background: var(--mm-light); border-color: var(--mm); color: var(--mm); }
+
+        /* Text input row */
+        .ai-input-row {
+          display: flex;
+          gap: 8px;
+          padding: 0 16px 12px;
+        }
+        .ai-text-input {
+          flex: 1;
+          border: 1.5px solid var(--border);
+          border-radius: 12px;
+          background: var(--subtle);
+          padding: 10px 13px;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--text);
+          outline: none;
+          transition: all 0.18s;
+        }
+        .ai-text-input:focus {
+          border-color: #7c3aed;
+          background: #fff;
+          box-shadow: 0 0 0 3px rgba(124,58,237,0.12);
+        }
+        .ai-text-input::placeholder { color: #c4b0cc; font-weight: 400; }
+        .ai-send-btn {
+          flex-shrink: 0;
+          width: 42px; height: 42px;
+          border-radius: 12px;
+          border: none;
+          background: linear-gradient(135deg, #7c3aed 0%, #ae0070 100%);
+          color: #fff;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer;
+          transition: all 0.18s;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .ai-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .ai-send-btn:not(:disabled):hover { transform: scale(1.05); }
+        .ai-send-btn.loading { opacity: 0.8; }
+
+        .ai-spinner {
+          width: 16px; height: 16px;
+          border: 2px solid rgba(255,255,255,0.35);
+          border-top-color: #fff;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
+        }
+
+        /* Example chips */
+        .ai-examples {
+          display: flex;
+          gap: 6px;
+          flex-wrap: wrap;
+          padding: 0 16px 14px;
+        }
+        .ai-example-chip {
+          padding: 5px 11px;
+          border-radius: 20px;
+          border: 1.5px solid rgba(124,58,237,0.2);
+          background: rgba(124,58,237,0.06);
+          font-family: inherit;
+          font-size: 11.5px;
+          font-weight: 600;
+          color: #7c3aed;
+          cursor: pointer;
+          transition: all 0.15s;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .ai-example-chip:hover, .ai-example-chip:active {
+          background: rgba(124,58,237,0.12);
+          border-color: #7c3aed;
+        }
+
+        /* Error */
+        .ai-error {
+          margin: 0 16px 14px;
+          padding: 9px 12px;
+          border-radius: 10px;
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          font-size: 11.5px;
+          color: #dc2626;
+          font-weight: 500;
+        }
+
+        /* Result block */
+        .ai-result {
+          padding: 0 16px 16px;
+        }
+        .ai-result-label {
+          font-size: 9.5px;
+          font-weight: 700;
+          letter-spacing: 0.6px;
+          text-transform: uppercase;
+          color: var(--muted);
+          margin-bottom: 7px;
+        }
+        .ai-result-main {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 13px 16px;
+          border-radius: 14px;
+          border: 2px solid rgba(124,58,237,0.25);
+          background: rgba(124,58,237,0.06);
+          cursor: pointer;
+          font-family: inherit;
+          transition: all 0.18s;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .ai-result-main:hover {
+          border-color: #7c3aed;
+          background: rgba(124,58,237,0.1);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(124,58,237,0.18);
+        }
+        .ai-result-amount {
+          font-size: 22px;
+          font-weight: 900;
+          color: #7c3aed;
+          letter-spacing: -0.5px;
+        }
+        .ai-result-apply {
+          font-size: 11px;
+          font-weight: 700;
+          color: #7c3aed;
+          opacity: 0.7;
+        }
+        .ai-result-note {
+          margin-top: 7px;
+          font-size: 11px;
+          color: var(--muted);
+          font-weight: 500;
+          line-height: 1.4;
+        }
+
+        /* Suggestion chips */
+        .ai-suggestions {
+          display: flex;
+          gap: 7px;
+          flex-wrap: wrap;
+        }
+        .ai-suggestion-chip {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 1px;
+          padding: 7px 14px;
+          border-radius: 12px;
+          border: 1.5px solid rgba(174,0,112,0.2);
+          background: var(--mm-light);
+          font-family: inherit;
+          font-size: 13px;
+          font-weight: 800;
+          color: var(--mm);
+          cursor: pointer;
+          transition: all 0.15s;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .ai-suggestion-chip:hover, .ai-suggestion-chip:active {
+          border-color: var(--mm);
+          background: rgba(174,0,112,0.13);
+          transform: translateY(-1px);
+        }
+        .ai-chip-full {
+          font-size: 9px;
+          font-weight: 500;
+          color: rgba(174,0,112,0.55);
+          letter-spacing: 0;
+        }
+
+        /* Loading skeleton */
+        .ai-skeleton-wrap { padding: 0 16px 16px; }
+        .ai-skeleton {
+          height: 14px;
+          border-radius: 8px;
+          background: linear-gradient(90deg, #f0e8ef 25%, #e8dce6 50%, #f0e8ef 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.2s infinite;
+        }
+        @keyframes shimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
         }
       `}</style>
 
@@ -765,10 +1158,8 @@ export default function CreateTransactionPage() {
 
       <div className="page-root">
         <div className="card">
-          {/* TOP STRIPE */}
           <div className="top-stripe" />
 
-          {/* HEADER */}
           <div className="card-header">
             <img src="/Main.png" alt="" className="header-logo" />
             <div>
@@ -777,10 +1168,7 @@ export default function CreateTransactionPage() {
             </div>
           </div>
 
-          {/* BODY */}
           <div className="card-body">
-
-            {/* Pending badge */}
             {pendingOrders.length > 0 && (
               <div className="pending-badge">
                 <div className="pending-dot" />
@@ -788,7 +1176,6 @@ export default function CreateTransactionPage() {
               </div>
             )}
 
-            {/* METHOD */}
             <div className="field-label">Phương thức</div>
             <div className="method-tabs">
               {methodConfig.map(m => (
@@ -805,7 +1192,6 @@ export default function CreateTransactionPage() {
               ))}
             </div>
 
-            {/* AMOUNT */}
             <div className="amount-section">
               <div className="field-label">Số tiền thanh toán</div>
               <div className="amount-input-wrap">
@@ -820,12 +1206,8 @@ export default function CreateTransactionPage() {
                   className={`amount-input${amount ? ' has-value' : ''}`}
                   style={{ paddingLeft: '44px' }}
                 />
-                <span className="prefix-label" style={{
-                  color: amount ? 'var(--mm)' : 'var(--muted)'
-                }}>₫</span>
+                <span className="prefix-label" style={{ color: amount ? 'var(--mm)' : 'var(--muted)' }}>₫</span>
               </div>
-
-              {/* Quick amounts */}
               <div className="quick-amounts">
                 {QUICK_AMOUNTS.map(v => (
                   <button
@@ -840,7 +1222,6 @@ export default function CreateTransactionPage() {
               </div>
             </div>
 
-            {/* ORDER INFO */}
             <div className="order-section">
               <div className="field-label">Mã đơn hàng</div>
               <div className="order-input-wrap">
@@ -862,7 +1243,6 @@ export default function CreateTransactionPage() {
               </div>
             </div>
 
-            {/* ATM NOTICE */}
             {isATM && (
               <div className="atm-notice">
                 <span className="atm-notice-icon">ℹ</span>
@@ -872,7 +1252,6 @@ export default function CreateTransactionPage() {
               </div>
             )}
 
-            {/* SUBMIT */}
             <button
               className={`submit-btn${loading ? ' loading' : ''}`}
               onClick={handleCreate}
@@ -884,7 +1263,6 @@ export default function CreateTransactionPage() {
               }
             </button>
 
-            {/* URL PREVIEW — realtime */}
             {previewUrl && (
               <div className="url-preview-row">
                 <div className="url-preview-text">{previewUrl}</div>
@@ -901,10 +1279,12 @@ export default function CreateTransactionPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      </div>
 
-          </div>{/* /card-body */}
-        </div>{/* /card */}
-      </div>{/* /page-root */}
+      {/* AI AMOUNT WIDGET — ngoài .card để fixed positioning không bị clip */}
+      <AiAmountWidget onAmountSelect={setAmount} />
     </>
   )
 }
