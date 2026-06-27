@@ -93,7 +93,22 @@ export default async function handler(req, res) {
       return res.status(502).json({ message: 'MoMo server trả về dữ liệu không hợp lệ' })
     }
 
-    return res.status(momoRes.ok ? 200 : momoRes.status).json(data)
+    // paymentOption: tài khoản/thẻ đã dùng để thanh toán ("momo" hoặc "pay_later")
+    // Trường này do MoMo trả về sẵn trong response của API query, đảm bảo luôn có mặt
+    // (fallback null) để phía client không cần tự kiểm tra undefined.
+    console.log('[momo/query] Kết quả MoMo:', {
+      orderId,
+      resultCode: data.resultCode,
+      payType: data.payType,
+      paymentOption: data.paymentOption,
+    })
+
+    const responseData = {
+      ...data,
+      paymentOption: data.paymentOption ?? null,
+    }
+
+    return res.status(momoRes.ok ? 200 : momoRes.status).json(responseData)
   } catch (err) {
     if (err.name === 'AbortError') {
       console.error('[momo/query] Timeout khi gọi MoMo (28s)')
