@@ -99,10 +99,41 @@ export default function CreateTransactionPage() {
 
   useEffect(() => {
     if (!router.isReady) return
-    const { method: qMethod, amount: qAmount, orderInfo: qOrderInfo } = router.query
-    if (qMethod === 'p2p' || qMethod === 'scan' || qMethod === 'atm') setMethod(qMethod)
-    if (qAmount) setAmount(String(parseInt(qAmount, 10) || ''))
+    const { method: qMethod, amount: qAmount, orderInfo: qOrderInfo, auto } = router.query
+    const validMethod = (qMethod === 'p2p' || qMethod === 'scan' || qMethod === 'atm') ? qMethod : null
+    const validAmount = qAmount ? String(parseInt(qAmount, 10) || '') : null
+
+    if (validMethod) setMethod(validMethod)
+    if (validAmount) setAmount(validAmount)
     if (qOrderInfo) setOrderInfo(String(qOrderInfo))
+
+    // Nếu có đủ method + amount từ URL → tự submit luôn, không cần bấm tay
+    if (validMethod && validAmount && parseInt(validAmount, 10) > 0) {
+      const finalOrderInfo = qOrderInfo || genOrderId()
+      if (qOrderInfo) setOrderInfo(finalOrderInfo)
+      setTimeout(() => {
+        const url = buildTxUrl(validMethod, validAmount, finalOrderInfo)
+        if (!url) return
+        if (validMethod === 'p2p' || validMethod === 'atm') {
+          const win = window.open('', '_blank')
+          fetch(url)
+            .then(r => r.json())
+            .then(data => {
+              if (data.payUrl) {
+                if (win) win.location.href = data.payUrl
+                else window.open(data.payUrl, '_blank', 'noopener,noreferrer')
+              } else {
+                win?.close()
+                alert(data.error || 'Tạo giao dịch thất bại')
+              }
+            })
+            .catch(() => { win?.close(); alert('Lỗi server') })
+        } else {
+          window.open(url, '_blank', 'noopener,noreferrer')
+        }
+        router.replace('/admin/create-transaction', undefined, { shallow: true })
+      }, 100)
+    }
   }, [router.isReady])
 
   useEffect(() => {
@@ -742,13 +773,20 @@ export default function CreateTransactionPage() {
             <img src="/Main.png" alt="" className="header-logo" />
             <div>
               <div className="header-text-title">Tạo Giao Dịch</div>
+              <div className="header-text-sub">Tạo link &amp; QR thanh toán MoMo</div>
             </div>
           </div>
 
           {/* BODY */}
           <div className="card-body">
 
-
+            {/* Pending badge */}
+            {pendingOrders.length > 0 && (
+              <div className="pending-badge">
+                <div className="pending-dot" />
+                {pendingOrders.length} đơn đang chờ kết quả
+              </div>
+            )}
 
             {/* METHOD */}
             <div className="field-label">Phương thức</div>
@@ -829,7 +867,7 @@ export default function CreateTransactionPage() {
               <div className="atm-notice">
                 <span className="atm-notice-icon">ℹ</span>
                 <p className="atm-notice-text">
-                  Khi tạo giao dịch thẻ ATM, khách hàng sẽ được chuyển hướng sang trang thanh toán của MoMo. Sau khi thanh toán xong, MoMo sẽ gửi kết quả về server của bạn (callback) và hiển thị thông báo thành công/thất bại cho khách hàng.
+                  Khách sẽ nhập số thẻ, tên chủ thẻ và xác thực OTP trực tiếp trên trang thanh toán MoMo.
                 </p>
               </div>
             )}
