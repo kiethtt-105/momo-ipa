@@ -40,7 +40,7 @@ const fmtTime = val => {
   return isNaN(d.getTime()) ? String(val) : d.toLocaleString('vi-VN')
 }
 
-const PAY_TYPE_LABEL = { wallet: 'Ví MoMo', napas: 'Thẻ ATM / Napas', credit: 'Thẻ tín dụng', pos: 'POS Quét mã' }
+const PAY_TYPE_LABEL = { wallet: 'Ví MoMo', napas: 'Thẻ ATM / Napas', credit: 'Thẻ tín dụng', pos: 'POS Scan' }
 
 // ─── Component ──────────────────────────────────────────────────────────────
 

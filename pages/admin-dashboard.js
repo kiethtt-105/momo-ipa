@@ -1,6 +1,6 @@
 // pages/admin-dashboard.js — REBUILT
 // Logic fix: scoped = date+search filtered (for stats). filtered = scoped + status filter (for table).
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 
@@ -93,23 +93,6 @@ const RESULT_CODE_MAP = {
   7000:'Đang xử lý',7002:'Đang xử lý bởi nhà cung cấp',9000:'Giao dịch đã được xác nhận thành công',
 }
 const getResultDesc = code => RESULT_CODE_MAP[code] !== undefined ? RESULT_CODE_MAP[code] : 'Mã lỗi không xác định'
-
-function exportOrdersToCSV(orders, filterLabel) {
-  const headers = ['Mã đơn','Trạng thái','Số tiền','Nội dung','Hình thức','Result Code','Mã GD MoMo','Thời gian tạo','Thời gian thanh toán']
-  const rows = orders.map(o => [
-    o.orderId||'', STATUS_META[o.status]?.label||o.status||'', o.amount||0,
-    o.orderInfo||'', o.method||(o.orderId?.startsWith('POS')||o.orderId?.startsWith('iPOS')?'pos':'p2p'),
-    o.resultCode??'', o.transId||'', fmtDate(o.createdAt), fmtDate(o.paidAt),
-  ])
-  const esc = v => { const s=String(v??''); return /[",\n;]/.test(s)?`"${s.replace(/"/g,'""')}"`:s }
-  const csv = '\uFEFF' + [headers,...rows].map(r=>r.map(esc).join(',')).join('\r\n')
-  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' })
-  const url  = URL.createObjectURL(blob)
-  const a    = document.createElement('a')
-  const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')
-  a.href=url; a.download=`giao-dich${filterLabel?`_${filterLabel}`:''}_${stamp}.csv`
-  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
-}
 
 // ─── ICON COMPONENTS ───────────────────────────────────────────────────────
 function IconHistory(props) { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg> }
@@ -558,14 +541,6 @@ function HistorySection({
               className="w-[160px] rounded-[10px] border border-[rgba(174,0,112,0.1)] bg-white/70 py-[7px] pl-[34px] pr-8 text-[13px] text-[#111827] transition-all focus:border-[#ae0070] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.08)] focus:w-[220px]" />
             {search && <button className="absolute right-[10px] text-xs leading-none text-[#6b7280]" onClick={() => setSearch('')}>✕</button>}
           </div>
-          <button
-            className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[9px] border border-[rgba(174,0,112,0.1)] bg-white/70 px-3 py-[7px] text-[13px] font-semibold text-[#374151] transition-all hover:border-[#ae0070] hover:bg-[#fff0f7] hover:text-[#ae0070] disabled:opacity-40"
-            onClick={() => exportOrdersToCSV(filtered, filter !== 'ALL' ? FILTERS.find(f=>f.key===filter)?.label.replace(/\s+/g,'-') : '')}
-            disabled={filtered.length === 0}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            CSV
-          </button>
           {selected.size > 0 && (
             <button className="flex-shrink-0 whitespace-nowrap rounded-[9px] bg-[#dc2626] px-3.5 py-[7px] text-[13px] font-bold text-white transition-all hover:bg-[#b91c1c]" onClick={() => doDelete([...selected])}>
               Xóa ({selected.size})
@@ -953,10 +928,10 @@ export default function AdminDashboardPage() {
 
   // ─── DATA PIPELINE (FIXED LOGIC) ───────────────────────────────────────
   // Step 1: normalize statuses
-  const displayed = orders.map(normalizeStatus)
+  const displayed = useMemo(() => orders.map(normalizeStatus), [orders])
 
   // Step 2: apply search + date range → "scoped" (used for stat cards)
-  const scoped = displayed
+  const scoped = useMemo(() => displayed
     .filter(o => {
       const q = search.trim().toLowerCase()
       if (!q) return true
@@ -975,24 +950,24 @@ export default function AdminDashboardPage() {
       if (dateFrom && dayStr < dateFrom) return false
       if (dateTo   && dayStr > dateTo)   return false
       return true
-    })
+    }), [displayed, search, dateFrom, dateTo])
 
   // Step 3: counts based on scoped (reflects current search+date, not status filter)
-  const counts = {
+  const counts = useMemo(() => ({
     ALL:     scoped.length,
     PAID:    scoped.filter(o => o.status === 'PAID').length,
     FAILED:  scoped.filter(o => o.status === 'FAILED').length,
     PENDING: scoped.filter(o => o.status === 'PENDING').length,
     EXPIRED: scoped.filter(o => o.status === 'EXPIRED').length,
-  }
+  }), [scoped])
 
   // Step 4: stat cards use scoped revenue (all PAID within date+search)
-  const totalRevenue = scoped
+  const totalRevenue = useMemo(() => scoped
     .filter(o => o.status === 'PAID')
-    .reduce((s, o) => s + parseInt(o.amount || 0), 0)
+    .reduce((s, o) => s + parseInt(o.amount || 0), 0), [scoped])
 
   // Step 5: table = scoped + status filter + sort
-  const filtered = scoped
+  const filtered = useMemo(() => scoped
     .filter(o => filter === 'ALL' || o.status === filter)
     .sort((a, b) => {
       let av = a[sortKey], bv = b[sortKey]
@@ -1007,7 +982,7 @@ export default function AdminDashboardPage() {
       if (av < bv) return sortDir==='asc' ? -1 : 1
       if (av > bv) return sortDir==='asc' ?  1 : -1
       return 0
-    })
+    }), [scoped, filter, sortKey, sortDir])
 
   const detailOrder = detail ? displayed.find(o => o.orderId === detail) : null
 
