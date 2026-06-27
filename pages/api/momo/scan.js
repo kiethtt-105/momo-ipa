@@ -13,6 +13,9 @@ const SECRET_KEY   = process.env.MOMO_SECRET_KEY
 const PUBLIC_KEY   = process.env.MOMO_POS_PUBLIC_KEY || ''
 const POS_ENDPOINT = 'https://payment.momo.vn/v2/gateway/api/pos'
 
+const STORE_ID   = process.env.MOMO_STORE_ID || ''
+const STORE_NAME = process.env.MOMO_STORE_NAME || ''
+
 const BASE_URL = process.env.NODE_ENV === 'production'
   ? 'https://kiehtt.vercel.app'
   : 'http://localhost:3000'
@@ -150,6 +153,18 @@ async function handlePosCharge(req, res) {
     lang: 'vi',
     signature: sign(rawSignature),
   }
+
+  // Thử nghiệm: storeId/storeName không nằm trong rawSignature của API POS,
+  // thêm vào body để xem MoMo có đọc/hiển thị ở "Nhà cung cấp" hay không.
+  if (STORE_ID) body.storeId = STORE_ID
+  if (STORE_NAME) body.storeName = STORE_NAME
+
+  console.log('[scan][POST] Debug storeId/storeName:', {
+    storeId: body.storeId,
+    storeName: body.storeName,
+    envStoreId: STORE_ID,
+    envStoreName: STORE_NAME,
+  })
 
   const now = new Date().toISOString()
 
