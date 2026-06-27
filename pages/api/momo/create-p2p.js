@@ -68,6 +68,7 @@ export default async function handler(req, res) {
       orderId,
       amount: amt,
       orderInfo,
+      storeId,
       storeName,
       partnerName,
     })
