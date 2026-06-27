@@ -214,7 +214,7 @@ async function handlePosCharge(req, res) {
 
     await redis.hset('momo:orders', { [orderId]: JSON.stringify(updated) })
 
-    console.log(`[scan][POST] Success: ${orderId} - Result: ${data.resultCode}`)
+    console.log(`[scan][POST] MoMo response: ${orderId} - resultCode: ${data.resultCode} - message: ${data.message} - full:`, JSON.stringify(data))
 
     return res.status(200).json(data)
 
