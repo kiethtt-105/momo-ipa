@@ -35,8 +35,10 @@ export default async function handler(req, res) {
     orderId = `iPOS${Date.now()}${Math.random().toString(36).slice(2, 6)}`
   }
 
-  const orderInfo = rawOrderInfo || `${orderId}`
-
+  let orderInfo = String(rawOrderInfo || '').trim()
+  if (!orderInfo) {
+    orderInfo = `Thanh toan DH ${orderId}`
+  }
   // Cho phép override storeId/storeName/partnerName theo request, fallback về env
   const storeId = (params.storeId || STORE_ID || '').toString().trim()
   const storeName = (params.storeName || STORE_NAME || '').toString().trim()
@@ -66,7 +68,6 @@ export default async function handler(req, res) {
       orderId,
       amount: amt,
       orderInfo,
-      storeId,
       storeName,
       partnerName,
     })
