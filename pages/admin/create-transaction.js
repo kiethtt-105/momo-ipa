@@ -349,28 +349,33 @@ export default function CreateTransactionPage() {
     if (validMethod && validAmount && parseInt(validAmount, 10) > 0) {
       const finalOrderInfo = qOrderInfo || genOrderId()
       if (qOrderInfo) setOrderInfo(finalOrderInfo)
-      setTimeout(() => {
-        const url = buildTxUrl(validMethod, validAmount, finalOrderInfo)
-        if (!url) return
-        if (validMethod === 'p2p' || validMethod === 'atm') {
-          const win = window.open('', '_blank')
-          fetch(url)
-            .then(r => r.json())
-            .then(data => {
-              if (data.payUrl) {
-                if (win) win.location.href = data.payUrl
-                else window.open(data.payUrl, '_blank', 'noopener,noreferrer')
-              } else {
-                win?.close()
-                alert(data.error || 'Tạo giao dịch thất bại')
-              }
-            })
-            .catch(() => { win?.close(); alert('Lỗi server') })
-        } else {
-          window.open(url, '_blank', 'noopener,noreferrer')
-        }
-        router.replace('/admin/create-transaction', undefined, { shallow: true })
-      }, 100)
+
+      const url = buildTxUrl(validMethod, validAmount, finalOrderInfo)
+      if (!url) return
+
+      // Điều hướng THẲNG trong cùng tab (window.location.href) — KHÔNG dùng
+      // window.open() vì hành động này chạy trong useEffect, không phải user-gesture
+      // trực tiếp, nên mobile Safari/Chrome sẽ chặn popup → trang chỉ fill form
+      // mà không nhảy tiếp được. Áp dụng đồng nhất cho cả 3 phương thức p2p/atm/scan.
+      if (validMethod === 'p2p' || validMethod === 'atm') {
+        fetch(url)
+          .then(r => r.json())
+          .then(data => {
+            if (data.payUrl) {
+              window.location.href = data.payUrl
+            } else {
+              alert(data.error || 'Tạo giao dịch thất bại')
+              router.replace('/admin/create-transaction', undefined, { shallow: true })
+            }
+          })
+          .catch(() => {
+            alert('Lỗi server')
+            router.replace('/admin/create-transaction', undefined, { shallow: true })
+          })
+      } else {
+        // scan
+        window.location.href = url
+      }
     }
   }, [router.isReady])
 
