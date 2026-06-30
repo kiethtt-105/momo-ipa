@@ -677,7 +677,7 @@ function HistorySection({
   activePresetKey, setActivePresetKey, filtered,
   selected, toggleOne, toggleAll, sortKey, sortDir, toggleSort,
   setDetail, openQueryForOrder, openConfirmForOrder, doDelete,
-  onReconcileAll, reconcilingAll,
+  onReconcileAll, reconcilingAll, reconcileMsg,
 }) {
   const successRate = counts.ALL ? Math.round(counts.PAID / counts.ALL * 100) : 0
 
@@ -745,15 +745,27 @@ function HistorySection({
               className="w-[160px] rounded-[10px] border border-[rgba(174,0,112,0.1)] bg-white/70 py-[7px] pl-[34px] pr-8 text-[13px] text-[#111827] transition-all focus:border-[#ae0070] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.08)] focus:w-[220px]" />
             {search && <button className="absolute right-[10px] text-xs leading-none text-[#6b7280]" onClick={() => setSearch('')}>✕</button>}
           </div>
-          <button
-            type="button"
-            title="Cập nhật lại trạng thái tất cả giao dịch"
-            disabled={reconcilingAll}
-            onClick={onReconcileAll}
-            className="relative z-10 flex h-[33px] w-[33px] flex-shrink-0 cursor-pointer items-center justify-center rounded-[10px] border border-[rgba(174,0,112,0.1)] bg-white/70 text-[#ae0070] transition-all hover:border-[#ae0070] hover:bg-[#fff0f7] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <IconRefresh className={`h-[15px] w-[15px] ${reconcilingAll ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              title="Cập nhật lại trạng thái tất cả giao dịch"
+              disabled={reconcilingAll}
+              onClick={onReconcileAll}
+              className={`relative z-10 flex h-[33px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-2.5 text-[12.5px] font-semibold transition-all disabled:cursor-not-allowed ${
+                reconcilingAll
+                  ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]'
+                  : 'cursor-pointer border-[rgba(174,0,112,0.1)] bg-white/70 text-[#ae0070] hover:border-[#ae0070] hover:bg-[#fff0f7]'
+              }`}
+            >
+              <IconRefresh className={`h-[14px] w-[14px] flex-shrink-0 ${reconcilingAll ? 'animate-spin' : ''}`} />
+              {reconcilingAll ? 'Đang quét...' : 'Cập nhật'}
+            </button>
+            {reconcileMsg && (
+              <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-max max-w-[260px] rounded-lg bg-[#111827] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)]" style={{ animation:'fadein 0.15s ease' }}>
+                {reconcileMsg}
+              </div>
+            )}
+          </div>
           {selected.size > 0 && (
             <button className="flex-shrink-0 whitespace-nowrap rounded-[9px] bg-[#dc2626] px-3.5 py-[7px] text-[13px] font-bold text-white transition-all hover:bg-[#b91c1c]" onClick={() => doDelete([...selected])}>
               Xóa ({selected.size})
@@ -1016,6 +1028,7 @@ export default function AdminDashboardPage() {
   const [orders,          setOrders]          = useState([])
   const [fetching,        setFetching]        = useState(false)
   const [reconcilingAll,  setReconcilingAll]  = useState(false)
+  const [reconcileMsg,    setReconcileMsg]    = useState(null)
   const [lastSync,        setLastSync]        = useState(null)
   const [filter,          setFilter]          = useState('ALL')
   const [search,          setSearch]          = useState('')
@@ -1043,6 +1056,7 @@ export default function AdminDashboardPage() {
   const ordersRef   = useRef([])
   const fetchingRef = useRef(false)
   const reconcilingAllRef = useRef(false)
+  const reconcileMsgTimerRef = useRef(null)
   const selectedRef = useRef(new Set())
   const detailRef   = useRef(null)
   const filteredRef = useRef([])
@@ -1094,22 +1108,35 @@ export default function AdminDashboardPage() {
       .map(normalizeStatus)
       .filter(o => o.status === 'PENDING')
       .map(o => o.orderId)
-    if (targets.length === 0) { fetchOrders({ force: true }); return }
+
+    if (targets.length === 0) {
+      setReconcileMsg('Không có giao dịch nào đang chờ xử lý')
+      clearTimeout(reconcileMsgTimerRef.current)
+      reconcileMsgTimerRef.current = setTimeout(() => setReconcileMsg(null), 3000)
+      fetchOrders({ force: true })
+      return
+    }
 
     reconcilingAllRef.current = true; setReconcilingAll(true)
+    setReconcileMsg(null); clearTimeout(reconcileMsgTimerRef.current)
+    let checked = 0, reconciled = 0
     const CONCURRENCY = 4
     let idx = 0
     const worker = async () => {
       while (idx < targets.length) {
         const orderId = targets[idx++]
         try {
-          await fetch('/api/momo/query', {
+          const res  = await fetch('/api/momo/query', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ orderId }),
           })
+          const data = await res.json().catch(() => null)
+          checked += 1
+          if (data?._reconciled) reconciled += 1
         } catch (err) {
           console.error('[AdminDashboard] reconcileAllPending lỗi với', orderId, err)
+          checked += 1
         }
       }
     }
@@ -1117,6 +1144,10 @@ export default function AdminDashboardPage() {
       await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker))
     } finally {
       reconcilingAllRef.current = false; setReconcilingAll(false)
+      setReconcileMsg(reconciled > 0
+        ? `Đã quét ${checked} đơn · cập nhật lại ${reconciled} đơn bị lệch`
+        : `Đã quét ${checked} đơn · không có đơn nào bị lệch`)
+      reconcileMsgTimerRef.current = setTimeout(() => setReconcileMsg(null), 4000)
       fetchOrders({ force: true })
     }
   }, [fetchOrders])
@@ -1422,6 +1453,7 @@ export default function AdminDashboardPage() {
                   doDelete={doDelete}
                   onReconcileAll={reconcileAllPending}
                   reconcilingAll={reconcilingAll}
+                  reconcileMsg={reconcileMsg}
                 />
               )}
               {activeSection === 'create' && <CreateSection />}
