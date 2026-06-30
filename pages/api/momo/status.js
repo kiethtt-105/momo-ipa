@@ -16,7 +16,13 @@ const RECHECK_WINDOW_MS   = 60 * 1000
 // Throttle: tối đa 1 lần gọi MoMo mỗi N giây trong khoảng recheck window, tránh rate-limit (resultCode 29).
 const RECHECK_THROTTLE_MS = 5 * 1000
 // resultCode coi là "đang xử lý", chưa kết luận được — không vội gắn FAILED/EXPIRED khi gặp các mã này.
-const STILL_PROCESSING_CODES = [1000, 7000, 7002]
+// Theo bảng Result Code chính thức của MoMo, các mã này có Final Status = "No":
+// 1000 (chờ xác nhận), 7000/7002 (đang xử lý), 9000 (đã xác nhận nhưng chưa phải kết quả
+// cuối — với thanh toán 2-step (autoCapture=0) còn cần capture/cancel tiếp).
+const STILL_PROCESSING_CODES = [1000, 7000, 7002, 9000]
+// resultCode coi là "hết hạn" theo MoMo — khác với 1003 (bị hủy, thuộc nhóm FAILED).
+// 1005: Giao dịch thất bại do url hoặc QR code đã hết hạn.
+const EXPIRED_CODES = [1005]
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
@@ -50,7 +56,8 @@ export default async function handler(req, res) {
         const now = new Date().toISOString()
 
         if (rc !== undefined && rc !== null && !STILL_PROCESSING_CODES.includes(parseInt(rc))) {
-          const isPaid = parseInt(rc) === 0
+          const isPaid    = parseInt(rc) === 0
+          const isExpired = EXPIRED_CODES.includes(parseInt(rc))
           order = {
             ...order,
             transId:       momoResult.transId      || order.transId      || '',
@@ -61,9 +68,10 @@ export default async function handler(req, res) {
             responseTime:  momoResult.responseTime  || order.responseTime|| null,
             requestId:     momoResult.requestId     || order.requestId   || '',
             paidAt:        isPaid ? now : (order.paidAt || null),
-            // MoMo đã có kết quả rõ ràng (không còn "đang xử lý") → ưu tiên kết quả thật này
-            // hơn việc tự suy đoán EXPIRED theo thời gian.
-            status:        isPaid ? 'PAID' : (age > EXPIRE_MS ? 'EXPIRED' : 'FAILED'),
+            // MoMo đã có kết quả rõ ràng (không còn "đang xử lý") → dùng đúng resultCode
+            // để phân biệt PAID/EXPIRED/FAILED, không suy đoán EXPIRED theo thời gian nữa
+            // (vd resultCode 1003 "bị hủy" phải là FAILED, không phải EXPIRED).
+            status:        isPaid ? 'PAID' : (isExpired ? 'EXPIRED' : 'FAILED'),
             source:        'status-verified',
             lastCheckedAt: now,
           }

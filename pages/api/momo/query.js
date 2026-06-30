@@ -9,8 +9,24 @@ const redis = new Redis({
 
 const MOMO_ENDPOINT = process.env.MOMO_QUERY_ENDPOINT
 
-// resultCode coi là "đang xử lý", chưa kết luận được — không vội cập nhật theo các mã này.
-const STILL_PROCESSING_CODES = [1000, 7000, 7002]
+// Theo bảng Result Code chính thức của MoMo (Final Status = "No"):
+// 1000: chờ người dùng xác nhận | 7000/7002: đang xử lý | 9000: đã xác nhận nhưng
+// chưa phải kết quả cuối — với 2-step (autoCapture=0) còn cần capture/cancel tiếp,
+// nên KHÔNG kết luận vội theo các mã này, chờ poll lần sau.
+const STILL_PROCESSING_CODES = [1000, 7000, 7002, 9000]
+
+// resultCode coi là "hết hạn" — khác với FAILED/CANCELLED (1003: bị hủy) và PENDING.
+// 1005: Giao dịch thất bại do url hoặc QR code đã hết hạn (Final: Yes, System error).
+const EXPIRED_CODES = [1005]
+
+// Suy ra trạng thái đúng từ resultCode của MoMo — PAID/EXPIRED/FAILED là 3 trạng thái
+// khác nhau, không được gộp EXPIRED vào FAILED.
+function resolveStatusFromResultCode(rc) {
+  const code = parseInt(rc)
+  if (code === 0) return 'PAID'
+  if (EXPIRED_CODES.includes(code)) return 'EXPIRED'
+  return 'FAILED'
+}
 
 const PARTNER_CODE = process.env.MOMO_PARTNER_CODE
 const ACCESS_KEY = process.env.MOMO_ACCESS_KEY
@@ -127,8 +143,8 @@ export default async function handler(req, res) {
         const raw = await redis.hget('momo:orders', orderId)
         if (raw) {
           let existing = typeof raw === 'string' ? JSON.parse(raw) : raw
-          const isPaid = parseInt(rc) === 0
-          const correctStatus = isPaid ? 'PAID' : 'FAILED'
+          const correctStatus = resolveStatusFromResultCode(rc)
+          const isPaid = correctStatus === 'PAID'
 
           // Không tự "hạ cấp" một đơn đã PAID trước đó dựa trên 1 lần tra cứu khác —
           // chỉ cập nhật khi trạng thái lưu trữ KHÔNG khớp với kết quả thật từ MoMo.
