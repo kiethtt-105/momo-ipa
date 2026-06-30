@@ -179,6 +179,7 @@ function IconSearch(props)  { return <svg {...props} viewBox="0 0 24 24" fill="n
 function IconLogout(props)  { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> }
 function IconMenu(props)    { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg> }
 function IconX(props)       { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
+function IconRefresh(props) { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg> }
 
 // ─── ANIMATED ORBS ─────────────────────────────────────────────────────────
 function Orbs() {
@@ -676,6 +677,7 @@ function HistorySection({
   activePresetKey, setActivePresetKey, filtered,
   selected, toggleOne, toggleAll, sortKey, sortDir, toggleSort,
   setDetail, openQueryForOrder, openConfirmForOrder, doDelete,
+  onReconcileAll, reconcilingAll,
 }) {
   const successRate = counts.ALL ? Math.round(counts.PAID / counts.ALL * 100) : 0
 
@@ -683,11 +685,22 @@ function HistorySection({
     <>
       {/* Title + status filter tabs */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[19px] font-extrabold tracking-[-0.3px] text-[#111827]">Lịch sử giao dịch</h1>
-          <p className="mt-0.5 text-xs text-[#6b7280]">
-            {filtered.length} giao dịch{filter !== 'ALL' && ` · "${FILTERS.find(f => f.key === filter)?.label}"`}
-          </p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h1 className="text-[19px] font-extrabold tracking-[-0.3px] text-[#111827]">Lịch sử giao dịch</h1>
+            <p className="mt-0.5 text-xs text-[#6b7280]">
+              {filtered.length} giao dịch{filter !== 'ALL' && ` · "${FILTERS.find(f => f.key === filter)?.label}"`}
+            </p>
+          </div>
+          <button
+            type="button"
+            title="Cập nhật lại trạng thái tất cả giao dịch"
+            disabled={reconcilingAll}
+            onClick={onReconcileAll}
+            className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-[rgba(174,0,112,0.15)] bg-white/80 text-[#ae0070] shadow-[0_1px_4px_rgba(174,0,112,0.1)] transition-all hover:bg-[#fff0f7] hover:shadow-[0_2px_8px_rgba(174,0,112,0.18)] disabled:opacity-50"
+          >
+            <IconRefresh className={`h-3 w-3 ${reconcilingAll ? 'animate-spin' : ''}`} />
+          </button>
         </div>
 
         {/* Status tabs — desktop */}
@@ -1004,6 +1017,7 @@ export default function AdminDashboardPage() {
 
   const [orders,          setOrders]          = useState([])
   const [fetching,        setFetching]        = useState(false)
+  const [reconcilingAll,  setReconcilingAll]  = useState(false)
   const [lastSync,        setLastSync]        = useState(null)
   const [filter,          setFilter]          = useState('ALL')
   const [search,          setSearch]          = useState('')
@@ -1030,6 +1044,7 @@ export default function AdminDashboardPage() {
 
   const ordersRef   = useRef([])
   const fetchingRef = useRef(false)
+  const reconcilingAllRef = useRef(false)
   const selectedRef = useRef(new Set())
   const detailRef   = useRef(null)
   const filteredRef = useRef([])
@@ -1072,9 +1087,43 @@ export default function AdminDashboardPage() {
     }
   }, [])
 
+  // Quét lại tất cả giao dịch đang PENDING bằng cách gọi /api/momo/query cho từng
+  // đơn — backend sẽ tự đối chiếu (reconcile) với MoMo và sửa Redis nếu IPN bị rớt.
+  // Giới hạn chạy đồng thời (CONCURRENCY) để không spam API MoMo cùng lúc.
+  const reconcileAllPending = useCallback(async () => {
+    if (reconcilingAllRef.current) return
+    const targets = ordersRef.current
+      .map(normalizeStatus)
+      .filter(o => o.status === 'PENDING')
+      .map(o => o.orderId)
+    if (targets.length === 0) { fetchOrders({ force: true }); return }
+
+    reconcilingAllRef.current = true; setReconcilingAll(true)
+    const CONCURRENCY = 4
+    let idx = 0
+    const worker = async () => {
+      while (idx < targets.length) {
+        const orderId = targets[idx++]
+        try {
+          await fetch('/api/momo/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId }),
+          })
+        } catch (err) {
+          console.error('[AdminDashboard] reconcileAllPending lỗi với', orderId, err)
+        }
+      }
+    }
+    try {
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker))
+    } finally {
+      reconcilingAllRef.current = false; setReconcilingAll(false)
+      fetchOrders({ force: true })
+    }
+  }, [fetchOrders])
+
   useEffect(() => {
-    if (authed !== true) return
-    fetchOrders({ force: true })
     const iv = setInterval(() => fetchOrders(), REFRESH_INTERVAL)
     return () => clearInterval(iv)
   }, [authed, fetchOrders])
@@ -1373,6 +1422,8 @@ export default function AdminDashboardPage() {
                   openQueryForOrder={openQueryForOrder}
                   openConfirmForOrder={openConfirmForOrder}
                   doDelete={doDelete}
+                  onReconcileAll={reconcileAllPending}
+                  reconcilingAll={reconcilingAll}
                 />
               )}
               {activeSection === 'create' && <CreateSection />}
