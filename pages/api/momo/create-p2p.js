@@ -26,12 +26,16 @@ export default async function handler(req, res) {
   const rawOrderId = (params.orderId || '').toString().trim()
   const rawOrderInfo = (params.orderInfo || '').toString().trim()
 
+  // Sanitize: chỉ giữ chữ/số/_-, bỏ khoảng trắng và ký tự đặc biệt vì MoMo
+  // không chấp nhận orderId chứa dấu cách (lỗi resultCode 20 "Yêu cầu sai định dạng")
+  const sanitize = (s) => s.replace(/[^a-zA-Z0-9_-]/g, '')
+
   let orderId
   if (rawOrderId) {
-    orderId = rawOrderId.startsWith('iPOS') ? rawOrderId : `iPOS${rawOrderId}`
-  } else if (rawOrderInfo) {
-    orderId = rawOrderInfo.startsWith('iPOS') ? rawOrderInfo : `iPOS${rawOrderInfo}`
+    const clean = sanitize(rawOrderId)
+    orderId = clean.startsWith('iPOS') ? clean : `iPOS${clean}`
   } else {
+    // KHÔNG dùng orderInfo để tạo orderId nữa (orderInfo có thể chứa dấu cách/tiếng Việt)
     orderId = `iPOS${Date.now()}${Math.random().toString(36).slice(2, 6)}`
   }
 
