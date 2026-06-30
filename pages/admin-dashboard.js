@@ -580,6 +580,89 @@ function ConfirmModal({ orderId, amount, loading, result, error, onConfirm, onCa
   )
 }
 
+// ─── QUERY RESULT MODAL (popup tra cứu MoMo) ──────────────────────────────
+function QueryResultModal({ orderId, loading, result, error, onClose, stacked }) {
+  const copy   = t => navigator.clipboard?.writeText(String(t))
+  const rc     = result?.resultCode
+  const isOk   = rc === 0 || rc === 9000
+  const rcDesc = rc !== undefined ? getResultDesc(rc) : null
+
+  return (
+    <div
+      className={`fixed inset-0 z-[320] flex items-center justify-center p-5 ${stacked ? 'bg-[rgba(17,7,13,0.35)]' : 'bg-[rgba(17,7,13,0.5)] backdrop-blur-[8px]'}`}
+      style={{ animation:'fadein 0.15s ease' }}
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[88vh] w-full max-w-[560px] flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_32px_80px_rgba(0,0,0,0.25),0_0_0_1px_rgba(99,102,241,0.1)]"
+        style={{ animation:'slideup 0.2s ease' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-[#f3f4f6] px-[22px] py-4">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-[#eef2ff] text-[#4f46e5]">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            </span>
+            <div>
+              <div className="text-[15px] font-extrabold tracking-[-0.2px] text-[#111827]">Tra cứu MoMo</div>
+              <div className="max-w-[320px] truncate font-mono text-[11px] text-[#9ca3af]" title={orderId}>{orderId}</div>
+            </div>
+          </div>
+          <button className="ml-3 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-[#f3f4f6] text-sm text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto py-1">
+          {loading && (
+            <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" style={{ animation:'rot 0.8s linear infinite' }}><path d="M3 12a9 9 0 0 1 9-9"/></svg>
+              <div className="text-[13px] font-semibold text-[#6b7280]">Đang tra cứu trên MoMo server...</div>
+            </div>
+          )}
+
+          {!loading && error && (
+            <div className="mx-[22px] my-4 flex items-center gap-2 rounded-[10px] border border-[#fecaca] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] font-semibold text-[#dc2626]">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+              {error}
+            </div>
+          )}
+
+          {!loading && result && (
+            <>
+              <div className="flex flex-col gap-1 px-[22px] py-4" style={{ background: isOk?'#f0fdf4':'#fff5f5' }}>
+                <div className="font-mono text-[22px] font-extrabold tracking-[-0.5px]" style={{ color: isOk?'#16a34a':'#dc2626' }}>{isOk?'✓':'✗'} {rc}</div>
+                <div className="text-sm font-bold text-[#374151]">{rcDesc}</div>
+                {result.message && <div className="text-xs text-[#6b7280]">{result.message}</div>}
+              </div>
+
+              <Section title="Thông tin giao dịch">
+                <Row label="orderId"      value={result.orderId}   mono copy={() => copy(result.orderId)} />
+                <Row label="requestId"    value={result.requestId} mono copy={() => copy(result.requestId)} />
+                <Row label="transId"      value={result.transId?.toString()||'—'} mono />
+                <Row label="partnerCode"  value={result.partnerCode} mono />
+                <Row label="amount"        value={result.amount !== undefined ? `${fmt(result.amount)} ₫` : '—'} />
+                <Row label="payType"       value={result.payType || '—'} />
+                <Row label="paymentOption" value={result.paymentOption || '—'} />
+                <Row label="responseTime"  value={result.responseTime ? fmtMs(result.responseTime) : '—'} />
+              </Section>
+
+              <Section title="Raw Response">
+                <div className="mb-4 max-h-[200px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">{JSON.stringify(result, null, 2)}</div>
+              </Section>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex flex-shrink-0 items-center justify-end border-t border-[#f3f4f6] px-[22px] py-3.5">
+          <button className="rounded-[9px] border border-[rgba(174,0,112,0.1)] bg-[#f9fafb] px-5 py-2 text-[13px] font-semibold text-[#374151] transition-all hover:bg-white" onClick={onClose}>Đóng</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── HISTORY SECTION ───────────────────────────────────────────────────────
 function HistorySection({
   counts, totalRevenue, filter, setFilter, search, setSearch,
@@ -930,6 +1013,7 @@ export default function AdminDashboardPage() {
   const [queryLoading,    setQueryLoading]    = useState(false)
   const [queryResult,     setQueryResult]     = useState(null)
   const [queryError,      setQueryError]      = useState(null)
+  const [queryModal,      setQueryModal]      = useState(false)
 
   const [confirmModal,    setConfirmModal]    = useState(false)
   const [confirmOrderId,  setConfirmOrderId]  = useState('')
@@ -1017,8 +1101,8 @@ export default function AdminDashboardPage() {
 
   const openQueryForOrder = useCallback(orderId => {
     setQueryOrderId(orderId); setQueryResult(null); setQueryError(null)
-    goToSection('lookup'); doMomoQuery(orderId)
-  }, [goToSection, doMomoQuery])
+    setQueryModal(true); doMomoQuery(orderId)
+  }, [doMomoQuery])
 
   const openConfirmForOrder = useCallback((orderId, amount) => {
     setConfirmOrderId(orderId); setConfirmAmount(amount)
@@ -1212,7 +1296,7 @@ export default function AdminDashboardPage() {
             order={detailOrder}
             onClose={() => setDetail(null)}
             onDelete={id => doDelete([id])}
-            onQuery={id => { setDetail(null); openQueryForOrder(id) }}
+            onQuery={id => openQueryForOrder(id)}
             onConfirm={(id, amount) => { setDetail(null); openConfirmForOrder(id, amount) }}
           />
         )}
@@ -1225,6 +1309,16 @@ export default function AdminDashboardPage() {
             onConfirm={() => doMomoConfirm('capture')}
             onCancel={() => doMomoConfirm('cancel')}
             onClose={() => { setConfirmModal(false); setConfirmResult(null); setConfirmError(null) }}
+          />
+        )}
+
+        {/* Query Result Modal (Tra cứu MoMo) */}
+        {queryModal && (
+          <QueryResultModal
+            orderId={queryOrderId}
+            loading={queryLoading} result={queryResult} error={queryError}
+            stacked={!!detailOrder}
+            onClose={() => { setQueryModal(false); setQueryResult(null); setQueryError(null) }}
           />
         )}
 

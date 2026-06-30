@@ -156,6 +156,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000), // 15s timeout - tránh treo vô thời hạn
     })
 
     const rawText = await momoRes.text()
@@ -163,6 +164,15 @@ export default async function handler(req, res) {
     try {
       data = JSON.parse(rawText)
     } catch {
+      await redis.hset('momo:orders', {
+        [orderId]: JSON.stringify({
+          orderId, amount: amt, orderInfo,
+          status: 'FAILED', createdAt: now, paidAt: null,
+          transId: '', payType: 'pos', paymentOption: '',
+          resultCode: -1, message: 'MoMo trả về dữ liệu không hợp lệ',
+          source: 'shortcut-pos',
+        }),
+      })
       return res.status(500).json({ error: 'MoMo trả về dữ liệu không hợp lệ', raw: rawText })
     }
 
@@ -198,6 +208,23 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('[pos-charge] Server Error:', err)
-    return res.status(500).json({ error: 'Lỗi server khi xử lý thanh toán' })
+    const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError'
+    try {
+      await redis.hset('momo:orders', {
+        [orderId]: JSON.stringify({
+          orderId, amount: amt, orderInfo,
+          status: 'FAILED', createdAt: now, paidAt: null,
+          transId: '', payType: 'pos', paymentOption: '',
+          resultCode: -1,
+          message: isTimeout ? 'Timeout khi gọi MoMo (15s)' : (err.message || 'Lỗi server'),
+          source: 'shortcut-pos',
+        }),
+      })
+    } catch (redisErr) {
+      console.error('[pos-charge] Redis update FAILED error:', redisErr)
+    }
+    return res.status(isTimeout ? 504 : 500).json({
+      error: isTimeout ? 'Timeout khi gọi MoMo, vui lòng thử lại' : 'Lỗi server khi xử lý thanh toán',
+    })
   }
 }

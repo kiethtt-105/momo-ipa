@@ -47,28 +47,50 @@ export default async function handler(req, res) {
 }
 
 async function handleQuickRedirect(req, res) {
-  //const { amount, orderInfo = 'Thanh toán tại quầy' } = req.query
-  const { amount, orderInfo = '' } = req.query
+  const { orderId: rawOrderId, amount, orderInfo: rawOrderInfo = '' } = req.query
 
+  const cookie = req.headers.cookie || ''
+  try {
+    const sessionRes = await fetch(`${BASE_URL}/api/admin/session`, {
+      headers: { cookie },
+    })
+    await sessionRes.json()
+  } catch (error) {
+    console.error('[scan][GET] Lỗi kiểm tra session:', error)
+  }
+
+  // ====== Mở lại link cũ bằng orderId (vd lỡ đóng tab) ======
+  // KHÔNG tạo đơn mới, chỉ tra lại đơn PENDING đã có trong Redis để lấy
+  // đúng amount/orderInfo rồi redirect vào lại y như link ban đầu.
+  if (rawOrderId) {
+    const orderId = String(rawOrderId).trim()
+    let existing
+    try {
+      const raw = await redis.hget('momo:orders', orderId)
+      existing = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null
+    } catch (err) {
+      console.error('[scan][GET] Lỗi tra đơn cũ:', err)
+    }
+
+    if (!existing) {
+      return res.status(404).send('Không tìm thấy đơn này (có thể đã hết hạn hoặc sai orderId)')
+    }
+    if (existing.status !== 'PENDING') {
+      return res.status(400).send(`Đơn ${orderId} không còn ở trạng thái chờ (hiện tại: ${existing.status})`)
+    }
+
+    const scanUrl = `/admin/scan?amount=${existing.amount}&orderInfo=${encodeURIComponent(existing.orderInfo || '')}&orderId=${encodeURIComponent(orderId)}&quick=true`
+    return res.redirect(302, scanUrl)
+  }
+
+  // ====== Luồng cũ: tạo link mới từ amount/orderInfo truyền vào ======
   const amt = parseInt(amount)
 
   if (!amt || isNaN(amt) || amt < 1000 || amt > 50_000_000) {
     return res.status(400).send('Số tiền không hợp lệ (1.000 - 50.000.000 ₫)')
   }
 
-  const cookie = req.headers.cookie || ''
-
-  try {
-    const sessionRes = await fetch(`${BASE_URL}/api/admin/session`, {
-      headers: { cookie },
-    })
-    await sessionRes.json()
-
-  } catch (error) {
-    console.error('[scan][GET] Lỗi kiểm tra session:', error)
-  }
-
-  const scanUrl = `/admin/scan?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}&quick=true`
+  const scanUrl = `/admin/scan?amount=${amt}&orderInfo=${encodeURIComponent(rawOrderInfo)}&quick=true`
   return res.redirect(302, scanUrl)
 }
 
@@ -187,6 +209,7 @@ async function handlePosCharge(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000), // 15s timeout - tránh treo vô thời hạn
     })
 
     const rawText = await momoRes.text()
@@ -194,6 +217,15 @@ async function handlePosCharge(req, res) {
     try {
       data = JSON.parse(rawText)
     } catch {
+      await redis.hset('momo:orders', {
+        [orderId]: JSON.stringify({
+          orderId, amount: amt, orderInfo,
+          status: 'FAILED', createdAt: now, paidAt: null,
+          transId: '', payType: 'pos', paymentOption: '',
+          resultCode: -1, message: 'MoMo trả về dữ liệu không hợp lệ',
+          source: 'pos',
+        }),
+      })
       return res.status(500).json({ error: 'MoMo trả về dữ liệu không hợp lệ' })
     }
 
@@ -221,6 +253,23 @@ async function handlePosCharge(req, res) {
 
   } catch (err) {
     console.error('[scan][POST] Server Error:', err)
-    return res.status(500).json({ error: 'Lỗi server khi xử lý thanh toán' })
+    const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError'
+    try {
+      await redis.hset('momo:orders', {
+        [orderId]: JSON.stringify({
+          orderId, amount: amt, orderInfo,
+          status: 'FAILED', createdAt: now, paidAt: null,
+          transId: '', payType: 'pos', paymentOption: '',
+          resultCode: -1,
+          message: isTimeout ? 'Timeout khi gọi MoMo (15s)' : (err.message || 'Lỗi server'),
+          source: 'pos',
+        }),
+      })
+    } catch (redisErr) {
+      console.error('[scan][POST] Redis update FAILED error:', redisErr)
+    }
+    return res.status(isTimeout ? 504 : 500).json({
+      error: isTimeout ? 'Timeout khi gọi MoMo, vui lòng thử lại' : 'Lỗi server khi xử lý thanh toán',
+    })
   }
 }
