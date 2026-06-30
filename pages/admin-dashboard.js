@@ -1,6 +1,6 @@
 // pages/admin-dashboard.js — REBUILT
 // Logic fix: scoped = date+search filtered (for stats). filtered = scoped + status filter (for table).
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 
@@ -93,6 +93,84 @@ const RESULT_CODE_MAP = {
   7000:'Đang xử lý',7002:'Đang xử lý bởi nhà cung cấp',9000:'Giao dịch đã được xác nhận thành công',
 }
 const getResultDesc = code => RESULT_CODE_MAP[code] !== undefined ? RESULT_CODE_MAP[code] : 'Mã lỗi không xác định'
+
+// ─── SIDEBAR (tách riêng + memo để không re-render theo `orders`/polling) ──
+// Chỉ re-render khi 1 trong các props dưới đây thực sự đổi giá trị.
+// Quan trọng: goToSection/logout truyền vào PHẢI được useCallback ở component
+// cha, nếu không React.memo vô nghĩa vì function reference đổi mỗi render.
+const Sidebar = memo(function Sidebar({
+  sidebarOpen, setSidebarOpen, activeSection, goToSection,
+  pendingCount, fetching, lastSync, logout,
+}) {
+  return (
+    <>
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-[250] bg-[rgba(17,7,13,0.45)] backdrop-blur-[2px] lg:hidden" style={{ animation:'fadein 0.15s ease' }} onClick={() => setSidebarOpen(false)} />
+      )}
+
+      <aside className={`fixed inset-y-0 left-0 z-[260] flex w-[252px] max-w-[80vw] flex-shrink-0 flex-col border-r border-[rgba(174,0,112,0.1)] bg-white/95 shadow-[4px_0_24px_rgba(174,0,112,0.06)] backdrop-blur-[20px] transition-transform duration-300 ease-out lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        {/* Logo */}
+        <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-[rgba(174,0,112,0.1)] px-5 py-4">
+          <div className="flex items-center gap-[9px]">
+            <img src="/Main.png" alt="" className="h-[30px] w-[30px] rounded-lg object-contain" />
+            <div className="flex flex-col leading-tight">
+              <span className="text-[15px] font-extrabold tracking-[-0.3px] text-[#ae0070]">MoMo Admin</span>
+              <span className="flex items-center gap-1 text-[10px] font-semibold text-[#6b7280]">
+                <span className={`h-[6px] w-[6px] flex-shrink-0 rounded-full transition-colors duration-300 ${fetching ? 'bg-[#f59e0b]' : 'bg-[#22c55e]'}`} style={fetching ? { animation:'pulse-dot 0.8s infinite' } : undefined} />
+                {lastSync ? `Sync ${lastSync.toLocaleTimeString('vi-VN')}` : 'Đang kết nối…'}
+              </span>
+            </div>
+          </div>
+          <button className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-[#6b7280] transition-all hover:bg-[#f3f4f6] lg:hidden" onClick={() => setSidebarOpen(false)}>
+            <IconX className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-wider text-[#6b7280]">Quản lý giao dịch</div>
+          <div className="flex flex-col gap-1">
+            {NAV_ITEMS.map(item => {
+              const Icon   = item.icon
+              const active = activeSection === item.key
+              return (
+                <button key={item.key}
+                  className={`flex items-center gap-3 rounded-[12px] px-3 py-2.5 text-left transition-all ${
+                    active ? 'bg-[#ae0070] text-white shadow-[0_4px_14px_rgba(174,0,112,0.25)]' : 'text-[#111827] hover:bg-[#fff0f7] hover:text-[#ae0070]'
+                  }`}
+                  onClick={() => goToSection(item.key)}
+                >
+                  <Icon className={`h-[18px] w-[18px] flex-shrink-0 ${active ? 'text-white' : 'text-[#ae0070]'}`} />
+                  <span className="flex flex-col leading-tight">
+                    <span className="text-[13.5px] font-bold">{item.label}</span>
+                    <span className={`text-[11px] font-medium ${active ? 'text-white/75' : 'text-[#6b7280]'}`}>{item.sub}</span>
+                  </span>
+                  {item.key === 'history' && pendingCount > 0 && (
+                    <span className={`ml-auto flex-shrink-0 rounded-full px-[7px] py-[1px] text-[10px] font-bold ${active ? 'bg-white/25 text-white' : 'bg-[#fef3c7] text-[#d97706]'}`}>
+                      {pendingCount}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </nav>
+
+        {/* Logout */}
+        <div className="flex-shrink-0 border-t border-[rgba(174,0,112,0.1)] px-3 py-4">
+          <button
+            className="flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]"
+            onClick={logout}
+          >
+            <IconLogout className="h-[18px] w-[18px] flex-shrink-0" />
+            <span className="text-[13.5px] font-bold">Đăng xuất</span>
+          </button>
+        </div>
+      </aside>
+    </>
+  )
+})
 
 // ─── ICON COMPONENTS ───────────────────────────────────────────────────────
 function IconHistory(props) { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg> }
@@ -883,7 +961,7 @@ export default function AdminDashboardPage() {
     return () => window.removeEventListener('keydown', fn)
   }, [])
 
-  const goToSection = key => { setActiveSection(key); setSidebarOpen(false) }
+  const goToSection = useCallback(key => { setActiveSection(key); setSidebarOpen(false) }, [])
 
   const doMomoQuery = async (idArg) => {
     const id = (idArg ?? queryOrderId).trim()
@@ -1013,10 +1091,10 @@ export default function AdminDashboardPage() {
     } catch { setPwError(true) }
   }
 
-  function logout() {
+  const logout = useCallback(() => {
     if (!confirm('Đăng xuất khỏi trang quản trị?')) return
     fetch('/api/admin/session', { method:'DELETE' }).finally(() => setAuthed(false))
-  }
+  }, [])
 
   // ─── LOADING STATE ──────────────────────────────────────────────────────
   if (checkingSession) return (
@@ -1101,72 +1179,17 @@ export default function AdminDashboardPage() {
           />
         )}
 
-        {/* Mobile sidebar overlay */}
-        {sidebarOpen && (
-          <div className="fixed inset-0 z-[250] bg-[rgba(17,7,13,0.45)] backdrop-blur-[2px] lg:hidden" style={{ animation:'fadein 0.15s ease' }} onClick={() => setSidebarOpen(false)} />
-        )}
-
         <div className="relative z-[1] flex min-h-screen">
-          {/* Sidebar */}
-          <aside className={`fixed inset-y-0 left-0 z-[260] flex w-[252px] max-w-[80vw] flex-shrink-0 flex-col border-r border-[rgba(174,0,112,0.1)] bg-white/95 shadow-[4px_0_24px_rgba(174,0,112,0.06)] backdrop-blur-[20px] transition-transform duration-300 ease-out lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-            {/* Logo */}
-            <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-[rgba(174,0,112,0.1)] px-5 py-4">
-              <div className="flex items-center gap-[9px]">
-                <img src="/Main.png" alt="" className="h-[30px] w-[30px] rounded-lg object-contain" />
-                <div className="flex flex-col leading-tight">
-                  <span className="text-[15px] font-extrabold tracking-[-0.3px] text-[#ae0070]">MoMo Admin</span>
-                  <span className="flex items-center gap-1 text-[10px] font-semibold text-[#6b7280]">
-                    <span className={`h-[6px] w-[6px] flex-shrink-0 rounded-full transition-colors duration-300 ${fetching ? 'bg-[#f59e0b]' : 'bg-[#22c55e]'}`} style={fetching ? { animation:'pulse-dot 0.8s infinite' } : undefined} />
-                    {lastSync ? `Sync ${lastSync.toLocaleTimeString('vi-VN')}` : 'Đang kết nối…'}
-                  </span>
-                </div>
-              </div>
-              <button className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-[#6b7280] transition-all hover:bg-[#f3f4f6] lg:hidden" onClick={() => setSidebarOpen(false)}>
-                <IconX className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Nav */}
-            <nav className="flex-1 overflow-y-auto px-3 py-4">
-              <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-wider text-[#6b7280]">Quản lý giao dịch</div>
-              <div className="flex flex-col gap-1">
-                {NAV_ITEMS.map(item => {
-                  const Icon   = item.icon
-                  const active = activeSection === item.key
-                  return (
-                    <button key={item.key}
-                      className={`flex items-center gap-3 rounded-[12px] px-3 py-2.5 text-left transition-all ${
-                        active ? 'bg-[#ae0070] text-white shadow-[0_4px_14px_rgba(174,0,112,0.25)]' : 'text-[#111827] hover:bg-[#fff0f7] hover:text-[#ae0070]'
-                      }`}
-                      onClick={() => goToSection(item.key)}
-                    >
-                      <Icon className={`h-[18px] w-[18px] flex-shrink-0 ${active ? 'text-white' : 'text-[#ae0070]'}`} />
-                      <span className="flex flex-col leading-tight">
-                        <span className="text-[13.5px] font-bold">{item.label}</span>
-                        <span className={`text-[11px] font-medium ${active ? 'text-white/75' : 'text-[#6b7280]'}`}>{item.sub}</span>
-                      </span>
-                      {item.key === 'history' && counts.PENDING > 0 && (
-                        <span className={`ml-auto flex-shrink-0 rounded-full px-[7px] py-[1px] text-[10px] font-bold ${active ? 'bg-white/25 text-white' : 'bg-[#fef3c7] text-[#d97706]'}`}>
-                          {counts.PENDING}
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            </nav>
-
-            {/* Logout */}
-            <div className="flex-shrink-0 border-t border-[rgba(174,0,112,0.1)] px-3 py-4">
-              <button
-                className="flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]"
-                onClick={logout}
-              >
-                <IconLogout className="h-[18px] w-[18px] flex-shrink-0" />
-                <span className="text-[13.5px] font-bold">Đăng xuất</span>
-              </button>
-            </div>
-          </aside>
+        <Sidebar
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          activeSection={activeSection}
+          goToSection={goToSection}
+          pendingCount={counts.PENDING}
+          fetching={fetching}
+          lastSync={lastSync}
+          logout={logout}
+        />
 
           {/* Main content */}
           <div className="flex min-h-screen w-full flex-1 flex-col lg:pl-[252px]">
