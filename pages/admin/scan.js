@@ -529,17 +529,11 @@ export default function ScanPage() {
               ) : (
                 <>
                   <div className="text-4xl mb-3">🔗</div>
-                  <h3 className="text-[15px] font-bold text-gray-700 mb-1.5">Chưa có giao dịch nào</h3>
-                  <p className="text-[13px] text-gray-500 mb-5 leading-relaxed">
-                    Trang này chỉ nhận đơn từ link do quầy thu ngân tạo.<br />
-                    Vui lòng tạo giao dịch mới để lấy link/QR.
+                  <h3 className="text-[15px] font-bold text-gray-700 mb-1.5">Đang chờ giao dịch</h3>
+                  <p className="text-[13px] text-gray-500 leading-relaxed">
+                    Trang này chỉ nhận đơn từ link do trang "Tạo giao dịch" tạo ra.<br />
+                    Vui lòng tạo giao dịch ở trang Tạo giao dịch, hệ thống sẽ tự mở link về đây để quét QR.
                   </p>
-                  <button
-                    onClick={() => router.push('/admin/create-transaction')}
-                    className={btnPrimary}
-                  >
-                    + Tạo giao dịch mới
-                  </button>
                 </>
               )}
             </div>
