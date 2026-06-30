@@ -745,20 +745,27 @@ function HistorySection({
               className="w-[160px] rounded-[10px] border border-[rgba(174,0,112,0.1)] bg-white/70 py-[7px] pl-[34px] pr-8 text-[13px] text-[#111827] transition-all focus:border-[#ae0070] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.08)] focus:w-[220px]" />
             {search && <button className="absolute right-[10px] text-xs leading-none text-[#6b7280]" onClick={() => setSearch('')}>✕</button>}
           </div>
-          <button
-            type="button"
-            title="Cập nhật lại trạng thái tất cả giao dịch"
-            disabled={reconcilingAll}
-            onClick={onReconcileAll}
-            className={`relative z-10 flex h-[33px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-2.5 text-[12.5px] font-semibold transition-all disabled:cursor-not-allowed ${
-              reconcilingAll
-                ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]'
-                : 'cursor-pointer border-[rgba(174,0,112,0.1)] bg-white/70 text-[#ae0070] hover:border-[#ae0070] hover:bg-[#fff0f7]'
-            }`}
-          >
-            <IconRefresh className={`h-[14px] w-[14px] flex-shrink-0 ${reconcilingAll ? 'animate-spin' : ''}`} />
-            Cập nhật
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              title="Cập nhật lại trạng thái tất cả giao dịch"
+              disabled={reconcilingAll}
+              onClick={onReconcileAll}
+              className={`relative z-10 flex h-[33px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-2.5 text-[12.5px] font-semibold transition-all disabled:cursor-not-allowed ${
+                reconcilingAll
+                  ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]'
+                  : 'cursor-pointer border-[rgba(174,0,112,0.1)] bg-white/70 text-[#ae0070] hover:border-[#ae0070] hover:bg-[#fff0f7]'
+              }`}
+            >
+              <IconRefresh className={`h-[14px] w-[14px] flex-shrink-0 ${reconcilingAll ? 'animate-spin' : ''}`} />
+              Cập nhật
+            </button>
+            {reconcileMsg && (
+              <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-max max-w-[260px] rounded-lg bg-[#111827] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)]" style={{ animation:'fadein 0.15s ease' }}>
+                {reconcileMsg}
+              </div>
+            )}
+          </div>
           {selected.size > 0 && (
             <button className="flex-shrink-0 whitespace-nowrap rounded-[9px] bg-[#dc2626] px-3.5 py-[7px] text-[13px] font-bold text-white transition-all hover:bg-[#b91c1c]" onClick={() => doDelete([...selected])}>
               Xóa ({selected.size})
@@ -1095,54 +1102,57 @@ export default function AdminDashboardPage() {
   // Quét lại tất cả giao dịch đang PENDING bằng cách gọi /api/momo/query cho từng
   // đơn — backend sẽ tự đối chiếu (reconcile) với MoMo và sửa Redis nếu IPN bị rớt.
   // Giới hạn chạy đồng thời (CONCURRENCY) để không spam API MoMo cùng lúc.
+  // Luôn xoay icon ngay khi bấm (kể cả khi không có đơn PENDING nào) và giữ xoay
+  // tối thiểu MIN_SPIN_MS để người dùng thấy rõ là đã bấm trúng / đang chạy.
   const reconcileAllPending = useCallback(async () => {
     if (reconcilingAllRef.current) return
+    reconcilingAllRef.current = true; setReconcilingAll(true)
+    setReconcileMsg(null); clearTimeout(reconcileMsgTimerRef.current)
+    const MIN_SPIN_MS = 600
+    const startedAt = Date.now()
+
     const targets = ordersRef.current
       .map(normalizeStatus)
       .filter(o => o.status === 'PENDING')
       .map(o => o.orderId)
 
-    if (targets.length === 0) {
-      setReconcileMsg('Không có giao dịch nào đang chờ xử lý')
-      clearTimeout(reconcileMsgTimerRef.current)
-      reconcileMsgTimerRef.current = setTimeout(() => setReconcileMsg(null), 3000)
-      fetchOrders({ force: true })
-      return
-    }
-
-    reconcilingAllRef.current = true; setReconcilingAll(true)
-    setReconcileMsg(null); clearTimeout(reconcileMsgTimerRef.current)
     let checked = 0, reconciled = 0
-    const CONCURRENCY = 4
-    let idx = 0
-    const worker = async () => {
-      while (idx < targets.length) {
-        const orderId = targets[idx++]
-        try {
-          const res  = await fetch('/api/momo/query', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderId }),
-          })
-          const data = await res.json().catch(() => null)
-          checked += 1
-          if (data?._reconciled) reconciled += 1
-        } catch (err) {
-          console.error('[AdminDashboard] reconcileAllPending lỗi với', orderId, err)
-          checked += 1
+    if (targets.length > 0) {
+      const CONCURRENCY = 4
+      let idx = 0
+      const worker = async () => {
+        while (idx < targets.length) {
+          const orderId = targets[idx++]
+          try {
+            const res  = await fetch('/api/momo/query', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ orderId }),
+            })
+            const data = await res.json().catch(() => null)
+            checked += 1
+            if (data?._reconciled) reconciled += 1
+          } catch (err) {
+            console.error('[AdminDashboard] reconcileAllPending lỗi với', orderId, err)
+            checked += 1
+          }
         }
       }
-    }
-    try {
       await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker))
-    } finally {
-      reconcilingAllRef.current = false; setReconcilingAll(false)
-      setReconcileMsg(reconciled > 0
+    }
+
+    await fetchOrders({ force: true })
+
+    const elapsed = Date.now() - startedAt
+    if (elapsed < MIN_SPIN_MS) await new Promise(r => setTimeout(r, MIN_SPIN_MS - elapsed))
+
+    reconcilingAllRef.current = false; setReconcilingAll(false)
+    setReconcileMsg(targets.length === 0
+      ? 'Không có giao dịch nào đang chờ xử lý'
+      : reconciled > 0
         ? `Đã quét ${checked} đơn · cập nhật lại ${reconciled} đơn bị lệch`
         : `Đã quét ${checked} đơn · không có đơn nào bị lệch`)
-      reconcileMsgTimerRef.current = setTimeout(() => setReconcileMsg(null), 4000)
-      fetchOrders({ force: true })
-    }
+    reconcileMsgTimerRef.current = setTimeout(() => setReconcileMsg(null), 4000)
   }, [fetchOrders])
 
   useEffect(() => {
