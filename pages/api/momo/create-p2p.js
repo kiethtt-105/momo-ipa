@@ -1,5 +1,6 @@
 import { createMoMoPayment } from '../../../lib/momo'
 import { Redis } from '@upstash/redis'
+import QRCode from 'qrcode'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -85,10 +86,26 @@ export default async function handler(req, res) {
       })
     }
 
+    // Chỉ thêm: tự generate ảnh QR (base64 PNG) từ payUrl để gửi kèm cho người dùng,
+    // không thay đổi logic tạo đơn / gọi MoMo ở trên.
+    let qrCodeImage = ''
+    if (result.payUrl) {
+      try {
+        qrCodeImage = await QRCode.toDataURL(result.payUrl, {
+          errorCorrectionLevel: 'M',
+          margin: 1,
+          width: 400,
+        })
+      } catch (qrErr) {
+        console.error('[create-p2p] QR Generate Error:', qrErr.message)
+      }
+    }
+
     return res.status(200).json({
       payUrl: result.payUrl,
       deeplink: result.deeplink,
       qrCodeUrl: result.qrCodeUrl,
+      qrCodeImage, // data:image/png;base64,... - tạo từ payUrl, dùng được luôn
       orderId: result.orderId,
       requestId: result.requestId,
     })
