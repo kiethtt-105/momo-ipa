@@ -685,22 +685,11 @@ function HistorySection({
     <>
       {/* Title + status filter tabs */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <div>
-            <h1 className="text-[19px] font-extrabold tracking-[-0.3px] text-[#111827]">Lịch sử giao dịch</h1>
-            <p className="mt-0.5 text-xs text-[#6b7280]">
-              {filtered.length} giao dịch{filter !== 'ALL' && ` · "${FILTERS.find(f => f.key === filter)?.label}"`}
-            </p>
-          </div>
-          <button
-            type="button"
-            title="Cập nhật lại trạng thái tất cả giao dịch"
-            disabled={reconcilingAll}
-            onClick={onReconcileAll}
-            className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-[rgba(174,0,112,0.15)] bg-white/80 text-[#ae0070] shadow-[0_1px_4px_rgba(174,0,112,0.1)] transition-all hover:bg-[#fff0f7] hover:shadow-[0_2px_8px_rgba(174,0,112,0.18)] disabled:opacity-50"
-          >
-            <IconRefresh className={`h-3 w-3 ${reconcilingAll ? 'animate-spin' : ''}`} />
-          </button>
+        <div>
+          <h1 className="text-[19px] font-extrabold tracking-[-0.3px] text-[#111827]">Lịch sử giao dịch</h1>
+          <p className="mt-0.5 text-xs text-[#6b7280]">
+            {filtered.length} giao dịch{filter !== 'ALL' && ` · "${FILTERS.find(f => f.key === filter)?.label}"`}
+          </p>
         </div>
 
         {/* Status tabs — desktop */}
@@ -756,6 +745,15 @@ function HistorySection({
               className="w-[160px] rounded-[10px] border border-[rgba(174,0,112,0.1)] bg-white/70 py-[7px] pl-[34px] pr-8 text-[13px] text-[#111827] transition-all focus:border-[#ae0070] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.08)] focus:w-[220px]" />
             {search && <button className="absolute right-[10px] text-xs leading-none text-[#6b7280]" onClick={() => setSearch('')}>✕</button>}
           </div>
+          <button
+            type="button"
+            title="Cập nhật lại trạng thái tất cả giao dịch"
+            disabled={reconcilingAll}
+            onClick={onReconcileAll}
+            className="relative z-10 flex h-[33px] w-[33px] flex-shrink-0 cursor-pointer items-center justify-center rounded-[10px] border border-[rgba(174,0,112,0.1)] bg-white/70 text-[#ae0070] transition-all hover:border-[#ae0070] hover:bg-[#fff0f7] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <IconRefresh className={`h-[15px] w-[15px] ${reconcilingAll ? 'animate-spin' : ''}`} />
+          </button>
           {selected.size > 0 && (
             <button className="flex-shrink-0 whitespace-nowrap rounded-[9px] bg-[#dc2626] px-3.5 py-[7px] text-[13px] font-bold text-white transition-all hover:bg-[#b91c1c]" onClick={() => doDelete([...selected])}>
               Xóa ({selected.size})
