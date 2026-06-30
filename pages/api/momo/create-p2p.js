@@ -101,6 +101,32 @@ export default async function handler(req, res) {
       }
     }
 
+    // Lưu thêm payUrl + qrCodeImage vào record của đơn (cập nhật lại record PENDING
+    // đã tạo ở trên), để phòng trường hợp lỡ tay đóng trình duyệt vẫn tra cứu lại
+    // được link/QR để thanh toán tiếp qua status.js / orders.js, không cần tạo đơn mới.
+    await redis.hset('momo:orders', {
+      [orderId]: JSON.stringify({
+        orderId,
+        amount: amt,
+        orderInfo,
+        status: 'PENDING',
+        createdAt: now,
+        paidAt: null,
+        transId: '',
+        payType: '',
+        paymentOption: '',
+        source: 'create-p2p',
+        storeId,
+        storeName,
+        partnerName,
+        payUrl: result.payUrl || '',
+        deeplink: result.deeplink || '',
+        qrCodeUrl: result.qrCodeUrl || '',
+        qrCodeImage,
+        requestId: result.requestId || '',
+      }),
+    })
+
     return res.status(200).json({
       payUrl: result.payUrl,
       deeplink: result.deeplink,

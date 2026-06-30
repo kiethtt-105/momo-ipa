@@ -446,6 +446,41 @@ function DetailModal({ order: o, onClose, onDelete, onQuery, onConfirm }) {
             </Section>
           )}
 
+          {o.payUrl && (
+            <Section title="Thanh toán nhanh (QR / Link)">
+              <div className="flex flex-col items-center gap-3 px-1 py-2 sm:flex-row sm:items-start">
+                {o.qrCodeImage && (
+                  <img
+                    src={o.qrCodeImage}
+                    alt="QR thanh toán"
+                    className="h-[160px] w-[160px] flex-shrink-0 rounded-lg border border-[#e5e7eb] bg-white p-1.5"
+                  />
+                )}
+                <div className="flex w-full flex-1 flex-col gap-2">
+                  <div className="break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 font-mono text-[11.5px] text-[#374151]">
+                    {o.payUrl}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      href={o.payUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-[7px] rounded-[9px] border border-[rgba(174,0,112,0.25)] bg-[#fff0f7] px-3.5 py-2 text-[13px] font-bold text-[#ae0070] transition-all hover:bg-[#ae0070] hover:text-white"
+                    >
+                      Mở link thanh toán
+                    </a>
+                    <button
+                      className="inline-flex items-center gap-[7px] rounded-[9px] border border-[#e5e7eb] bg-white px-3.5 py-2 text-[13px] font-bold text-[#374151] transition-all hover:bg-[#f3f4f6]"
+                      onClick={() => copy(o.payUrl)}
+                    >
+                      Copy link
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </Section>
+          )}
+
           {o.requestId && (
             <Section title="IDs kỹ thuật">
               <Row label="requestId"    value={o.requestId}   mono copy={() => copy(o.requestId)} />

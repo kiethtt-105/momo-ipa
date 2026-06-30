@@ -52,7 +52,11 @@ export default async function handler(req, res) {
     paidAt:       isPaid ? now : (existing?.paidAt || null),
     createdAt:    existing?.createdAt || now,
     status:       isPaid ? 'PAID' : 'FAILED',
-    source:       'redirect-verified', 
+    source:       'redirect-verified',
+    payUrl:       existing?.payUrl       || '',
+    deeplink:     existing?.deeplink     || '',
+    qrCodeUrl:    existing?.qrCodeUrl    || '',
+    qrCodeImage:  existing?.qrCodeImage  || '',
   }
 
   await redis.hset('momo:orders', { [orderId]: JSON.stringify(record) })
