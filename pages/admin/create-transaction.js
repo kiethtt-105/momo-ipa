@@ -599,7 +599,7 @@ export default function CreateTransactionPage() {
 
         .method-tabs {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
+          grid-template-columns: repeat(2, 1fr);
           gap: 8px;
           margin-bottom: 20px;
         }
