@@ -745,27 +745,20 @@ function HistorySection({
               className="w-[160px] rounded-[10px] border border-[rgba(174,0,112,0.1)] bg-white/70 py-[7px] pl-[34px] pr-8 text-[13px] text-[#111827] transition-all focus:border-[#ae0070] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.08)] focus:w-[220px]" />
             {search && <button className="absolute right-[10px] text-xs leading-none text-[#6b7280]" onClick={() => setSearch('')}>✕</button>}
           </div>
-          <div className="relative">
-            <button
-              type="button"
-              title="Cập nhật lại trạng thái tất cả giao dịch"
-              disabled={reconcilingAll}
-              onClick={onReconcileAll}
-              className={`relative z-10 flex h-[33px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-2.5 text-[12.5px] font-semibold transition-all disabled:cursor-not-allowed ${
-                reconcilingAll
-                  ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]'
-                  : 'cursor-pointer border-[rgba(174,0,112,0.1)] bg-white/70 text-[#ae0070] hover:border-[#ae0070] hover:bg-[#fff0f7]'
-              }`}
-            >
-              <IconRefresh className={`h-[14px] w-[14px] flex-shrink-0 ${reconcilingAll ? 'animate-spin' : ''}`} />
-              {reconcilingAll ? 'Đang quét...' : 'Cập nhật'}
-            </button>
-            {reconcileMsg && (
-              <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-max max-w-[260px] rounded-lg bg-[#111827] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)]" style={{ animation:'fadein 0.15s ease' }}>
-                {reconcileMsg}
-              </div>
-            )}
-          </div>
+          <button
+            type="button"
+            title="Cập nhật lại trạng thái tất cả giao dịch"
+            disabled={reconcilingAll}
+            onClick={onReconcileAll}
+            className={`relative z-10 flex h-[33px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-2.5 text-[12.5px] font-semibold transition-all disabled:cursor-not-allowed ${
+              reconcilingAll
+                ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]'
+                : 'cursor-pointer border-[rgba(174,0,112,0.1)] bg-white/70 text-[#ae0070] hover:border-[#ae0070] hover:bg-[#fff0f7]'
+            }`}
+          >
+            <IconRefresh className={`h-[14px] w-[14px] flex-shrink-0 ${reconcilingAll ? 'animate-spin' : ''}`} />
+            Cập nhật
+          </button>
           {selected.size > 0 && (
             <button className="flex-shrink-0 whitespace-nowrap rounded-[9px] bg-[#dc2626] px-3.5 py-[7px] text-[13px] font-bold text-white transition-all hover:bg-[#b91c1c]" onClick={() => doDelete([...selected])}>
               Xóa ({selected.size})
