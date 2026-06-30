@@ -24,7 +24,7 @@ const FILTERS = [
 
 const NAV_ITEMS = [
   { key: 'history', label: 'Lịch sử giao dịch', sub: 'Toàn bộ đơn hàng',  icon: IconHistory },
-  { key: 'create',  label: 'Tạo giao dịch',     sub: 'P2P / Scan / ATM',  icon: IconPlus   },
+  { key: 'create',  label: 'Tạo giao dịch',     sub: 'P2P / Scan',  icon: IconPlus   },
   { key: 'lookup',  label: 'Tra cứu giao dịch', sub: 'Theo mã đơn MoMo',  icon: IconSearch },
 ]
 
@@ -192,7 +192,7 @@ function Orbs() {
 }
 
 // ─── STAT CARD ─────────────────────────────────────────────────────────────
-function StatCard({ label, value, color, sub }) {
+const StatCard = memo(function StatCard({ label, value, color, sub }) {
   return (
     <div className="flex flex-col gap-1 rounded-2xl border border-white/60 bg-white/80 px-5 py-4 shadow-[0_2px_16px_rgba(174,0,112,0.04)] backdrop-blur-[12px]">
       <div className="text-[11px] font-bold uppercase tracking-wider text-[#6b7280]">{label}</div>
@@ -200,10 +200,10 @@ function StatCard({ label, value, color, sub }) {
       {sub && <div className="text-[11.5px] text-[#9ca3af]">{sub}</div>}
     </div>
   )
-}
+})
 
 // ─── SORTABLE TH ───────────────────────────────────────────────────────────
-function SortableTh({ label, sortKey: sk, currentKey, dir, onSort }) {
+const SortableTh = memo(function SortableTh({ label, sortKey: sk, currentKey, dir, onSort }) {
   const active = currentKey === sk
   return (
     <th
@@ -219,19 +219,19 @@ function SortableTh({ label, sortKey: sk, currentKey, dir, onSort }) {
       </span>
     </th>
   )
-}
+})
 
 // ─── ORDER CARD (mobile) ────────────────────────────────────────────────────
-function OrderCard({ o, selected, onToggle, onOpenDetail, onQuery, onDelete, onConfirm }) {
+const OrderCard = memo(function OrderCard({ o, selected, onToggle, onOpenDetail, onQuery, onDelete, onConfirm }) {
   const sm = STATUS_META[o.status] || STATUS_META.PENDING
   return (
     <div
       className={`flex cursor-pointer flex-col gap-2 border-b border-[rgba(174,0,112,0.05)] px-4 py-3.5 transition-colors ${selected ? 'bg-[rgba(174,0,112,0.04)]' : 'hover:bg-white/50'}`}
-      onClick={onOpenDetail}
+      onClick={() => onOpenDetail(o.orderId)}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
-          <input type="checkbox" checked={selected} onChange={e => { e.stopPropagation(); onToggle() }} onClick={e => e.stopPropagation()} className="flex-shrink-0" />
+          <input type="checkbox" checked={selected} onChange={e => { e.stopPropagation(); onToggle(o.orderId) }} onClick={e => e.stopPropagation()} className="flex-shrink-0" />
           <span className="inline-flex items-center gap-1.5 rounded-[20px] px-[10px] py-[4px] text-xs font-bold" style={{ background: sm.bg, color: sm.color }}>
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: sm.dot }} />
             {sm.label}
@@ -246,14 +246,14 @@ function OrderCard({ o, selected, onToggle, onOpenDetail, onQuery, onDelete, onC
           <div className="mt-0.5 text-[11px] text-[#9ca3af]">{fmtDate(o.createdAt)}</div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-1" onClick={e => e.stopPropagation()}>
-          <button className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[#6366f1] transition-all hover:bg-[#eef2ff]" onClick={onQuery} title="Tra cứu">
+          <button className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[#6366f1] transition-all hover:bg-[#eef2ff]" onClick={() => onQuery(o.orderId)} title="Tra cứu">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/></svg>
           </button>
-          <button className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[#9ca3af] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]" onClick={onDelete} title="Xóa">
+          <button className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[#9ca3af] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]" onClick={() => onDelete([o.orderId])} title="Xóa">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
           </button>
           {o.resultCode === 9000 && (
-            <button className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[rgba(22,163,74,0.3)] bg-[#f0fdf4] text-[#16a34a] transition-all hover:bg-[#16a34a] hover:text-white" onClick={onConfirm} title="Xác nhận">
+            <button className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[rgba(22,163,74,0.3)] bg-[#f0fdf4] text-[#16a34a] transition-all hover:bg-[#16a34a] hover:text-white" onClick={() => onConfirm(o.orderId, o.amount)} title="Xác nhận">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
             </button>
           )}
@@ -261,7 +261,7 @@ function OrderCard({ o, selected, onToggle, onOpenDetail, onQuery, onDelete, onC
       </div>
     </div>
   )
-}
+})
 
 // ─── SECTION / ROW (modal helpers) ─────────────────────────────────────────
 function Section({ title, children }) {
@@ -740,9 +740,9 @@ function HistorySection({
               <div className="max-h-[70vh] overflow-y-auto">
                 {filtered.map(o => (
                   <OrderCard key={o.orderId} o={o} selected={selected.has(o.orderId)}
-                    onToggle={() => toggleOne(o.orderId)} onOpenDetail={() => setDetail(o.orderId)}
-                    onQuery={() => openQueryForOrder(o.orderId)} onDelete={() => doDelete([o.orderId])}
-                    onConfirm={() => openConfirmForOrder(o.orderId, o.amount)} />
+                    onToggle={toggleOne} onOpenDetail={setDetail}
+                    onQuery={openQueryForOrder} onDelete={doDelete}
+                    onConfirm={openConfirmForOrder} />
                 ))}
               </div>
             </div>
@@ -761,7 +761,7 @@ function CreateSection() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-[19px] font-extrabold tracking-[-0.3px] text-[#111827]">Tạo giao dịch</h1>
-          <p className="mt-0.5 text-xs text-[#6b7280]">Tạo thanh toán mới qua P2P, quét mã QR (Scan) hoặc thẻ ATM</p>
+          <p className="mt-0.5 text-xs text-[#6b7280]">Tạo thanh toán mới qua P2P hoặc quét mã QR (Scan)</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -907,6 +907,7 @@ export default function AdminDashboardPage() {
   const fetchingRef = useRef(false)
   const selectedRef = useRef(new Set())
   const detailRef   = useRef(null)
+  const filteredRef = useRef([])
 
   useEffect(() => { ordersRef.current   = orders   }, [orders])
   useEffect(() => { selectedRef.current = selected }, [selected])
@@ -963,7 +964,7 @@ export default function AdminDashboardPage() {
 
   const goToSection = useCallback(key => { setActiveSection(key); setSidebarOpen(false) }, [])
 
-  const doMomoQuery = async (idArg) => {
+  const doMomoQuery = useCallback(async (idArg) => {
     const id = (idArg ?? queryOrderId).trim()
     if (!id) return
     setQueryLoading(true); setQueryResult(null); setQueryError(null)
@@ -977,17 +978,17 @@ export default function AdminDashboardPage() {
     } finally {
       setQueryLoading(false)
     }
-  }
+  }, [queryOrderId])
 
-  const openQueryForOrder = orderId => {
+  const openQueryForOrder = useCallback(orderId => {
     setQueryOrderId(orderId); setQueryResult(null); setQueryError(null)
     goToSection('lookup'); doMomoQuery(orderId)
-  }
+  }, [goToSection, doMomoQuery])
 
-  const openConfirmForOrder = (orderId, amount) => {
+  const openConfirmForOrder = useCallback((orderId, amount) => {
     setConfirmOrderId(orderId); setConfirmAmount(amount)
     setConfirmResult(null); setConfirmError(null); setConfirmModal(true)
-  }
+  }, [])
 
   const doMomoConfirm = async (requestType) => {
     setConfirmLoading(true); setConfirmResult(null); setConfirmError(null)
@@ -1064,24 +1065,37 @@ export default function AdminDashboardPage() {
 
   const detailOrder = detail ? displayed.find(o => o.orderId === detail) : null
 
-  const toggleOne = id => { const s = new Set(selected); s.has(id) ? s.delete(id) : s.add(id); setSelected(s) }
-  const toggleAll = () => selected.size === filtered.length ? setSelected(new Set()) : setSelected(new Set(filtered.map(o=>o.orderId)))
-  const toggleSort = key => {
-    if (sortKey === key) setSortDir(d => d==='asc'?'desc':'asc')
-    else { setSortKey(key); setSortDir('desc') }
-  }
+  useEffect(() => { filteredRef.current = filtered }, [filtered])
 
-  const doDelete = async (ids) => {
+  const toggleOne = useCallback(id => {
+    setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }, [])
+
+  const toggleAll = useCallback(() => {
+    setSelected(s => {
+      const ids = filteredRef.current.map(o => o.orderId)
+      return s.size === ids.length ? new Set() : new Set(ids)
+    })
+  }, [])
+  const toggleSort = useCallback(key => {
+    setSortKey(prevKey => {
+      if (prevKey === key) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); return prevKey }
+      setSortDir('desc')
+      return key
+    })
+  }, [])
+
+  const doDelete = useCallback(async (ids) => {
     if (!confirm(`Xóa ${ids.length} đơn?\nKhông thể hoàn tác!`)) return
     try {
       await Promise.all(ids.map(id => fetch('/api/momo/delete', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ orderId:id }) })))
-      if (detail && ids.includes(detail)) setDetail(null)
+      setDetail(d => (d && ids.includes(d)) ? null : d)
       setSelected(s => { const n = new Set(s); ids.forEach(id => n.delete(id)); return n })
       await fetchOrders({ force: true })
     } catch (err) {
       console.error(err); alert('Lỗi khi xóa')
     }
-  }
+  }, [fetchOrders])
 
   async function login() {
     setPwError(false)
