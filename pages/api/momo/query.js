@@ -1,7 +1,16 @@
 // pages/api/momo/query.js
 import crypto from 'crypto'
+import { Redis } from '@upstash/redis'
+
+const redis = new Redis({
+  url:   process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+})
 
 const MOMO_ENDPOINT = process.env.MOMO_QUERY_ENDPOINT
+
+// resultCode coi là "đang xử lý", chưa kết luận được — không vội cập nhật theo các mã này.
+const STILL_PROCESSING_CODES = [1000, 7000, 7002]
 
 const PARTNER_CODE = process.env.MOMO_PARTNER_CODE
 const ACCESS_KEY = process.env.MOMO_ACCESS_KEY
@@ -106,6 +115,50 @@ export default async function handler(req, res) {
     const responseData = {
       ...data,
       paymentOption: data.paymentOption ?? null,
+    }
+
+    // ===== Đối chiếu (reconcile) với dữ liệu đang lưu trong Redis =====
+    // Trường hợp IPN bị rớt/lỗi → trạng thái local có thể sai (vd: vẫn PENDING rồi tự
+    // chuyển EXPIRED theo thời gian, dù MoMo đã báo thành công). Khi admin bấm "tra cứu",
+    // ta lấy kết quả thật từ MoMo và so sánh với bản ghi hiện tại; nếu lệch thì cập nhật lại.
+    try {
+      const rc = data.resultCode
+      if (rc !== undefined && rc !== null && !STILL_PROCESSING_CODES.includes(parseInt(rc))) {
+        const raw = await redis.hget('momo:orders', orderId)
+        if (raw) {
+          let existing = typeof raw === 'string' ? JSON.parse(raw) : raw
+          const isPaid = parseInt(rc) === 0
+          const correctStatus = isPaid ? 'PAID' : 'FAILED'
+
+          // Không tự "hạ cấp" một đơn đã PAID trước đó dựa trên 1 lần tra cứu khác —
+          // chỉ cập nhật khi trạng thái lưu trữ KHÔNG khớp với kết quả thật từ MoMo.
+          if (existing.status !== correctStatus) {
+            const now = new Date().toISOString()
+            const reconciled = {
+              ...existing,
+              transId:       data.transId      || existing.transId      || '',
+              amount:        parseInt(data.amount || existing.amount    || 0),
+              payType:       data.payType       || existing.payType     || '',
+              resultCode:    parseInt(rc),
+              message:       data.message       || existing.message     || '',
+              responseTime:  data.responseTime  || existing.responseTime || null,
+              requestId:     data.requestId     || existing.requestId    || '',
+              paidAt:        isPaid ? (existing.paidAt || now) : (existing.paidAt || null),
+              status:        correctStatus,
+              source:        'manual-lookup-reconciled',
+              lastCheckedAt: now,
+            }
+            await redis.hset('momo:orders', { [orderId]: JSON.stringify(reconciled) })
+            console.log(`[momo/query] Reconciled ${orderId}: ${existing.status} -> ${correctStatus} (IPN bị rớt hoặc sai lệch)`)
+            responseData._reconciled = true
+            responseData._previousStatus = existing.status
+            responseData._newStatus = correctStatus
+          }
+        }
+      }
+    } catch (reconcileErr) {
+      // Lỗi reconcile không được làm hỏng response tra cứu — chỉ log lại.
+      console.error('[momo/query] Lỗi reconcile với Redis:', reconcileErr.message)
     }
 
     return res.status(momoRes.ok ? 200 : momoRes.status).json(responseData)

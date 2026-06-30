@@ -630,6 +630,12 @@ function QueryResultModal({ orderId, loading, result, error, onClose, stacked })
 
           {!loading && result && (
             <>
+              {result._reconciled && (
+                <div className="mx-[22px] mt-4 flex items-center gap-2 rounded-[10px] border border-[#fde68a] bg-[#fffbeb] px-3.5 py-2.5 text-[13px] font-semibold text-[#92400e]">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+                  Phát hiện lệch trạng thái (IPN có thể đã bị rớt) — đã tự động cập nhật từ "{STATUS_META[result._previousStatus]?.label || result._previousStatus}" sang "{STATUS_META[result._newStatus]?.label || result._newStatus}"
+                </div>
+              )}
               <div className="flex flex-col gap-1 px-[22px] py-4" style={{ background: isOk?'#f0fdf4':'#fff5f5' }}>
                 <div className="font-mono text-[22px] font-extrabold tracking-[-0.5px]" style={{ color: isOk?'#16a34a':'#dc2626' }}>{isOk?'✓':'✗'} {rc}</div>
                 <div className="text-sm font-bold text-[#374151]">{rcDesc}</div>
@@ -1092,12 +1098,18 @@ export default function AdminDashboardPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`)
       setQueryResult(data)
+      // Nếu backend phát hiện trạng thái lưu trữ bị lệch so với MoMo (do IPN rớt/lỗi)
+      // và đã tự sửa lại trong Redis → refresh ngay danh sách đơn hàng để bảng/khung
+      // chi tiết hiển thị đúng trạng thái mới, không phải đợi tới lượt poll kế tiếp.
+      if (data._reconciled) {
+        fetchOrders({ force: true })
+      }
     } catch (err) {
       setQueryError(err.message || 'Lỗi không xác định')
     } finally {
       setQueryLoading(false)
     }
-  }, [queryOrderId])
+  }, [queryOrderId, fetchOrders])
 
   const openQueryForOrder = useCallback(orderId => {
     setQueryOrderId(orderId); setQueryResult(null); setQueryError(null)
