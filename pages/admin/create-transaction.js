@@ -11,7 +11,6 @@ function buildTxUrl(method, amount, orderInfo) {
   if (!amt || amt <= 0) return null
   const path =
     method === 'p2p' ? '/api/momo/create-p2p'
-    : method === 'atm' ? '/api/momo/create-atm'
     : '/api/momo/scan'
   return `${TX_BASE_URL}${path}?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
 }
@@ -84,12 +83,6 @@ const IconScan = () => (
     <path d="M3 9V5a2 2 0 0 1 2-2h2M21 9V5a2 2 0 0 0-2-2h-2M3 15v4a2 2 0 0 0 2 2h2M21 15v4a2 2 0 0 1-2 2h-2"/>
     <line x1="12" y1="8" x2="12" y2="16"/>
     <line x1="8" y1="12" x2="16" y2="12"/>
-  </svg>
-)
-const IconATM = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-    <rect x="2" y="5" width="20" height="14" rx="2"/>
-    <path d="M2 9h20M6 14h2M10 14h4"/>
   </svg>
 )
 const IconSend = () => (
@@ -339,7 +332,7 @@ export default function CreateTransactionPage() {
   useEffect(() => {
     if (!router.isReady) return
     const { method: qMethod, amount: qAmount, orderInfo: qOrderInfo } = router.query
-    const validMethod = (qMethod === 'p2p' || qMethod === 'scan' || qMethod === 'atm') ? qMethod : null
+    const validMethod = (qMethod === 'p2p' || qMethod === 'scan') ? qMethod : null
     const validAmount = qAmount ? String(parseInt(qAmount, 10) || '') : null
 
     if (validMethod) setMethod(validMethod)
@@ -356,8 +349,8 @@ export default function CreateTransactionPage() {
       // Điều hướng THẲNG trong cùng tab (window.location.href) — KHÔNG dùng
       // window.open() vì hành động này chạy trong useEffect, không phải user-gesture
       // trực tiếp, nên mobile Safari/Chrome sẽ chặn popup → trang chỉ fill form
-      // mà không nhảy tiếp được. Áp dụng đồng nhất cho cả 3 phương thức p2p/atm/scan.
-      if (validMethod === 'p2p' || validMethod === 'atm') {
+      // mà không nhảy tiếp được. Áp dụng đồng nhất cho cả 2 phương thức p2p/scan.
+      if (validMethod === 'p2p') {
         fetch(url)
           .then(r => r.json())
           .then(data => {
@@ -426,7 +419,6 @@ export default function CreateTransactionPage() {
   }, [resultToast])
 
   const isP2P    = method === 'p2p'
-  const isATM    = method === 'atm'
   const canSubmit = parseInt(amount || 0, 10) > 0
   const previewUrl = buildTxUrl(method, amount, orderInfo) || ''
 
@@ -439,7 +431,7 @@ export default function CreateTransactionPage() {
     setPendingOrders(prev => [...prev, { orderId: finalOrderInfo, amount: parseInt(amount, 10) || 0 }])
     setOrderInfo(genOrderId())
 
-    if (!isP2P && !isATM) {
+    if (!isP2P) {
       window.open(url, '_blank', 'noopener,noreferrer')
       setLoading(false)
       return
@@ -479,7 +471,6 @@ export default function CreateTransactionPage() {
   const methodConfig = [
     { key: 'p2p',  label: 'P2P',     icon: <IconP2P />,  desc: 'QR chuyển tiền' },
     { key: 'scan', label: 'Scan QR', icon: <IconScan />, desc: 'Quét mã nhanh'   },
-    { key: 'atm',  label: 'Thẻ ATM', icon: <IconATM />,  desc: 'Nhập thẻ nội địa' },
   ]
 
   return (
@@ -715,15 +706,6 @@ export default function CreateTransactionPage() {
           -webkit-tap-highlight-color: transparent;
         }
         .refresh-btn:hover { border-color: var(--mm); color: var(--mm); background: var(--mm-light); }
-
-        .atm-notice {
-          display: flex; gap: 8px; align-items: flex-start;
-          padding: 10px 12px; border-radius: 10px;
-          background: #fff8f0; border: 1px solid #fde8c8;
-          margin-bottom: 16px;
-        }
-        .atm-notice-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
-        .atm-notice-text { font-size: 11px; line-height: 1.5; color: #9a6a2a; font-weight: 500; }
 
         .submit-btn {
           width: 100%;
@@ -1247,15 +1229,6 @@ export default function CreateTransactionPage() {
                 </button>
               </div>
             </div>
-
-            {isATM && (
-              <div className="atm-notice">
-                <span className="atm-notice-icon">ℹ</span>
-                <p className="atm-notice-text">
-                  Khách sẽ nhập số thẻ, tên chủ thẻ và xác thực OTP trực tiếp trên trang thanh toán MoMo.
-                </p>
-              </div>
-            )}
 
             <button
               className={`submit-btn${loading ? ' loading' : ''}`}
