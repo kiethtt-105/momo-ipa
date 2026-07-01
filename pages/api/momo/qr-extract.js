@@ -103,9 +103,12 @@ export default async function handler(req, res) {
   }
 
   const debug = req.query.debug === '1'
+  const noCache = req.query.nocache === '1'
 
   // Check cache trước — nếu vừa chụp đơn này trong 60s gần đây, trả luôn
-  if (!debug) {
+  // (bỏ qua khi debug=1 hoặc nocache=1, dùng lúc test để chắc chắn đang xem
+  // kết quả MỚI NHẤT chứ không phải ảnh cache từ lần chụp trước đó).
+  if (!debug && !noCache) {
     const cached = getCached(payUrl)
     if (cached) {
       res.setHeader('Content-Type', 'image/png')
@@ -187,18 +190,27 @@ export default async function handler(req, res) {
 
     // ─── Tìm đúng CARD (banner + mã QR + text hướng dẫn) ───
     // #form-qr-code là CẢ payment form (bao gồm cả "Thông tin đơn hàng" phía
-    // trên) — quá to. Ngược lại, MoMo lại có sẵn 1 id ổn định bọc đúng cái
-    // card cần lấy: #body-payment-content (đã kiểm chứng qua DevTools — kích
-    // thước đúng bằng khung hồng/cam hiển thị trên trang, bao gồm banner
-    // Vi Trả Sau/VietQR phía trên, QR ở giữa và text hướng dẫn phía dưới).
-    // Ưu tiên lấy thẳng theo id này (nhanh, không cần dò); chỉ khi MoMo đổi
-    // DOM và id này biến mất mới rơi về heuristic dò theo QR + nền màu cũ.
+    // trên) — quá to. #body-payment-content là id ổn định bọc đúng card cần
+    // lấy (đã kiểm chứng qua DevTools), thử lấy thẳng theo id này trước.
+    // Nếu vì lý do gì đó id này không có/không đủ lớn, rơi về heuristic: leo
+    // từ ảnh/canvas QR lên tối đa 8 cấp cha, chọn phần tử LỚN NHẤT (không
+    // phải phần tử ĐẦU TIÊN) có "nền thật" — quan trọng: card ngoài của MoMo
+    // tô nền bằng CSS gradient (background-image), không phải background-color
+    // đơn thuần, nên phải kiểm tra cả backgroundImage; nếu chỉ check
+    // backgroundColor như code cũ, vòng lặp sẽ dừng nhầm ở cái khung viền nhỏ
+    // quanh QR (có background-color trắng/off-white riêng) trước khi leo tới
+    // được card thật.
     const elementHandle = await page.evaluateHandle(() => {
       const byId = document.querySelector('#body-payment-content')
       if (byId) {
         const r = byId.getBoundingClientRect()
-        if (r.width > 100 && r.height > 100) return byId
+        if (r.width > 150 && r.height > 200) {
+          window.__qrSource = 'byId'
+          return byId
+        }
       }
+      window.__qrSource = 'heuristic'
+
       const isVisible = (el) => {
         const r = el.getBoundingClientRect()
         if (r.width < 80 || r.height < 80) return false
@@ -207,12 +219,11 @@ export default async function handler(req, res) {
       }
 
       const hasRealBackground = (el) => {
-        const bg = window.getComputedStyle(el).backgroundColor
-        // Loại: transparent, rgba(0,0,0,0) và trắng thuần rgb(255,255,255)
-        if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') return false
-        const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
-        if (m && m[1] === '255' && m[2] === '255' && m[3] === '255') return false
-        return true
+        const cs = window.getComputedStyle(el)
+        const bg = cs.backgroundColor
+        const hasColor = !!bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)' && !/^rgba?\(255,\s*255,\s*255/.test(bg)
+        const hasImage = !!cs.backgroundImage && cs.backgroundImage !== 'none'
+        return hasColor || hasImage
       }
 
       // Bước 1: tìm đúng ảnh/canvas QR (vuông, đủ lớn, đang hiển thị)
@@ -232,20 +243,28 @@ export default async function handler(req, res) {
       }
       if (!qrEl) return document.querySelector('#form-qr-code') || document.querySelector('#qr-web-ui')
 
-      // Bước 2: đi ngược lên tối đa 6 cấp cha, tìm phần tử đầu tiên có nền
-      // màu thật + kích thước hợp lý (200-700px cao) — đó là card hồng.
+      // Bước 2: đi ngược lên tối đa 8 cấp cha, thu thập MỌI phần tử có nền
+      // thật + kích thước hợp lý, rồi chọn cái LỚN NHẤT (gần chắc chắn là
+      // card ngoài cùng, vì các khung/viewfinder nhỏ quanh QR luôn nhỏ hơn).
       let node = qrEl.parentElement
       let depth = 0
-      while (node && depth < 6) {
+      let best = null
+      let bestArea = 0
+      while (node && depth < 8) {
         const r = node.getBoundingClientRect()
-        if (hasRealBackground(node) && r.height >= 200 && r.height <= 700 && r.width >= 200) {
-          return node
+        if (hasRealBackground(node) && r.height >= 200 && r.height <= 900 && r.width >= 200) {
+          const area = r.width * r.height
+          if (area > bestArea) {
+            bestArea = area
+            best = node
+          }
         }
         node = node.parentElement
         depth++
       }
+      if (best) return best
 
-      // Không tìm thấy card có nền màu -> trả về chính ảnh QR (an toàn hơn
+      // Không tìm thấy card có nền -> trả về chính ảnh QR (an toàn hơn
       // là trả cả #form-qr-code quá to)
       return qrEl
     })
@@ -262,6 +281,16 @@ export default async function handler(req, res) {
     if (!element) {
       await page.close()
       return res.status(404).json({ error: 'Không tìm thấy vùng mã QR trên trang thanh toán' })
+    }
+
+    // Debug nhanh: xem strategy nào được dùng (byId/heuristic) + kích thước
+    // vùng thực sự chụp, qua header — không cần bật ?debug=1 (chụp full page,
+    // nặng hơn). Dùng thêm ?nocache=1 khi test để chắc chắn không dính cache cũ.
+    const qrSource = await page.evaluate(() => window.__qrSource || 'unknown')
+    res.setHeader('X-QR-Source', qrSource)
+    const box = await element.boundingBox()
+    if (box) {
+      res.setHeader('X-QR-Region', `${Math.round(box.width)}x${Math.round(box.height)}`)
     }
 
     const buffer = await element.screenshot({ type: 'png' })
