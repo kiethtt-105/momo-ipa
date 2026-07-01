@@ -345,6 +345,18 @@ export default function CreateTransactionPage() {
   const [scanning,      setScanning]      = useState(false)
   const [jsQrReady,     setJsQrReady]     = useState(false)
 
+  // ─── SCAN: TRẠNG THÁI XÁC NHẬN SAU KHI GỬI MÃ (giống p2p, KHÔNG có
+  // đếm ngược vì mã quét không có mốc hết hạn cố định) ─────────────
+  // Sau khi submitPaymentCode gửi mã lên /api/momo/scan, thay vì chỉ
+  // dựa vào response đồng bộ, ta chuyển đơn sang PENDING rồi tự động
+  // poll /api/momo/status mỗi giây (giống hệt cơ chế p2p) cho tới khi
+  // có kết quả cuối cùng PAID/FAILED.
+  const [scanStatus,      setScanStatus]      = useState('PENDING') // PENDING | PAID | FAILED
+  const [scanChecking,    setScanChecking]    = useState(false)
+  const [scanCheckMsg,    setScanCheckMsg]    = useState('')
+  const [scanSubmittedCode, setScanSubmittedCode] = useState('') // mã đã gửi, hiển thị bên panel trạng thái
+  const scanPollingRef = useRef(false) // chặn 2 lần poll tự động chồng lên nhau
+
   // ─── P2P QR INLINE STATE ────────────────────────────────────
   // Khi method = p2p và đã bấm "Xác nhận", QR thanh toán hiện ngay
   // trong trang (chia đôi màn hình) thay vì mở tab MoMo mới.
@@ -452,6 +464,11 @@ export default function CreateTransactionPage() {
     setIsServerErr(false)
     setIsSubmittingCode(false)
     submittingRef.current = false
+    setScanStatus('PENDING')
+    setScanChecking(false)
+    setScanCheckMsg('')
+    setScanSubmittedCode('')
+    scanPollingRef.current = false
     setAmount('')
     setOrderInfo(genOrderId())
   }
@@ -585,6 +602,77 @@ export default function CreateTransactionPage() {
     } finally {
       if (!silent) setP2pChecking(false)
     }
+  }
+
+  // ─── SCAN: KIỂM TRA TRẠNG THÁI GIAO DỊCH (giống checkP2pStatus, KHÔNG
+  // có bước gọi /api/momo/query trước vì /api/momo/scan đã tự verify thật
+  // với MoMo ngay lúc gửi mã rồi — chỉ cần đọc lại /api/momo/status để
+  // lấy bản ghi mới nhất, tránh gọi trùng MoMo 2 lần cho cùng 1 mã) ────
+  async function checkScanStatus(opts = {}) {
+    const silent = opts.silent === true
+    const targetOrderId = opts.orderId || scanOrderId
+    if (!targetOrderId) return
+    if (!silent) {
+      if (scanChecking) return
+      setScanChecking(true)
+      setScanCheckMsg('')
+    }
+    try {
+      const res  = await fetch(`/api/momo/status?orderId=${encodeURIComponent(targetOrderId)}`)
+      const data = await res.json()
+      const status = data.status || 'PENDING'
+      setScanStatus(status)
+
+      if (status === 'PAID') {
+        setScanCheckMsg('✓ Thanh toán thành công!')
+        setResultToast({
+          orderId: targetOrderId,
+          status: 'success',
+          amount: data.amount || parseInt(amount, 10) || null,
+        })
+        setPendingOrders(prev => prev.filter(o => o.orderId !== targetOrderId))
+        setTimeout(() => closeScanPanel(), 1500)
+      } else if (status === 'FAILED') {
+        setScanCheckMsg(`✗ Giao dịch thất bại${data.message ? `: ${data.message}` : ''}`)
+      } else if (!silent) {
+        setScanCheckMsg('⏳ Chưa xác nhận được thanh toán, đang tiếp tục kiểm tra…')
+      }
+      // silent + vẫn PENDING → không đụng vào scanCheckMsg, tránh spam UI
+    } catch (e) {
+      if (!silent) setScanCheckMsg('⚠ Lỗi kết nối, thử kiểm tra lại.')
+    } finally {
+      if (!silent) setScanChecking(false)
+    }
+  }
+
+  // ─── SCAN: TỰ ĐỘNG POLL TRẠNG THÁI (giống hệt p2p, KHÔNG có mốc hết
+  // hạn/đếm ngược — mã quét không có TTL cố định như QR P2P) ─────────
+  useEffect(() => {
+    if (!scanActive || !scanOrderId || !scanSubmittedCode || scanStatus !== 'PENDING') return
+    const id = setInterval(async () => {
+      if (scanPollingRef.current) return
+      scanPollingRef.current = true
+      try {
+        await checkScanStatus({ silent: true })
+      } finally {
+        scanPollingRef.current = false
+      }
+    }, P2P_POLL_MS)
+    return () => clearInterval(id)
+  }, [scanActive, scanOrderId, scanSubmittedCode, scanStatus])
+
+  // Cho phép thử lại với mã khác khi giao dịch FAILED — giữ nguyên
+  // scanOrderId (đơn nháp cũ), chỉ reset để nhập/quét mã mới, bật lại camera.
+  function retryScanCode() {
+    setScanStatus('PENDING')
+    setScanCheckMsg('')
+    setScanSubmittedCode('')
+    setManualCode('')
+    setManualErr('')
+    setIsServerErr(false)
+    submittingRef.current = false
+    setCamError('')
+    setScanning(true)
   }
 
   // Copy URL thanh toán (payUrl) vào clipboard — dùng khi admin muốn gửi
@@ -781,14 +869,25 @@ export default function CreateTransactionPage() {
         break
       }
 
-      setResultToast({
-        orderId,
-        status: data?.resultCode === 0 ? 'success' : 'fail',
-        amount: amt,
-        message: data?.message || null,
-      })
-      setPendingOrders(prev => prev.filter(o => o.orderId !== orderId))
-      closeScanPanel()
+      // Không đóng panel / không kết luận ngay từ response đồng bộ nữa.
+      // Chuyển sang chế độ chờ xác nhận + tự động poll /api/momo/status
+      // (giống hệt cơ chế p2p), chỉ khác là KHÔNG có đếm ngược hết hạn.
+      submittingRef.current = false
+      setIsSubmittingCode(false)
+      stopCamera()
+      setScanSubmittedCode(code)
+
+      if (data?.resultCode === 0) {
+        setIsServerErr(false)
+        setScanStatus('PENDING')
+        setScanCheckMsg('⏳ Đã gửi mã, đang xác nhận giao dịch…')
+        await checkScanStatus({ silent: true, orderId })
+      } else {
+        // MoMo trả lỗi rõ ràng ngay lúc gửi (mã sai/hết hạn/không khớp…)
+        setIsServerErr(false)
+        setScanStatus('FAILED')
+        setScanCheckMsg(`✗ Giao dịch thất bại${data?.message ? `: ${data.message}` : ''}`)
+      }
     } catch (e) {
       submittingRef.current = false
       setIsSubmittingCode(false)
@@ -2016,7 +2115,8 @@ export default function CreateTransactionPage() {
 
           {scanActive && (
             <div className="scan-split">
-              {/* CỬA SỔ TRÁI — thông tin đơn hàng */}
+              {/* CỬA SỔ TRÁI — thông tin đơn hàng + trạng thái (giống p2p,
+                  KHÔNG có dòng "Thời gian còn lại" vì mã quét không có TTL) */}
               <div className="scan-pane scan-pane-info">
                 <div className="field-label">Thông tin đơn hàng</div>
                 <div className="scan-order-card">
@@ -2033,12 +2133,47 @@ export default function CreateTransactionPage() {
                     <span>Nội dung</span>
                     <span className="scan-order-mono">{orderInfo}</span>
                   </div>
+                  {scanSubmittedCode && (
+                    <>
+                      <div className="scan-order-divider" />
+                      <div className="scan-order-row">
+                        <span>Mã đã gửi</span>
+                        <span className="scan-order-mono">{scanSubmittedCode}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="scan-order-divider" />
+                  <div className="scan-order-row">
+                    <span>Trạng thái</span>
+                    <span className={`p2p-status-badge p2p-status-${scanStatus.toLowerCase()}`}>
+                      {scanStatus === 'PAID'   ? 'Đã thanh toán'
+                        : scanStatus === 'FAILED' ? 'Thất bại'
+                        : 'Đang chờ'}
+                    </span>
+                  </div>
                 </div>
 
-                {camError && <div className="scan-cam-error">⚠ {camError}</div>}
-                {!camError && (
-                  <div className="scan-cam-status">
-                    <span className="scan-cam-dot" /> Camera đang quét mã QR…
+                {!scanSubmittedCode && (
+                  <>
+                    {camError && <div className="scan-cam-error">⚠ {camError}</div>}
+                    {!camError && (
+                      <div className="scan-cam-status">
+                        <span className="scan-cam-dot" /> Camera đang quét mã QR…
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {scanSubmittedCode && scanStatus === 'PENDING' && (
+                  <div className="p2p-poll-hint">
+                    <span className="p2p-poll-dot" />
+                    Đang tự động kiểm tra giao dịch mỗi {P2P_POLL_MS / 1000}s…
+                  </div>
+                )}
+
+                {scanCheckMsg && (
+                  <div className={`p2p-check-msg${scanStatus === 'PAID' ? ' ok' : scanStatus === 'FAILED' ? ' err' : ''}`}>
+                    {scanCheckMsg}
                   </div>
                 )}
 
@@ -2047,52 +2182,90 @@ export default function CreateTransactionPage() {
                     type="button"
                     className="scan-cancel-btn"
                     onClick={() => setShowCancelModal(true)}
+                    disabled={scanStatus === 'PAID'}
                   >
                     ← Hủy &amp; quay lại
                   </button>
                 )}
               </div>
 
-              {/* CỬA SỔ PHẢI — nhập / quét mã thanh toán */}
+              {/* CỬA SỔ PHẢI — nhập / quét mã thanh toán, hoặc khi đã gửi
+                  mã thì hiện trạng thái đang xác nhận / kết quả cuối cùng */}
               <div className="scan-pane scan-pane-code">
-                <div className="field-label">Mã thanh toán MoMo (18 số)</div>
-                <input
-                  autoFocus
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="Scan mã QR hoặc gõ mã 18 số"
-                  value={manualCode}
-                  onChange={e => { setManualCode(e.target.value); setManualErr('') }}
-                  onKeyDown={handleManualCodeKey}
-                  disabled={isSubmittingCode}
-                  className="scan-code-input"
-                />
-                {manualErr && <div className="scan-code-err">⚠ {manualErr}</div>}
+                {!scanSubmittedCode ? (
+                  <>
+                    <div className="field-label">Mã thanh toán MoMo (18 số)</div>
+                    <input
+                      autoFocus
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="Scan mã QR hoặc gõ mã 18 số"
+                      value={manualCode}
+                      onChange={e => { setManualCode(e.target.value); setManualErr('') }}
+                      onKeyDown={handleManualCodeKey}
+                      disabled={isSubmittingCode}
+                      className="scan-code-input"
+                    />
+                    {manualErr && <div className="scan-code-err">⚠ {manualErr}</div>}
 
-                <button
-                  type="button"
-                  className={`scan-confirm-btn${isSubmittingCode ? ' loading' : ''}`}
-                  onClick={submitManualCode}
-                  disabled={!manualCode.trim() || isSubmittingCode}
-                >
-                  {isSubmittingCode
-                    ? <><div className="spinner" /> Đang xử lý…</>
-                    : <>✓ Xác nhận thanh toán</>
-                  }
-                </button>
+                    <button
+                      type="button"
+                      className={`scan-confirm-btn${isSubmittingCode ? ' loading' : ''}`}
+                      onClick={submitManualCode}
+                      disabled={!manualCode.trim() || isSubmittingCode}
+                    >
+                      {isSubmittingCode
+                        ? <><div className="spinner" /> Đang xử lý…</>
+                        : <>✓ Xác nhận thanh toán</>
+                      }
+                    </button>
 
-                {isServerErr && !isSubmittingCode && (
-                  <button type="button" className="scan-retry-btn" onClick={submitManualCode}>
-                    ⚡ Gửi lại dữ liệu
-                  </button>
-                )}
+                    {isServerErr && !isSubmittingCode && (
+                      <button type="button" className="scan-retry-btn" onClick={submitManualCode}>
+                        ⚡ Gửi lại dữ liệu
+                      </button>
+                    )}
 
-                {/* Camera chạy ngầm — ẩn khỏi UI nhưng vẫn quét */}
-                {scanning && (
-                  <div className="scan-cam-hidden">
-                    <video ref={setVideoRef} playsInline muted />
-                    <canvas ref={canvasRef} />
-                  </div>
+                    {/* Camera chạy ngầm — ẩn khỏi UI nhưng vẫn quét */}
+                    {scanning && (
+                      <div className="scan-cam-hidden">
+                        <video ref={setVideoRef} playsInline muted />
+                        <canvas ref={canvasRef} />
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="field-label">Xác nhận giao dịch</div>
+                    <div className="p2p-iframe-loading">
+                      {scanStatus === 'PENDING' && (
+                        <>
+                          <div className="spinner" style={{ borderTopColor: 'var(--mm)', borderColor: 'rgba(174,0,112,0.25)' }} />
+                          <span>Đang xác nhận thanh toán…</span>
+                        </>
+                      )}
+                      {scanStatus === 'PAID' && <span>✓ Thanh toán thành công!</span>}
+                      {scanStatus === 'FAILED' && <span>✗ Giao dịch thất bại</span>}
+                    </div>
+
+                    <button
+                      type="button"
+                      className={`scan-confirm-btn${scanChecking ? ' loading' : ''}`}
+                      onClick={() => checkScanStatus()}
+                      disabled={scanChecking || scanStatus === 'PAID'}
+                    >
+                      {scanChecking
+                        ? <><div className="spinner" /> Đang kiểm tra…</>
+                        : <>✓ Kiểm tra giao dịch</>
+                      }
+                    </button>
+
+                    {scanStatus === 'FAILED' && (
+                      <button type="button" className="scan-retry-btn" onClick={retryScanCode}>
+                        ⚡ Thử mã khác
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
