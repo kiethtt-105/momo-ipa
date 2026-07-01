@@ -122,28 +122,31 @@ export default async function handler(req, res) {
 
     // Chặn domain tracking/analytics — không ảnh hưởng tới việc render QR
     // nhưng tốn thời gian tải, làm chậm đáng kể nếu không chặn.
-    // ĐỒNG THỜI chặn luôn ảnh/font/media KHÔNG PHẢI QR (banner, icon trang
-    // trí…) vì QR được MoMo vẽ bằng canvas/img nội bộ trong JS, không phụ
-    // thuộc các ảnh tĩnh khác trên trang — đây là phần tốn thời gian tải
-    // nhất (nhiều ảnh nặng), chặn xong giảm đáng kể thời gian tới lúc QR
-    // render xong.
+    // LƯU Ý: giờ ta cần chụp CẢ khung ngoài (banner, logo Vi Trả Sau/VietQR,
+    // nền hoa văn của card hồng) nên KHÔNG được chặn hết 'image' như trước
+    // nữa — chặn hết sẽ làm logo/nền card bị trống khi chụp. Thay vào đó
+    // chỉ chặn ảnh KHÔNG thuộc domain asset của MoMo (banner quảng cáo bên
+    // ngoài card, pixel tracking...), còn ảnh/logo thuộc chính card vẫn
+    // được tải. font/media vẫn chặn vì QR + card không cần tới.
     await page.setRequestInterception(true)
     const BLOCKED_HOSTS = ['googletagmanager.com', 'google-analytics.com', 'facebook.net', 'connect.facebook.net', 'doubleclick.net']
-    const BLOCKED_TYPES = ['image', 'font', 'media']
+    const MOMO_ASSET_HOSTS = /momocdn\.net|static\.mservice\.io|momo\.vn/
+    const BLOCKED_TYPES = ['font', 'media']
     page.on('request', (req) => {
       const url = req.url()
       const type = req.resourceType()
       if (BLOCKED_HOSTS.some((h) => url.includes(h))) {
-        req.abort()
-      } else if (BLOCKED_TYPES.includes(type)) {
-        // QR canvas/img do MoMo tự vẽ bằng JS nên KHÔNG bị ảnh hưởng bởi
-        // việc chặn ảnh tĩnh khác — nếu sau này MoMo đổi sang load QR qua
-        // thẻ <img src="..."> (ảnh network thật) thay vì canvas, cần bỏ
-        // 'image' khỏi BLOCKED_TYPES để không chặn nhầm chính mã QR.
-        req.abort()
-      } else {
-        req.continue()
+        return req.abort()
       }
+      if (BLOCKED_TYPES.includes(type)) {
+        return req.abort()
+      }
+      if (type === 'image' && !MOMO_ASSET_HOSTS.test(url)) {
+        // Ảnh lạ (banner quảng cáo bên thứ 3, pixel tracking...) — không
+        // thuộc card nên chặn để đỡ tốn thời gian tải.
+        return req.abort()
+      }
+      req.continue()
     })
 
     // domcontentloaded thay vì networkidle2 — không cần đợi mạng "rảnh" hoàn
@@ -168,15 +171,34 @@ export default async function handler(req, res) {
       // Không thấy render kịp trong 8s — vẫn thử chụp bằng logic fallback bên dưới
     }
 
-    // ─── Tìm đúng CARD QR (banner + mã QR + text hướng dẫn) ───
+    // Giờ cần chụp cả khung ngoài (banner/logo) nên đợi thêm các <img> bên
+    // trong card đã tải xong (complete + naturalWidth>0), timeout ngắn vì
+    // hầu hết đã tải song song trong lúc waitForFunction ở trên đang chờ QR.
+    try {
+      await page.waitForFunction(() => {
+        const card = document.querySelector('#body-payment-content') || document.querySelector('#form-qr-code, #qr-web-ui')
+        if (!card) return true
+        const imgs = [...card.querySelectorAll('img')]
+        return imgs.every((img) => img.complete)
+      }, { timeout: 1500 })
+    } catch {
+      // Không sao, vẫn chụp — thà thiếu 1 logo còn hơn timeout lâu
+    }
+
+    // ─── Tìm đúng CARD (banner + mã QR + text hướng dẫn) ───
     // #form-qr-code là CẢ payment form (bao gồm cả "Thông tin đơn hàng" phía
-    // trên) — quá to, không phải cái card hồng cần lấy. Card hồng là 1 <div>
-    // con nằm sâu bên trong, không có id/class cố định để trỏ thẳng tới.
-    // Chiến thuật: tìm đúng ảnh/canvas QR trước (đáng tin cậy — luôn vuông),
-    // rồi đi ngược lên từng cấp cha tới khi gặp phần tử có nền MÀU THẬT
-    // (khác trắng/trong suốt) — đó chính là ranh giới card hồng trong ảnh
-    // MoMo, không cần biết trước tên class.
+    // trên) — quá to. Ngược lại, MoMo lại có sẵn 1 id ổn định bọc đúng cái
+    // card cần lấy: #body-payment-content (đã kiểm chứng qua DevTools — kích
+    // thước đúng bằng khung hồng/cam hiển thị trên trang, bao gồm banner
+    // Vi Trả Sau/VietQR phía trên, QR ở giữa và text hướng dẫn phía dưới).
+    // Ưu tiên lấy thẳng theo id này (nhanh, không cần dò); chỉ khi MoMo đổi
+    // DOM và id này biến mất mới rơi về heuristic dò theo QR + nền màu cũ.
     const elementHandle = await page.evaluateHandle(() => {
+      const byId = document.querySelector('#body-payment-content')
+      if (byId) {
+        const r = byId.getBoundingClientRect()
+        if (r.width > 100 && r.height > 100) return byId
+      }
       const isVisible = (el) => {
         const r = el.getBoundingClientRect()
         if (r.width < 80 || r.height < 80) return false
