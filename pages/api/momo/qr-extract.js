@@ -40,6 +40,32 @@ async function getBrowser() {
   return browserPromise
 }
 
+// Cache PNG tạm theo payUrl (60s) — tránh chạy lại Puppeteer nếu component
+// re-render hoặc user F5 lại trang cho cùng 1 đơn hàng trong thời gian ngắn.
+// Chỉ có tác dụng trong cùng 1 lambda container còn "ấm" (warm), không phải
+// cache toàn cục giữa mọi request.
+const qrCache = new Map()
+const CACHE_TTL_MS = 60_000
+
+function getCached(key) {
+  const hit = qrCache.get(key)
+  if (!hit) return null
+  if (Date.now() - hit.ts > CACHE_TTL_MS) {
+    qrCache.delete(key)
+    return null
+  }
+  return hit.buffer
+}
+
+function setCached(key, buffer) {
+  qrCache.set(key, { buffer, ts: Date.now() })
+  // Dọn cache quá 50 entries để không phình bộ nhớ container
+  if (qrCache.size > 50) {
+    const oldestKey = qrCache.keys().next().value
+    qrCache.delete(oldestKey)
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -50,12 +76,42 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'payUrl không hợp lệ' })
   }
 
+  const debug = req.query.debug === '1'
+
+  // Check cache trước — nếu vừa chụp đơn này trong 60s gần đây, trả luôn
+  if (!debug) {
+    const cached = getCached(payUrl)
+    if (cached) {
+      res.setHeader('Content-Type', 'image/png')
+      res.setHeader('Cache-Control', 'no-store')
+      res.setHeader('X-QR-Cache', 'HIT')
+      return res.status(200).send(cached)
+    }
+  }
+
   let page
   try {
     const browser = await getBrowser()
     page = await browser.newPage()
 
-    await page.goto(payUrl, { waitUntil: 'networkidle2', timeout: 15000 })
+    // Chặn domain tracking/analytics — không ảnh hưởng tới việc render QR
+    // nhưng tốn thời gian tải, làm chậm đáng kể nếu không chặn.
+    await page.setRequestInterception(true)
+    const BLOCKED_HOSTS = ['googletagmanager.com', 'google-analytics.com', 'facebook.net', 'connect.facebook.net', 'doubleclick.net']
+    page.on('request', (req) => {
+      const url = req.url()
+      if (BLOCKED_HOSTS.some((h) => url.includes(h))) {
+        req.abort()
+      } else {
+        req.continue()
+      }
+    })
+
+    // domcontentloaded thay vì networkidle2 — không cần đợi mạng "rảnh" hoàn
+    // toàn (GTM/tracking script chạy ngầm liên tục khiến networkidle2 luôn
+    // sát ngưỡng timeout). waitForFunction bên dưới đã tự đợi đúng lúc QR
+    // render xong rồi nên không cần đợi network idle nữa.
+    await page.goto(payUrl, { waitUntil: 'domcontentloaded', timeout: 10000 })
 
     // MoMo vẽ QR bằng JS (qrcode.min2.js) SAU khi trang load — đợi thêm cho
     // tới khi element trong #form-qr-code thực sự có kích thước > 0 mới chụp,
@@ -68,12 +124,10 @@ export default async function handler(req, res) {
         if (!el) return false
         const r = el.getBoundingClientRect()
         return r.width > 50 && r.height > 50
-      }, { timeout: 8000 })
+      }, { timeout: 6000 })
     } catch {
       // Không thấy render kịp trong 8s — vẫn thử chụp bằng logic fallback bên dưới
     }
-
-    const debug = req.query.debug === '1'
 
     // ─── Tìm đúng CARD QR (banner + mã QR + text hướng dẫn) ───
     // #form-qr-code là CẢ payment form (bao gồm cả "Thông tin đơn hàng" phía
@@ -152,8 +206,11 @@ export default async function handler(req, res) {
     const buffer = await element.screenshot({ type: 'png' })
     await page.close()
 
+    setCached(payUrl, buffer)
+
     res.setHeader('Content-Type', 'image/png')
     res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('X-QR-Cache', 'MISS')
     return res.status(200).send(buffer)
   } catch (err) {
     console.error('[qr-extract] error:', err)
