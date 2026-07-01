@@ -1,3 +1,0 @@
-curl -X POST https://kiehtt.vercel.app/api/momo/create-p2p \
-  -H "Content-Type: application/json" \
-  -d '{"amount": 10000, "orderInfo": "Test P2P"}'

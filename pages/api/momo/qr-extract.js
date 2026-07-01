@@ -31,7 +31,14 @@ let browserPromise = null
 async function getBrowser() {
   if (!browserPromise) {
     browserPromise = puppeteer.launch({
-      args: chromium.args,
+      args: [
+        ...chromium.args,
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--disable-extensions',
+        '--no-first-run',
+        '--disable-background-networking',
+      ],
       defaultViewport: { width: 430, height: 932 }, // viewport điện thoại làm chuẩn
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
@@ -96,11 +103,24 @@ export default async function handler(req, res) {
 
     // Chặn domain tracking/analytics — không ảnh hưởng tới việc render QR
     // nhưng tốn thời gian tải, làm chậm đáng kể nếu không chặn.
+    // ĐỒNG THỜI chặn luôn ảnh/font/media KHÔNG PHẢI QR (banner, icon trang
+    // trí…) vì QR được MoMo vẽ bằng canvas/img nội bộ trong JS, không phụ
+    // thuộc các ảnh tĩnh khác trên trang — đây là phần tốn thời gian tải
+    // nhất (nhiều ảnh nặng), chặn xong giảm đáng kể thời gian tới lúc QR
+    // render xong.
     await page.setRequestInterception(true)
     const BLOCKED_HOSTS = ['googletagmanager.com', 'google-analytics.com', 'facebook.net', 'connect.facebook.net', 'doubleclick.net']
+    const BLOCKED_TYPES = ['image', 'font', 'media']
     page.on('request', (req) => {
       const url = req.url()
+      const type = req.resourceType()
       if (BLOCKED_HOSTS.some((h) => url.includes(h))) {
+        req.abort()
+      } else if (BLOCKED_TYPES.includes(type)) {
+        // QR canvas/img do MoMo tự vẽ bằng JS nên KHÔNG bị ảnh hưởng bởi
+        // việc chặn ảnh tĩnh khác — nếu sau này MoMo đổi sang load QR qua
+        // thẻ <img src="..."> (ảnh network thật) thay vì canvas, cần bỏ
+        // 'image' khỏi BLOCKED_TYPES để không chặn nhầm chính mã QR.
         req.abort()
       } else {
         req.continue()
@@ -124,7 +144,7 @@ export default async function handler(req, res) {
         if (!el) return false
         const r = el.getBoundingClientRect()
         return r.width > 50 && r.height > 50
-      }, { timeout: 6000 })
+      }, { timeout: 4000 })
     } catch {
       // Không thấy render kịp trong 8s — vẫn thử chụp bằng logic fallback bên dưới
     }

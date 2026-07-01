@@ -24,7 +24,6 @@ const FILTERS = [
 
 const NAV_ITEMS = [
   { key: 'history', label: 'Lịch sử giao dịch', sub: 'Toàn bộ đơn hàng',  icon: IconHistory },
-  { key: 'create',  label: 'Tạo giao dịch',     sub: 'P2P / Scan',  icon: IconPlus   },
   { key: 'lookup',  label: 'Tra cứu giao dịch', sub: 'Theo mã đơn MoMo',  icon: IconSearch },
 ]
 

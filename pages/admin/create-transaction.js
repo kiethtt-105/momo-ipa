@@ -38,7 +38,7 @@ const QUICK_AMOUNTS = [50000, 100000, 200000, 500000]
 
 // ─── P2P TIMING ──────────────────────────────────────────────
 const P2P_DURATION_MS = 10 * 60 * 1000 // mỗi giao dịch P2P sống 10 phút
-const P2P_POLL_MS     = 4000           // tần suất tự động kiểm tra trạng thái
+const P2P_POLL_MS     = 2500           // tần suất tự động kiểm tra trạng thái
 
 function formatCountdown(totalSeconds) {
   const s = Math.max(0, totalSeconds)
