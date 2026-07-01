@@ -38,7 +38,7 @@ const QUICK_AMOUNTS = [50000, 100000, 200000, 500000]
 
 // ─── P2P TIMING ──────────────────────────────────────────────
 const P2P_DURATION_MS = 10 * 60 * 1000 // mỗi giao dịch P2P sống 10 phút
-const P2P_POLL_MS     = 2500           // tần suất tự động kiểm tra trạng thái
+const P2P_POLL_MS     = 1000           // tần suất tự động kiểm tra trạng thái
 
 function formatCountdown(totalSeconds) {
   const s = Math.max(0, totalSeconds)
@@ -471,8 +471,14 @@ export default function CreateTransactionPage() {
     setP2pTimeLeft(0)
     setP2pCopied(false)
     p2pPollingRef.current = false
+    p2pSyncedOrderRef.current = null
+    p2pAutoVerifyTickRef.current = 0
     setAmount('')
     setOrderInfo(genOrderId())
+    // Chỉ xoá URL cứng (orderId/payUrl) ở ĐÂY — lúc panel thực sự đóng.
+    // Trong lúc đơn đang chờ HOẶC đang hiện kết quả (PAID/FAILED/EXPIRED
+    // trước khi tự đóng), URL vẫn giữ nguyên để F5 không mất đơn.
+    router.replace('/admin/create-transaction', undefined, { shallow: true })
   }
 
   async function startP2P(amt, info) {
@@ -493,21 +499,49 @@ export default function CreateTransactionPage() {
       setP2pDeeplink(data.deeplink || '')
       setP2pStatus('PENDING')
       setP2pCheckMsg('')
-      setP2pExpiresAt(Date.now() + P2P_DURATION_MS)
+      const expiresAt = Date.now() + P2P_DURATION_MS
+      setP2pExpiresAt(expiresAt)
       setP2pCopied(false)
       setOrderInfo(finalOrderInfo)
       setP2pActive(true)
+
+      // Ghi "cứng" thông tin đơn vào URL (shallow, không reload trang) —
+      // nếu admin lỡ bấm F5, trang sẽ đọc lại đúng đơn này ở effect resume
+      // bên dưới thay vì tạo đơn P2P MỚI (trước đây F5 = mất đơn cũ, sinh
+      // đơn trùng).
+      router.replace({
+        pathname: '/admin/create-transaction',
+        query: {
+          method: 'p2p',
+          orderId: data.orderId || finalOrderInfo,
+          payUrl: data.payUrl || '',
+          ...(data.deeplink ? { deeplink: data.deeplink } : {}),
+          amount: amt,
+          orderInfo: finalOrderInfo,
+          expiresAt,
+        },
+      }, undefined, { shallow: true })
     } catch (e) {
       alert('Lỗi server, thử lại sau')
     }
   }
 
   // Bấm "Kiểm tra giao dịch" — gọi /api/momo/status để lấy trạng thái mới
-  // nhất (server sẽ tự đối chiếu với MoMo nếu cần) rồi cập nhật UI.
+  // nhất rồi cập nhật UI.
   // opts.silent = true khi gọi tự động từ vòng polling nền — không bật
   // trạng thái loading trên nút "Kiểm tra giao dịch" và không hiện lỗi
   // kết nối (tránh nháy UI liên tục), nhưng vẫn cập nhật trạng thái/QR khi
   // có kết quả rõ ràng.
+  //
+  // QUAN TRỌNG: /api/momo/status CHỈ tự gọi MoMo để verify thật trong 60s
+  // cuối trước khi hết hạn — ngoài khoảng đó nó chỉ đọc lại bản ghi Redis
+  // (được IPN webhook cập nhật). Nếu IPN bị trễ/rớt, bấm "Kiểm tra giao
+  // dịch" trong 9 phút đầu sẽ KHÔNG cập nhật gì cả vì status.js không hề
+  // gọi MoMo. Vì vậy khi bấm TAY (không silent), gọi thêm /api/momo/query
+  // trước — endpoint này verify thật với MoMo bất kể đơn còn bao lâu, và
+  // tự reconcile lại Redis nếu lệch — rồi mới đọc /api/momo/status để lấy
+  // đúng bản ghi đã cập nhật. Auto-poll nền (silent) vẫn chỉ đọc status
+  // như cũ, tránh gọi MoMo dồn dập mỗi giây.
   async function checkP2pStatus(opts = {}) {
     const silent = opts.silent === true
     if (!p2pOrderId) return
@@ -515,6 +549,13 @@ export default function CreateTransactionPage() {
       if (p2pChecking) return
       setP2pChecking(true)
       setP2pCheckMsg('')
+      // Verify thật với MoMo trước — lỗi ở bước này (mạng, MoMo rate-limit…)
+      // không chặn bước đọc status bên dưới, cứ đọc trạng thái hiện có.
+      await fetch('/api/momo/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: p2pOrderId }),
+      }).catch(() => {})
     }
     try {
       const res  = await fetch(`/api/momo/status?orderId=${encodeURIComponent(p2pOrderId)}`)
@@ -591,16 +632,47 @@ export default function CreateTransactionPage() {
     return () => clearInterval(id)
   }, [p2pActive, p2pExpiresAt])
 
+  // ─── ĐỒNG BỘ NGAY VỚI SERVER MỖI KHI CÓ ĐƠN MỚI/RESUME ───────
+  // Chạy 1 lần duy nhất mỗi khi p2pOrderId đổi (áp dụng cho cả đơn vừa tạo
+  // lẫn đơn được khôi phục từ URL sau F5). Quan trọng nhất với trường hợp
+  // resume: trạng thái EXPIRED/PENDING lúc đó chỉ là suy đoán từ đồng hồ
+  // phía client, cần xác nhận lại với server phòng khi khách đã thanh
+  // toán/đơn đã hết hạn thật trong lúc admin không nhìn màn hình.
+  const p2pSyncedOrderRef = useRef(null)
+  useEffect(() => {
+    if (!p2pActive || !p2pOrderId) return
+    if (p2pSyncedOrderRef.current === p2pOrderId) return
+    p2pSyncedOrderRef.current = p2pOrderId
+    checkP2pStatus({ silent: true })
+  }, [p2pActive, p2pOrderId])
+
   // ─── TỰ ĐỘNG POLL TRẠNG THÁI ────────────────────────────────
   // Thay vì bắt admin bấm "Kiểm tra giao dịch" liên tục, tự động gọi ngầm
   // mỗi P2P_POLL_MS trong lúc đơn còn PENDING. Dừng ngay khi có kết quả
   // cuối (PAID/EXPIRED/FAILED) hoặc khi rời khỏi màn hình P2P.
+  //
+  // /api/momo/status chỉ tự verify thật với MoMo trong 60s cuối trước khi
+  // hết hạn — ngoài khoảng đó nó chỉ đọc Redis (phụ thuộc IPN webhook).
+  // Để không phải đợi IPN (có thể trễ/rớt) hoặc bắt admin bấm tay, cứ mỗi
+  // ~10 lần poll (~10s) thì chủ động gọi /api/momo/query verify thật 1
+  // lần — tần suất đủ thấp để không đụng rate-limit của MoMo, nhưng đủ
+  // nhanh để không còn cảnh "thanh toán rồi mà đợi cả chục giây không lên".
+  const p2pAutoVerifyTickRef = useRef(0)
   useEffect(() => {
     if (!p2pActive || !p2pOrderId || p2pStatus !== 'PENDING') return
     const id = setInterval(async () => {
       if (p2pPollingRef.current) return
       p2pPollingRef.current = true
       try {
+        p2pAutoVerifyTickRef.current += 1
+        const shouldLiveVerify = p2pAutoVerifyTickRef.current % 10 === 0
+        if (shouldLiveVerify) {
+          await fetch('/api/momo/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId: p2pOrderId }),
+          }).catch(() => {})
+        }
         await checkP2pStatus({ silent: true })
       } finally {
         p2pPollingRef.current = false
@@ -785,13 +857,45 @@ export default function CreateTransactionPage() {
 
   useEffect(() => {
     if (!router.isReady) return
-    const { method: qMethod, amount: qAmount, orderInfo: qOrderInfo } = router.query
+    const {
+      method: qMethod, amount: qAmount, orderInfo: qOrderInfo,
+      orderId: qOrderId, payUrl: qPayUrl, deeplink: qDeeplink, expiresAt: qExpiresAt,
+    } = router.query
     const validMethod = (qMethod === 'p2p' || qMethod === 'scan') ? qMethod : null
     const validAmount = qAmount ? String(parseInt(qAmount, 10) || '') : null
 
     if (validMethod) setMethod(validMethod)
     if (validAmount) setAmount(validAmount)
     if (qOrderInfo) setOrderInfo(String(qOrderInfo))
+
+    // ─── RESUME: URL đã có sẵn orderId + payUrl của 1 đơn P2P đang chạy
+    // (do chính trang này ghi vào lúc tạo đơn) → khôi phục lại panel thay
+    // vì tạo đơn P2P MỚI. Trường hợp này xảy ra khi admin bấm F5 giữa lúc
+    // khách đang quét QR — không có bước này, F5 sẽ chạy lại startP2P và
+    // sinh ra một đơn hoàn toàn khác, đơn cũ (khách có thể đang quét dở)
+    // bị bỏ rơi.
+    if (validMethod === 'p2p' && qOrderId && qPayUrl) {
+      const orderIdStr   = String(qOrderId)
+      const payUrlStr    = String(qPayUrl)
+      const deeplinkStr  = qDeeplink ? String(qDeeplink) : ''
+      const expiresAtNum = qExpiresAt ? parseInt(qExpiresAt, 10) : null
+
+      setP2pOrderId(orderIdStr)
+      setP2pPayUrl(payUrlStr)
+      setP2pDeeplink(deeplinkStr)
+      setP2pCheckMsg('')
+      setP2pActive(true)
+
+      if (expiresAtNum && expiresAtNum > Date.now()) {
+        setP2pExpiresAt(expiresAtNum)
+        setP2pStatus('PENDING')
+      } else {
+        // Thiếu mốc hết hạn hoặc đã quá giờ ngay khi vừa mở lại trang
+        setP2pStatus('EXPIRED')
+        setP2pCheckMsg('⚠ Mã QR đã hết hạn, vui lòng tạo đơn mới.')
+      }
+      return // đã resume xong — KHÔNG chạy nhánh tạo-mới bên dưới
+    }
 
     if (validMethod && validAmount && parseInt(validAmount, 10) > 0) {
       const finalOrderInfo = qOrderInfo || genOrderId()

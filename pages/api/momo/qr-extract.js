@@ -78,6 +78,25 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  // ─── WARM PING ──────────────────────────────────────────────
+  // GitHub Actions (hoặc bất kỳ cron ngoài nào) gọi
+  // /api/momo/qr-extract?warm=1 định kỳ để giữ ĐÚNG function này ấm.
+  // Trước đây warm.js là 1 route riêng — trên Vercel mỗi file trong
+  // pages/api là 1 Serverless Function ĐỘC LẬP, ping route khác không hề
+  // làm nóng route này, nên cold-start vẫn xảy ra mỗi lần khách quét thật.
+  // Nhánh này chỉ launch/tái sử dụng Chromium rồi trả về ngay — không mở
+  // trang MoMo, không cần payUrl, tốn ít tài nguyên nhất có thể.
+  if (req.query.warm === '1') {
+    try {
+      await getBrowser()
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({ ok: true, warmed: true })
+    } catch (err) {
+      console.error('[qr-extract][warm] error:', err)
+      return res.status(500).json({ ok: false })
+    }
+  }
+
   const payUrl = (req.query.payUrl || '').toString().trim()
   if (!payUrl || !payUrl.startsWith('https://payment.momo.vn')) {
     return res.status(400).json({ error: 'payUrl không hợp lệ' })
