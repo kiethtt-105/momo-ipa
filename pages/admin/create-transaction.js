@@ -1271,18 +1271,66 @@ export default function CreateTransactionPage() {
         .p2p-check-msg.ok  { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
         .p2p-check-msg.err { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
 
-        .p2p-qr-wrap {
-          display: flex; align-items: center; justify-content: center;
-          width: 100%; aspect-ratio: 1 / 1; max-width: 240px;
-          margin: 0 auto;
-          background: var(--subtle); border: 1.5px solid var(--border);
-          border-radius: 16px; overflow: hidden;
+        .p2p-qr-card {
+          display: flex; flex-direction: column; align-items: center; gap: 14px;
+          width: 100%; max-width: 260px; margin: 0 auto;
+          background: linear-gradient(160deg, #d6006c 0%, var(--mm) 60%, #8f0059 100%);
+          border-radius: 20px;
+          padding: 18px 16px 20px;
+          box-shadow: 0 14px 34px rgba(174,0,112,0.28);
         }
-        .p2p-qr-img { width: 100%; height: 100%; object-fit: contain; padding: 10px; }
+
+        .p2p-brand-row {
+          display: flex; align-items: center; gap: 6px;
+          background: #fff; border-radius: 30px;
+          padding: 5px 6px;
+        }
+        .p2p-brand-chip {
+          font-size: 9.5px; font-weight: 800; letter-spacing: 0.2px;
+          padding: 4px 9px; border-radius: 20px;
+          color: var(--mm); background: var(--mm-light);
+          white-space: nowrap;
+        }
+        .p2p-brand-chip.solid { background: var(--mm); color: #fff; }
+        .p2p-brand-chip.alt   { background: #eef2ff; color: #4338ca; }
+
+        .p2p-qr-frame {
+          position: relative;
+          width: 100%; aspect-ratio: 1 / 1; max-width: 220px;
+          background: #fff; border-radius: 14px;
+          padding: 12px;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .p2p-qr-img { width: 100%; height: 100%; object-fit: contain; }
         .p2p-qr-placeholder {
           display: flex; align-items: center; justify-content: center;
           width: 100%; height: 100%;
         }
+        .p2p-qr-corner {
+          position: absolute; width: 22px; height: 22px;
+          border: 3px solid #fff;
+        }
+        .p2p-qr-corner.tl { top: -3px;  left: -3px;  border-right: none;  border-bottom: none; border-radius: 8px 0 0 0; }
+        .p2p-qr-corner.tr { top: -3px;  right: -3px; border-left: none;   border-bottom: none; border-radius: 0 8px 0 0; }
+        .p2p-qr-corner.bl { bottom: -3px; left: -3px; border-right: none; border-top: none;    border-radius: 0 0 0 8px; }
+        .p2p-qr-corner.br { bottom: -3px; right: -3px; border-left: none; border-top: none;    border-radius: 0 0 8px 0; }
+
+        .p2p-qr-logo {
+          position: absolute; top: 50%; left: 50%;
+          transform: translate(-50%, -50%);
+          width: 42px; height: 42px; border-radius: 50%;
+          background: #fff; border: 3px solid #fff;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+          display: flex; align-items: center; justify-content: center;
+          overflow: hidden;
+        }
+        .p2p-qr-logo img { width: 100%; height: 100%; object-fit: contain; }
+
+        .p2p-qr-hint {
+          font-size: 11.5px; font-weight: 600; color: #fce7f3;
+          text-align: center; line-height: 1.5;
+        }
+        .p2p-qr-hint b { color: #fff; font-weight: 800; }
 
         .p2p-open-link {
           display: block; text-align: center;
@@ -1904,14 +1952,37 @@ export default function CreateTransactionPage() {
               <div className="scan-pane scan-pane-code">
                 <div className="field-label">Khách quét mã QR để thanh toán</div>
 
-                <div className="p2p-qr-wrap">
-                  {p2pQrImage ? (
-                    <img src={p2pQrImage} alt="QR thanh toán MoMo" className="p2p-qr-img" />
-                  ) : (
-                    <div className="p2p-qr-placeholder">
-                      <div className="spinner" style={{ borderTopColor: 'var(--mm)', borderColor: 'rgba(174,0,112,0.25)' }} />
-                    </div>
-                  )}
+                <div className="p2p-qr-card">
+                  <div className="p2p-brand-row">
+                    <span className="p2p-brand-chip">Ví Trả Sau</span>
+                    <span className="p2p-brand-chip solid">MoMo</span>
+                    <span className="p2p-brand-chip alt">VietQR</span>
+                  </div>
+
+                  <div className="p2p-qr-frame">
+                    <span className="p2p-qr-corner tl" />
+                    <span className="p2p-qr-corner tr" />
+                    <span className="p2p-qr-corner bl" />
+                    <span className="p2p-qr-corner br" />
+
+                    {p2pQrImage ? (
+                      <img src={p2pQrImage} alt="QR thanh toán MoMo" className="p2p-qr-img" />
+                    ) : (
+                      <div className="p2p-qr-placeholder">
+                        <div className="spinner" style={{ borderTopColor: 'var(--mm)', borderColor: 'rgba(174,0,112,0.25)' }} />
+                      </div>
+                    )}
+
+                    {p2pQrImage && (
+                      <span className="p2p-qr-logo">
+                        <img src="/Main.png" alt="" />
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="p2p-qr-hint">
+                    Sử dụng <b>App MoMo</b> hoặc <b>ứng dụng ngân hàng</b> để quét mã
+                  </div>
                 </div>
 
                 {p2pPayUrl && (

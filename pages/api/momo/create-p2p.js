@@ -86,13 +86,16 @@ export default async function handler(req, res) {
       })
     }
 
-    // Chỉ thêm: tự generate ảnh QR (base64 PNG) từ payUrl để gửi kèm cho người dùng,
-    // không thay đổi logic tạo đơn / gọi MoMo ở trên.
+    // Chỉ thêm: tự generate ảnh QR (base64 PNG) — ƯU TIÊN dùng result.qrCodeUrl
+    // (chuỗi VietQR/EMV gốc do MoMo trả về, quét được bằng cả app MoMo lẫn app
+    // ngân hàng bất kỳ, giống QR VietQR chuẩn). Chỉ fallback về payUrl (mở trang
+    // web thanh toán) nếu tài khoản chưa được cấp quyền dùng field qrCodeUrl.
     let qrCodeImage = ''
-    if (result.payUrl) {
+    const qrSource = result.qrCodeUrl || result.payUrl
+    if (qrSource) {
       try {
-        qrCodeImage = await QRCode.toDataURL(result.payUrl, {
-          errorCorrectionLevel: 'M',
+        qrCodeImage = await QRCode.toDataURL(qrSource, {
+          errorCorrectionLevel: 'H', // mức sửa lỗi cao nhất — cho phép overlay logo giữa QR mà vẫn quét được
           margin: 1,
           width: 400,
         })
@@ -131,7 +134,7 @@ export default async function handler(req, res) {
       payUrl: result.payUrl,
       deeplink: result.deeplink,
       qrCodeUrl: result.qrCodeUrl,
-      qrCodeImage, // data:image/png;base64,... - tạo từ payUrl, dùng được luôn
+      qrCodeImage, // data:image/png;base64,... - QR VietQR thật (từ qrCodeUrl), quét trực tiếp bằng app MoMo/ngân hàng
       orderId: result.orderId,
       requestId: result.requestId,
     })
