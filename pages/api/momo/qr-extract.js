@@ -22,6 +22,7 @@ export const config = {
     // Puppeteer cold-start có thể mất vài giây, tăng timeout mặc định
     externalResolver: true,
   },
+  maxDuration: 60, // CHỈ có tác dụng trên Vercel Pro trở lên — Hobby cứng 10s
 }
 
 // Cache browser instance giữa các lần gọi trong cùng 1 lambda container
@@ -72,6 +73,8 @@ export default async function handler(req, res) {
       // Không thấy render kịp trong 8s — vẫn thử chụp bằng logic fallback bên dưới
     }
 
+    const debug = req.query.debug === '1'
+
     // ─── Tìm element chứa QR ───
     // Ưu tiên 1: container chính xác MoMo dùng cho khối QR — xác nhận qua
     // DevTools thật trên trang thanh toán (id="form-qr-code", nằm trong
@@ -111,6 +114,14 @@ export default async function handler(req, res) {
       }
       return best
     })
+
+    if (debug) {
+      const fullBuffer = await page.screenshot({ type: 'png', fullPage: true })
+      await page.close()
+      res.setHeader('Content-Type', 'image/png')
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).send(fullBuffer)
+    }
 
     const element = elementHandle.asElement()
     if (!element) {
