@@ -1642,6 +1642,19 @@ export default function CreateTransactionPage() {
           overflow: hidden;
           padding: 12px;
         }
+        /* Co giãn theo màn hình: 260px chỉ hợp cho điện thoại (1 cột dọc).
+           Từ 600px trở lên, .scan-split chia 2 cột (xem @media ở trên) nên
+           cột QR có nhiều chỗ trống hơn — tăng dần max-width theo breakpoint
+           để khung QR to rõ ràng trên laptop, không bị kẹt cứng ở 260px. */
+        @media (min-width: 600px) {
+          .p2p-qr-card { max-width: 300px; }
+        }
+        @media (min-width: 900px) {
+          .p2p-qr-card { max-width: 340px; }
+        }
+        @media (min-width: 1200px) {
+          .p2p-qr-card { max-width: 380px; }
+        }
         .p2p-qr-img {
           width: 100%; height: 100%;
           object-fit: contain;
