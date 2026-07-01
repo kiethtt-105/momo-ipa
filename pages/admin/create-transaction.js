@@ -9,10 +9,14 @@ const TX_BASE_URL = 'https://kiehtt.vercel.app'
 function buildTxUrl(method, amount, orderInfo) {
   const amt = parseInt(amount, 10)
   if (!amt || amt <= 0) return null
-  const path =
-    method === 'p2p' ? '/api/momo/create-p2p'
-    : '/api/momo/scan'
-  return `${TX_BASE_URL}${path}?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
+  // Scan QR giờ xử lý INLINE ngay trong trang (xem startScan()), không còn
+  // điều hướng qua /api/momo/scan (GET) nữa → chỉ build URL cho p2p.
+  if (method !== 'p2p') return null
+  return `${TX_BASE_URL}/api/momo/create-p2p?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
+}
+
+function cleanCode(raw) {
+  return (raw || '').trim()
 }
 
 function formatAmount(raw) {
@@ -316,6 +320,362 @@ export default function CreateTransactionPage() {
   const [loading,      setLoading]      = useState(false)
   const amountInputRef = useRef(null)
 
+  // ─── SCAN QR INLINE STATE ──────────────────────────────────
+  // Khi method = scan và đã bấm "Xác nhận", khung quét QR hiện ngay
+  // trong trang (chia đôi màn hình) thay vì chuyển sang /admin/scan.
+  const [scanActive,    setScanActive]    = useState(false)
+  const [scanOrderId,   setScanOrderId]   = useState(null)
+  const [manualCode,    setManualCode]    = useState('')
+  const [manualErr,     setManualErr]     = useState('')
+  const [isSubmittingCode, setIsSubmittingCode] = useState(false)
+  const [isServerErr,   setIsServerErr]   = useState(false)
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [camError,      setCamError]      = useState('')
+  const [scanning,      setScanning]      = useState(false)
+  const [jsQrReady,     setJsQrReady]     = useState(false)
+
+  // ─── P2P QR INLINE STATE ────────────────────────────────────
+  // Khi method = p2p và đã bấm "Xác nhận", QR thanh toán hiện ngay
+  // trong trang (chia đôi màn hình) thay vì mở tab MoMo mới.
+  const [p2pActive,        setP2pActive]        = useState(false)
+  const [p2pOrderId,       setP2pOrderId]       = useState(null)
+  const [p2pQrImage,       setP2pQrImage]       = useState('')
+  const [p2pPayUrl,        setP2pPayUrl]        = useState('')
+  const [p2pDeeplink,      setP2pDeeplink]      = useState('')
+  const [p2pStatus,        setP2pStatus]        = useState('PENDING')
+  const [p2pChecking,      setP2pChecking]      = useState(false)
+  const [p2pCancelling,    setP2pCancelling]    = useState(false)
+  const [p2pCheckMsg,      setP2pCheckMsg]      = useState('')
+  const [showP2pCancelModal, setShowP2pCancelModal] = useState(false)
+
+  const videoRef     = useRef(null)
+  const canvasRef     = useRef(null)
+  const streamRef      = useRef(null)
+  const rafRef          = useRef(null)
+  const submittingRef    = useRef(false)
+
+  // Tải thư viện jsQR 1 lần khi vào trang
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.jsQR) { setJsQrReady(true); return }
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'
+    s.onload = () => setJsQrReady(true)
+    s.onerror = () => setCamError('Không tải được thư viện QR.')
+    document.head.appendChild(s)
+  }, [])
+
+  function setVideoRef(el) {
+    videoRef.current = el
+    if (el && !streamRef.current) initStream(el)
+  }
+
+  async function initStream(videoEl) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      })
+      streamRef.current = stream
+      videoEl.srcObject = stream
+      videoEl.setAttribute('playsinline', true)
+      await videoEl.play()
+      rafRef.current = requestAnimationFrame(tick)
+    } catch (err) {
+      setScanning(false)
+      if (err.name === 'NotAllowedError')
+        setCamError('Bị từ chối quyền camera. Vào Settings trình duyệt → cho phép Camera.')
+      else if (err.name === 'NotFoundError')
+        setCamError('Không tìm thấy camera.')
+      else
+        setCamError(`Lỗi camera: ${err.message}`)
+    }
+  }
+
+  function tick() {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas) return
+    if (video.readyState < 2) { rafRef.current = requestAnimationFrame(tick); return }
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(video, 0, 0)
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const code = window.jsQR?.(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' })
+    if (code?.data && !submittingRef.current) {
+      submitPaymentCode(code.data)
+      return
+    }
+    rafRef.current = requestAnimationFrame(tick)
+  }
+
+  function stopCamera() {
+    cancelAnimationFrame(rafRef.current)
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current = null
+    setScanning(false)
+  }
+
+  // Dừng camera khi rời trang
+  useEffect(() => () => stopCamera(), [])
+
+  // Tự bật camera ngay khi khung scan mở
+  useEffect(() => {
+    if (scanActive && jsQrReady) {
+      setCamError('')
+      submittingRef.current = false
+      setScanning(true)
+    }
+  }, [scanActive, jsQrReady])
+
+  function closeScanPanel() {
+    stopCamera()
+    setScanActive(false)
+    setScanOrderId(null)
+    setManualCode('')
+    setManualErr('')
+    setIsServerErr(false)
+    setIsSubmittingCode(false)
+    submittingRef.current = false
+    setAmount('')
+    setOrderInfo(genOrderId())
+  }
+
+  // ─── P2P: tạo đơn + QR rồi hiện ngay tại chỗ (chia đôi màn hình) ──
+  function closeP2pPanel() {
+    setP2pActive(false)
+    setP2pOrderId(null)
+    setP2pQrImage('')
+    setP2pPayUrl('')
+    setP2pDeeplink('')
+    setP2pStatus('PENDING')
+    setP2pCheckMsg('')
+    setP2pChecking(false)
+    setP2pCancelling(false)
+    setAmount('')
+    setOrderInfo(genOrderId())
+  }
+
+  async function startP2P(amt, info) {
+    const finalOrderInfo = info || genOrderId()
+    const url = buildTxUrl('p2p', amt, finalOrderInfo)
+    if (!url) return
+
+    try {
+      const res  = await fetch(url)
+      const data = await res.json()
+      if (!res.ok || !data.payUrl) {
+        alert(data.error || 'Tạo giao dịch thất bại, thử lại sau')
+        return
+      }
+      setP2pOrderId(data.orderId || finalOrderInfo)
+      setP2pQrImage(data.qrCodeImage || '')
+      setP2pPayUrl(data.payUrl || '')
+      setP2pDeeplink(data.deeplink || '')
+      setP2pStatus('PENDING')
+      setP2pCheckMsg('')
+      setOrderInfo(finalOrderInfo)
+      setP2pActive(true)
+    } catch (e) {
+      alert('Lỗi server, thử lại sau')
+    }
+  }
+
+  // Bấm "Kiểm tra giao dịch" — gọi /api/momo/status để lấy trạng thái mới
+  // nhất (server sẽ tự đối chiếu với MoMo nếu cần) rồi cập nhật UI.
+  async function checkP2pStatus() {
+    if (!p2pOrderId || p2pChecking) return
+    setP2pChecking(true)
+    setP2pCheckMsg('')
+    try {
+      const res  = await fetch(`/api/momo/status?orderId=${encodeURIComponent(p2pOrderId)}`)
+      const data = await res.json()
+      const status = data.status || 'PENDING'
+      setP2pStatus(status)
+
+      if (status === 'PAID') {
+        setP2pCheckMsg('✓ Thanh toán thành công!')
+        setResultToast({
+          orderId: p2pOrderId,
+          status: 'success',
+          amount: data.amount || parseInt(amount, 10) || null,
+        })
+        setTimeout(() => closeP2pPanel(), 1500)
+      } else if (status === 'EXPIRED') {
+        setP2pCheckMsg('⚠ Mã QR đã hết hạn, vui lòng tạo đơn mới.')
+      } else if (status === 'FAILED') {
+        setP2pCheckMsg(`✗ Giao dịch thất bại${data.message ? `: ${data.message}` : ''}`)
+      } else {
+        setP2pCheckMsg('⏳ Chưa nhận được thanh toán, khách vui lòng quét mã QR.')
+      }
+    } catch (e) {
+      setP2pCheckMsg('⚠ Lỗi kết nối, thử kiểm tra lại.')
+    } finally {
+      setP2pChecking(false)
+    }
+  }
+
+  // Bấm "Hủy giao dịch" — chỉ đánh dấu FAILED nếu đơn còn PENDING bên server
+  // (route /api/momo/cancel tự bảo vệ, không ghi đè đơn đã PAID/FAILED/EXPIRED).
+  async function cancelP2pOrder() {
+    if (!p2pOrderId || p2pCancelling) return
+    setP2pCancelling(true)
+    try {
+      const res  = await fetch('/api/momo/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: p2pOrderId }),
+      })
+      const data = await res.json()
+      if (data.alreadyFinal && data.status === 'PAID') {
+        // Khách vừa thanh toán xong đúng lúc admin bấm hủy — không hủy nữa, báo thành công.
+        setP2pStatus('PAID')
+        setP2pCheckMsg('✓ Đơn đã được thanh toán, không thể hủy.')
+        setP2pCancelling(false)
+        return
+      }
+    } catch (e) {
+      console.error('Lỗi hủy đơn P2P:', e)
+    } finally {
+      setP2pCancelling(false)
+    }
+    closeP2pPanel()
+  }
+
+  // Tạo đơn PENDING rồi mở khung quét QR ngay tại chỗ (không chuyển trang)
+  async function startScan(amt, info) {
+    const generatedId = `POS${Date.now()}`
+    const finalOrderInfo = info || genOrderId()
+    submittingRef.current = true
+    try {
+      await fetch('/api/momo/save-pending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: generatedId,
+          amount: parseInt(amt, 10),
+          orderInfo: finalOrderInfo,
+        }),
+      })
+    } catch (e) {
+      console.error('Lỗi lưu đơn hàng nháp:', e)
+    } finally {
+      submittingRef.current = false
+    }
+    setScanOrderId(generatedId)
+    setOrderInfo(finalOrderInfo)
+    setManualCode('')
+    setManualErr('')
+    setIsServerErr(false)
+    setScanActive(true)
+  }
+
+  // Gửi mã thanh toán (18 số, có thể có MM) lên /api/momo/scan (POST)
+  async function submitPaymentCode(rawCode) {
+    if (submittingRef.current) return
+    submittingRef.current = true
+    setIsSubmittingCode(true)
+    setIsServerErr(false)
+
+    const code = cleanCode(rawCode)
+    setManualCode(code)
+
+    const amt = parseInt(amount, 10)
+    let orderId = scanOrderId || `POS${Date.now()}`
+    const baseOrderInfo = orderInfo || genOrderId()
+
+    const MAX_RETRY = 5
+    let attempt = 0
+    let data = null
+
+    try {
+      while (attempt < MAX_RETRY) {
+        const res = await fetch('/api/momo/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, amount: amt, orderInfo: baseOrderInfo, paymentCode: code }),
+        })
+        data = await res.json()
+
+        if (data.resultCode === 41) {
+          // Trùng orderId bên MoMo → tự bump số thứ tự rồi thử lại
+          const match = orderId.match(/^(.+)_(\d+)$/)
+          orderId = match ? `${match[1]}_${parseInt(match[2]) + 1}` : `${orderId}_2`
+          setScanOrderId(orderId)
+          attempt++
+          try {
+            await fetch('/api/momo/save-pending', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ orderId, amount: amt, orderInfo: baseOrderInfo }),
+            })
+          } catch (e) { console.error('Lỗi lưu đơn nháp khi bump:', e) }
+          continue
+        }
+        break
+      }
+
+      setResultToast({
+        orderId,
+        status: data?.resultCode === 0 ? 'success' : 'fail',
+        amount: amt,
+        message: data?.message || null,
+      })
+      setPendingOrders(prev => prev.filter(o => o.orderId !== orderId))
+      closeScanPanel()
+    } catch (e) {
+      submittingRef.current = false
+      setIsSubmittingCode(false)
+      setIsServerErr(true)
+      setManualErr('Mất kết nối hoặc cổng thanh toán phản hồi chậm!')
+    }
+  }
+
+  function handleManualCodeKey(e) {
+    if (e.key === 'Enter') submitManualCode()
+  }
+
+  async function submitManualCode() {
+    const code = cleanCode(manualCode)
+    if (!/^(MM|mm)?\d{18}$/.test(code)) {
+      setManualErr('Mã không hợp lệ. Vui lòng kiểm tra lại (18 chữ số, có thể có MM).')
+      return
+    }
+    setManualErr('')
+    await submitPaymentCode(code)
+  }
+
+  // Tự gửi khi gõ/quét đủ 18 hoặc 20 ký tự hợp lệ — tránh trường hợp
+  // người quét mã QR (18 số) bị nhầm thành đang gõ số tiền.
+  useEffect(() => {
+    const code = cleanCode(manualCode)
+    if ((code.length === 18 || code.length === 20) && !submittingRef.current && /^(MM|mm)?\d{18}$/.test(code)) {
+      submitManualCode()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualCode])
+
+  async function triggerCancelOrderBackend() {
+    submittingRef.current = true
+    setIsSubmittingCode(true)
+    try {
+      await fetch('/api/momo/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: scanOrderId,
+          amount: parseInt(amount, 10),
+          orderInfo: orderInfo || scanOrderId,
+          paymentCode: '000000000000000000',
+        }),
+      })
+    } catch (e) {
+      console.error(e)
+    } finally {
+      closeScanPanel()
+    }
+  }
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -343,32 +703,15 @@ export default function CreateTransactionPage() {
       const finalOrderInfo = qOrderInfo || genOrderId()
       if (qOrderInfo) setOrderInfo(finalOrderInfo)
 
-      const url = buildTxUrl(validMethod, validAmount, finalOrderInfo)
-      if (!url) return
-
-      // Điều hướng THẲNG trong cùng tab (window.location.href) — KHÔNG dùng
-      // window.open() vì hành động này chạy trong useEffect, không phải user-gesture
-      // trực tiếp, nên mobile Safari/Chrome sẽ chặn popup → trang chỉ fill form
-      // mà không nhảy tiếp được. Áp dụng đồng nhất cho cả 2 phương thức p2p/scan.
-      if (validMethod === 'p2p') {
-        fetch(url)
-          .then(r => r.json())
-          .then(data => {
-            if (data.payUrl) {
-              window.location.href = data.payUrl
-            } else {
-              alert(data.error || 'Tạo giao dịch thất bại')
-              router.replace('/admin/create-transaction', undefined, { shallow: true })
-            }
-          })
-          .catch(() => {
-            alert('Lỗi server')
-            router.replace('/admin/create-transaction', undefined, { shallow: true })
-          })
-      } else {
-        // scan
-        window.location.href = url
+      if (validMethod !== 'p2p') {
+        // scan: tạo đơn & mở khung quét QR ngay tại chỗ, không cần build URL
+        startScan(validAmount, finalOrderInfo)
+        return
       }
+
+      // p2p: tạo đơn + QR rồi hiện ngay tại chỗ (chia đôi màn hình), không
+      // điều hướng sang MoMo nữa.
+      startP2P(validAmount, finalOrderInfo)
     }
   }, [router.isReady])
 
@@ -424,41 +767,21 @@ export default function CreateTransactionPage() {
 
   const handleCreate = async () => {
     const finalOrderInfo = (orderInfo || '').trim() || genOrderId()
-    const url = buildTxUrl(method, amount, finalOrderInfo)
-    if (!url) return
-
-    setLoading(true)
-    setPendingOrders(prev => [...prev, { orderId: finalOrderInfo, amount: parseInt(amount, 10) || 0 }])
-    setOrderInfo(genOrderId())
 
     if (!isP2P) {
-      window.open(url, '_blank', 'noopener,noreferrer')
+      // SCAN: bấm Enter/Xác nhận → tạo đơn PENDING rồi hiện khung quét QR
+      // ngay trong trang (không mở tab mới, không qua /admin/scan)
+      setLoading(true)
+      await startScan(amount, finalOrderInfo)
       setLoading(false)
       return
     }
 
-    const win = window.open('', '_blank')
-    try {
-      const res  = await fetch(url)
-      const data = await res.json()
-      if (!res.ok || !data.payUrl) {
-        setPendingOrders(prev => prev.filter(o => o.orderId !== finalOrderInfo))
-        win?.close()
-        alert(data.error || 'Tạo giao dịch thất bại, thử lại sau')
-        return
-      }
-      if (win) {
-        win.location.href = data.payUrl
-      } else {
-        window.open(data.payUrl, '_blank', 'noopener,noreferrer')
-      }
-    } catch (e) {
-      setPendingOrders(prev => prev.filter(o => o.orderId !== finalOrderInfo))
-      win?.close()
-      alert('Lỗi server, thử lại sau')
-    } finally {
-      setLoading(false)
-    }
+    // P2P: tạo đơn + QR rồi hiện ngay trong trang (chia đôi màn hình),
+    // kèm nút "Kiểm tra giao dịch" và "Hủy giao dịch".
+    setLoading(true)
+    await startP2P(amount, finalOrderInfo)
+    setLoading(false)
   }
 
   const copyUrl = () => {
@@ -814,6 +1137,183 @@ export default function CreateTransactionPage() {
           50%      { opacity: 0.5; transform: scale(0.75); }
         }
 
+        /* ── SCAN QR — chia 2 cửa sổ ── */
+        .card.split { }
+        @media (min-width: 600px) {
+          .card.split { max-width: 760px; }
+        }
+
+        .scan-split {
+          flex: 1;
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0;
+        }
+        @media (min-width: 600px) {
+          .scan-split { grid-template-columns: 1fr 1fr; }
+        }
+
+        .scan-pane {
+          padding: 16px 20px 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .scan-pane-info {
+          border-bottom: 1px solid var(--border);
+        }
+        @media (min-width: 600px) {
+          .scan-pane-info {
+            border-bottom: none;
+            border-right: 1px solid var(--border);
+          }
+        }
+
+        .scan-order-card {
+          border: 1.5px solid var(--border);
+          border-radius: 14px;
+          background: var(--subtle);
+          padding: 14px 16px;
+        }
+        .scan-order-row {
+          display: flex; align-items: center; justify-content: space-between;
+          font-size: 12.5px; color: var(--muted); font-weight: 600;
+          padding: 5px 0;
+        }
+        .scan-order-mono {
+          font-family: 'SF Mono','Fira Code', monospace;
+          font-size: 11.5px; color: var(--text); font-weight: 600;
+          max-width: 60%; text-align: right; word-break: break-all;
+        }
+        .scan-order-amount span:last-child {
+          font-size: 20px; font-weight: 900; color: var(--mm);
+        }
+        .scan-order-divider { height: 1px; background: var(--border); margin: 6px 0; }
+
+        .scan-cam-status {
+          display: flex; align-items: center; gap: 7px;
+          font-size: 12px; font-weight: 600; color: var(--mm);
+        }
+        .scan-cam-dot {
+          width: 7px; height: 7px; border-radius: 50%;
+          background: var(--mm);
+          animation: pulse 1.2s ease-in-out infinite;
+        }
+        .scan-cam-error {
+          font-size: 12px; font-weight: 600; color: #dc2626;
+          background: #fef2f2; border: 1px solid #fecaca;
+          border-radius: 10px; padding: 8px 10px;
+        }
+        .scan-cam-hidden {
+          position: absolute; width: 1px; height: 1px;
+          overflow: hidden; opacity: 0; pointer-events: none;
+        }
+
+        .scan-cancel-btn {
+          margin-top: auto;
+          width: 100%;
+          padding: 11px; border-radius: 12px;
+          border: 1.5px solid var(--border);
+          background: #fff; color: var(--muted);
+          font-family: inherit; font-size: 12.5px; font-weight: 700;
+          cursor: pointer; transition: all 0.15s;
+        }
+        .scan-cancel-btn:hover { border-color: #fca5a5; color: #dc2626; background: #fef2f2; }
+
+        .scan-code-input {
+          width: 100%;
+          border: 1.5px solid var(--border);
+          border-radius: 12px;
+          background: var(--subtle);
+          padding: 12px 14px;
+          font-family: 'SF Mono','Fira Code', monospace;
+          font-size: 14px; font-weight: 600; color: var(--text);
+          outline: none; transition: all 0.18s;
+        }
+        .scan-code-input:focus { border-color: var(--mm); background: #fff; box-shadow: 0 0 0 3px var(--mm-mid); }
+        .scan-code-err { font-size: 11.5px; color: #dc2626; font-weight: 600; }
+
+        .scan-confirm-btn {
+          width: 100%;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          padding: 13px; border-radius: 14px; border: none;
+          background: linear-gradient(135deg, var(--mm) 0%, #c0006a 100%);
+          color: #fff; font-family: inherit; font-size: 13.5px; font-weight: 800;
+          cursor: pointer; transition: all 0.18s;
+          box-shadow: 0 8px 20px rgba(174,0,112,0.25);
+        }
+        .scan-confirm-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+        .scan-confirm-btn.loading { opacity: 0.85; }
+
+        .scan-retry-btn {
+          width: 100%;
+          padding: 11px; border-radius: 12px; border: none;
+          background: #f59e0b; color: #fff;
+          font-family: inherit; font-size: 12.5px; font-weight: 700;
+          cursor: pointer; box-shadow: 0 4px 12px rgba(245,158,11,0.25);
+        }
+
+        /* ── P2P QR PANE ── */
+        .p2p-status-badge {
+          font-size: 11px; font-weight: 800;
+          padding: 3px 9px; border-radius: 20px;
+        }
+        .p2p-status-pending { background: var(--mm-light); color: var(--mm); }
+        .p2p-status-paid    { background: #dcfce7; color: #16a34a; }
+        .p2p-status-expired { background: #fef3c7; color: #b45309; }
+        .p2p-status-failed  { background: #fee2e2; color: #dc2626; }
+
+        .p2p-check-msg {
+          font-size: 12px; font-weight: 600; color: var(--mm);
+          background: var(--mm-light); border: 1px solid rgba(174,0,112,0.18);
+          border-radius: 10px; padding: 8px 10px; line-height: 1.4;
+        }
+        .p2p-check-msg.ok  { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
+        .p2p-check-msg.err { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+
+        .p2p-qr-wrap {
+          display: flex; align-items: center; justify-content: center;
+          width: 100%; aspect-ratio: 1 / 1; max-width: 240px;
+          margin: 0 auto;
+          background: var(--subtle); border: 1.5px solid var(--border);
+          border-radius: 16px; overflow: hidden;
+        }
+        .p2p-qr-img { width: 100%; height: 100%; object-fit: contain; padding: 10px; }
+        .p2p-qr-placeholder {
+          display: flex; align-items: center; justify-content: center;
+          width: 100%; height: 100%;
+        }
+
+        .p2p-open-link {
+          display: block; text-align: center;
+          font-size: 12.5px; font-weight: 700; color: var(--mm);
+          text-decoration: none; padding: 4px 0 2px;
+        }
+        .p2p-open-link:hover { text-decoration: underline; }
+
+        /* ── CANCEL MODAL ── */
+        .cancel-modal-backdrop {
+          position: fixed; inset: 0; z-index: 200;
+          background: rgba(0,0,0,0.4);
+          display: flex; align-items: center; justify-content: center;
+          padding: 16px;
+        }
+        .cancel-modal-box {
+          width: 100%; max-width: 340px;
+          background: #fff; border-radius: 18px; padding: 22px;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        .cancel-modal-title { font-size: 15px; font-weight: 800; color: var(--text); text-align: center; margin-bottom: 6px; }
+        .cancel-modal-desc { font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.5; margin-bottom: 16px; }
+        .cancel-modal-id { font-family: 'SF Mono','Fira Code', monospace; font-weight: 700; color: var(--text); }
+        .cancel-modal-actions { display: flex; gap: 10px; }
+        .cancel-modal-keep, .cancel-modal-confirm {
+          flex: 1; padding: 10px; border-radius: 10px; border: none;
+          font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+        }
+        .cancel-modal-keep { background: var(--subtle); color: var(--muted); }
+        .cancel-modal-confirm { background: #dc2626; color: #fff; }
+
         /* ══════════════════════════════════════════════
            AI WIDGET STYLES
            ══════════════════════════════════════════════ */
@@ -1144,17 +1644,26 @@ export default function CreateTransactionPage() {
       )}
 
       <div className="page-root">
-        <div className="card">
+        <div className={`card${(scanActive || p2pActive) ? ' split' : ''}`}>
           <div className="top-stripe" />
 
           <div className="card-header">
             <img src="/Main.png" alt="" className="header-logo" />
             <div>
-              <div className="header-text-title">Tạo Giao Dịch</div>
-              <div className="header-text-sub">Tạo link &amp; QR thanh toán MoMo</div>
+              <div className="header-text-title">
+                {scanActive ? 'Quét Mã MoMo' : p2pActive ? 'Thanh Toán QR' : 'Tạo Giao Dịch'}
+              </div>
+              <div className="header-text-sub">
+                {scanActive
+                  ? 'Quét mã QR khách hàng để nhận tiền'
+                  : p2pActive
+                  ? 'Đưa mã QR cho khách quét để thanh toán'
+                  : 'Tạo link & QR thanh toán MoMo'}
+              </div>
             </div>
           </div>
 
+          {!scanActive && !p2pActive && (
           <div className="card-body">
             {pendingOrders.length > 0 && (
               <div className="pending-badge">
@@ -1258,8 +1767,245 @@ export default function CreateTransactionPage() {
               </div>
             )}
           </div>
+          )}
+
+          {scanActive && (
+            <div className="scan-split">
+              {/* CỬA SỔ TRÁI — thông tin đơn hàng */}
+              <div className="scan-pane scan-pane-info">
+                <div className="field-label">Thông tin đơn hàng</div>
+                <div className="scan-order-card">
+                  <div className="scan-order-row">
+                    <span>Mã đơn hàng</span>
+                    <span className="scan-order-mono">{scanOrderId || '—'}</span>
+                  </div>
+                  <div className="scan-order-row scan-order-amount">
+                    <span>Số tiền</span>
+                    <span>{formatAmount(amount)}₫</span>
+                  </div>
+                  <div className="scan-order-divider" />
+                  <div className="scan-order-row">
+                    <span>Nội dung</span>
+                    <span className="scan-order-mono">{orderInfo}</span>
+                  </div>
+                </div>
+
+                {camError && <div className="scan-cam-error">⚠ {camError}</div>}
+                {!camError && (
+                  <div className="scan-cam-status">
+                    <span className="scan-cam-dot" /> Camera đang quét mã QR…
+                  </div>
+                )}
+
+                {!isSubmittingCode && (
+                  <button
+                    type="button"
+                    className="scan-cancel-btn"
+                    onClick={() => setShowCancelModal(true)}
+                  >
+                    ← Hủy &amp; quay lại
+                  </button>
+                )}
+              </div>
+
+              {/* CỬA SỔ PHẢI — nhập / quét mã thanh toán */}
+              <div className="scan-pane scan-pane-code">
+                <div className="field-label">Mã thanh toán MoMo (18 số)</div>
+                <input
+                  autoFocus
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Scan mã QR hoặc gõ mã 18 số"
+                  value={manualCode}
+                  onChange={e => { setManualCode(e.target.value); setManualErr('') }}
+                  onKeyDown={handleManualCodeKey}
+                  disabled={isSubmittingCode}
+                  className="scan-code-input"
+                />
+                {manualErr && <div className="scan-code-err">⚠ {manualErr}</div>}
+
+                <button
+                  type="button"
+                  className={`scan-confirm-btn${isSubmittingCode ? ' loading' : ''}`}
+                  onClick={submitManualCode}
+                  disabled={!manualCode.trim() || isSubmittingCode}
+                >
+                  {isSubmittingCode
+                    ? <><div className="spinner" /> Đang xử lý…</>
+                    : <>✓ Xác nhận thanh toán</>
+                  }
+                </button>
+
+                {isServerErr && !isSubmittingCode && (
+                  <button type="button" className="scan-retry-btn" onClick={submitManualCode}>
+                    ⚡ Gửi lại dữ liệu
+                  </button>
+                )}
+
+                {/* Camera chạy ngầm — ẩn khỏi UI nhưng vẫn quét */}
+                {scanning && (
+                  <div className="scan-cam-hidden">
+                    <video ref={setVideoRef} playsInline muted />
+                    <canvas ref={canvasRef} />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {p2pActive && (
+            <div className="scan-split">
+              {/* CỬA SỔ TRÁI — thông tin đơn hàng + trạng thái */}
+              <div className="scan-pane scan-pane-info">
+                <div className="field-label">Thông tin đơn hàng</div>
+                <div className="scan-order-card">
+                  <div className="scan-order-row">
+                    <span>Mã đơn hàng</span>
+                    <span className="scan-order-mono">{p2pOrderId || '—'}</span>
+                  </div>
+                  <div className="scan-order-row scan-order-amount">
+                    <span>Số tiền</span>
+                    <span>{formatAmount(amount)}₫</span>
+                  </div>
+                  <div className="scan-order-divider" />
+                  <div className="scan-order-row">
+                    <span>Nội dung</span>
+                    <span className="scan-order-mono">{orderInfo}</span>
+                  </div>
+                  <div className="scan-order-divider" />
+                  <div className="scan-order-row">
+                    <span>Trạng thái</span>
+                    <span className={`p2p-status-badge p2p-status-${p2pStatus.toLowerCase()}`}>
+                      {p2pStatus === 'PAID'    ? 'Đã thanh toán'
+                        : p2pStatus === 'EXPIRED' ? 'Hết hạn'
+                        : p2pStatus === 'FAILED'  ? 'Thất bại'
+                        : 'Đang chờ'}
+                    </span>
+                  </div>
+                </div>
+
+                {p2pCheckMsg && (
+                  <div className={`p2p-check-msg${p2pStatus === 'PAID' ? ' ok' : (p2pStatus === 'EXPIRED' || p2pStatus === 'FAILED') ? ' err' : ''}`}>
+                    {p2pCheckMsg}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className="scan-cancel-btn"
+                  onClick={() => setShowP2pCancelModal(true)}
+                  disabled={p2pCancelling || p2pStatus === 'PAID'}
+                >
+                  ← Hủy giao dịch
+                </button>
+              </div>
+
+              {/* CỬA SỔ PHẢI — mã QR để khách quét thanh toán */}
+              <div className="scan-pane scan-pane-code">
+                <div className="field-label">Khách quét mã QR để thanh toán</div>
+
+                <div className="p2p-qr-wrap">
+                  {p2pQrImage ? (
+                    <img src={p2pQrImage} alt="QR thanh toán MoMo" className="p2p-qr-img" />
+                  ) : (
+                    <div className="p2p-qr-placeholder">
+                      <div className="spinner" style={{ borderTopColor: 'var(--mm)', borderColor: 'rgba(174,0,112,0.25)' }} />
+                    </div>
+                  )}
+                </div>
+
+                {p2pPayUrl && (
+                  <a
+                    href={p2pDeeplink || p2pPayUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p2p-open-link"
+                  >
+                    Mở trong ứng dụng MoMo ↗
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  className={`scan-confirm-btn${p2pChecking ? ' loading' : ''}`}
+                  onClick={checkP2pStatus}
+                  disabled={p2pChecking || p2pStatus === 'PAID'}
+                >
+                  {p2pChecking
+                    ? <><div className="spinner" /> Đang kiểm tra…</>
+                    : <>✓ Kiểm tra giao dịch</>
+                  }
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* POPUP XÁC NHẬN HỦY ĐƠN ĐANG QUÉT */}
+      {showCancelModal && (
+        <div className="cancel-modal-backdrop">
+          <div className="cancel-modal-box">
+            <div className="cancel-modal-title">Xác nhận hủy giao dịch?</div>
+            <p className="cancel-modal-desc">
+              Hành động này sẽ hủy bỏ và đánh dấu thất bại cho đơn hàng{' '}
+              <span className="cancel-modal-id">{scanOrderId}</span>.
+            </p>
+            <div className="cancel-modal-actions">
+              <button
+                type="button"
+                className="cancel-modal-keep"
+                onClick={() => setShowCancelModal(false)}
+              >
+                Tiếp tục chờ
+              </button>
+              <button
+                type="button"
+                className="cancel-modal-confirm"
+                onClick={async () => {
+                  setShowCancelModal(false)
+                  await triggerCancelOrderBackend()
+                }}
+              >
+                Đồng ý hủy đơn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPUP XÁC NHẬN HỦY ĐƠN P2P (QR chuyển tiền) */}
+      {showP2pCancelModal && (
+        <div className="cancel-modal-backdrop">
+          <div className="cancel-modal-box">
+            <div className="cancel-modal-title">Xác nhận hủy giao dịch?</div>
+            <p className="cancel-modal-desc">
+              Hành động này sẽ hủy bỏ và đánh dấu thất bại cho đơn hàng{' '}
+              <span className="cancel-modal-id">{p2pOrderId}</span>.
+              Nếu khách vừa thanh toán xong, đơn sẽ không bị hủy.
+            </p>
+            <div className="cancel-modal-actions">
+              <button
+                type="button"
+                className="cancel-modal-keep"
+                onClick={() => setShowP2pCancelModal(false)}
+              >
+                Tiếp tục chờ
+              </button>
+              <button
+                type="button"
+                className="cancel-modal-confirm"
+                onClick={async () => {
+                  setShowP2pCancelModal(false)
+                  await cancelP2pOrder()
+                }}
+              >
+                Đồng ý hủy đơn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI AMOUNT WIDGET — ngoài .card để fixed positioning không bị clip */}
       <AiAmountWidget onAmountSelect={setAmount} />

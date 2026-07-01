@@ -1,4 +1,7 @@
 // /pages/api/momo/scan.js
+// POST-only handler: nhận mã thanh toán từ create-transaction inline scan
+// GET handler + redirect đã bỏ — không còn dùng /admin/scan nữa
+
 import crypto from 'crypto'
 import { Redis } from '@upstash/redis'
 
@@ -20,7 +23,6 @@ const BASE_URL = process.env.NODE_ENV === 'production'
   ? 'https://kiehtt.vercel.app'
   : 'http://localhost:3000'
 
-
 function sign(raw) {
   return crypto.createHmac('sha256', SECRET_KEY).update(raw).digest('hex')
 }
@@ -41,59 +43,11 @@ function encryptPaymentCode(code) {
 }
 
 export default async function handler(req, res) {
-  if (req.method === 'GET')  return handleQuickRedirect(req, res)
-  if (req.method === 'POST') return handlePosCharge(req, res)
-  return res.status(405).json({ error: 'Method Not Allowed' })
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' })
+  }
+  return handlePosCharge(req, res)
 }
-
-async function handleQuickRedirect(req, res) {
-  const { orderId: rawOrderId, amount, orderInfo: rawOrderInfo = '' } = req.query
-
-  const cookie = req.headers.cookie || ''
-  try {
-    const sessionRes = await fetch(`${BASE_URL}/api/admin/session`, {
-      headers: { cookie },
-    })
-    await sessionRes.json()
-  } catch (error) {
-    console.error('[scan][GET] Lỗi kiểm tra session:', error)
-  }
-
-  // ====== Mở lại link cũ bằng orderId (vd lỡ đóng tab) ======
-  // KHÔNG tạo đơn mới, chỉ tra lại đơn PENDING đã có trong Redis để lấy
-  // đúng amount/orderInfo rồi redirect vào lại y như link ban đầu.
-  if (rawOrderId) {
-    const orderId = String(rawOrderId).trim()
-    let existing
-    try {
-      const raw = await redis.hget('momo:orders', orderId)
-      existing = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null
-    } catch (err) {
-      console.error('[scan][GET] Lỗi tra đơn cũ:', err)
-    }
-
-    if (!existing) {
-      return res.status(404).send('Không tìm thấy đơn này (có thể đã hết hạn hoặc sai orderId)')
-    }
-    if (existing.status !== 'PENDING') {
-      return res.status(400).send(`Đơn ${orderId} không còn ở trạng thái chờ (hiện tại: ${existing.status})`)
-    }
-
-    const scanUrl = `/admin/scan?amount=${existing.amount}&orderInfo=${encodeURIComponent(existing.orderInfo || '')}&orderId=${encodeURIComponent(orderId)}&quick=true`
-    return res.redirect(302, scanUrl)
-  }
-
-  // ====== Luồng cũ: tạo link mới từ amount/orderInfo truyền vào ======
-  const amt = parseInt(amount)
-
-  if (!amt || isNaN(amt) || amt < 1000 || amt > 50_000_000) {
-    return res.status(400).send('Số tiền không hợp lệ (1.000 - 50.000.000 ₫)')
-  }
-
-  const scanUrl = `/admin/scan?amount=${amt}&orderInfo=${encodeURIComponent(rawOrderInfo)}&quick=true`
-  return res.redirect(302, scanUrl)
-}
-
 
 async function handlePosCharge(req, res) {
   const cookie = req.headers.cookie || ''
@@ -120,7 +74,6 @@ async function handlePosCharge(req, res) {
     return res.status(400).json({ error: 'Thiếu thông tin bắt buộc: orderId, amount, paymentCode' })
   }
 
-
   let orderId = String(rawOrderId).trim()
   if (!orderId.startsWith('iPOS') && !orderId.startsWith('POS')) {
     orderId = `iPOS${orderId}`
@@ -128,7 +81,7 @@ async function handlePosCharge(req, res) {
 
   let orderInfo = String(rawOrderInfo || '').trim()
   if (!orderInfo) {
-    orderInfo = orderId  
+    orderInfo = orderId
   }
 
   const paymentCode = String(rawPaymentCode).trim()
@@ -180,13 +133,6 @@ async function handlePosCharge(req, res) {
   if (STORE_ID)   body.storeId   = STORE_ID
   if (STORE_NAME) body.storeName = STORE_NAME
 
-  console.log('[scan][POST] Debug storeId/storeName:', {
-    storeId: body.storeId,
-    storeName: body.storeName,
-    envStoreId: STORE_ID,
-    envStoreName: STORE_NAME,
-  })
-
   const now = new Date().toISOString()
 
   try {
@@ -209,7 +155,7 @@ async function handlePosCharge(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(15000), // 15s timeout - tránh treo vô thời hạn
+      signal: AbortSignal.timeout(15000),
     })
 
     const rawText = await momoRes.text()
@@ -247,7 +193,11 @@ async function handlePosCharge(req, res) {
 
     await redis.hset('momo:orders', { [orderId]: JSON.stringify(updated) })
 
-    console.log(`[scan][POST] MoMo response: ${orderId} - resultCode: ${data.resultCode} - message: ${data.message} - full:`, JSON.stringify(data))
+    console.log(
+      `[scan][POST] MoMo response: ${orderId}`,
+      `resultCode: ${data.resultCode}`,
+      `message: ${data.message}`
+    )
 
     return res.status(200).json(data)
 
@@ -269,7 +219,9 @@ async function handlePosCharge(req, res) {
       console.error('[scan][POST] Redis update FAILED error:', redisErr)
     }
     return res.status(isTimeout ? 504 : 500).json({
-      error: isTimeout ? 'Timeout khi gọi MoMo, vui lòng thử lại' : 'Lỗi server khi xử lý thanh toán',
+      error: isTimeout
+        ? 'Timeout khi gọi MoMo, vui lòng thử lại'
+        : 'Lỗi server khi xử lý thanh toán',
     })
   }
 }
