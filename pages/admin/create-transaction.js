@@ -36,6 +36,17 @@ function genOrderId() {
 const DRAFT_KEY = 'momo_create_tx_draft'
 const QUICK_AMOUNTS = [50000, 100000, 200000, 500000]
 
+// ─── P2P TIMING ──────────────────────────────────────────────
+const P2P_DURATION_MS = 10 * 60 * 1000 // mỗi giao dịch P2P sống 10 phút
+const P2P_POLL_MS     = 4000           // tần suất tự động kiểm tra trạng thái
+
+function formatCountdown(totalSeconds) {
+  const s = Math.max(0, totalSeconds)
+  const m = Math.floor(s / 60).toString().padStart(2, '0')
+  const r = (s % 60).toString().padStart(2, '0')
+  return `${m}:${r}`
+}
+
 // ─── AI AMOUNT PARSER ───────────────────────────────────────
 // Gọi Anthropic API để parse ngôn ngữ tự nhiên → số tiền VNĐ
 async function parseAmountWithAI(userInput) {
@@ -347,6 +358,10 @@ export default function CreateTransactionPage() {
   const [p2pCancelling,    setP2pCancelling]    = useState(false)
   const [p2pCheckMsg,      setP2pCheckMsg]      = useState('')
   const [showP2pCancelModal, setShowP2pCancelModal] = useState(false)
+  const [p2pExpiresAt,     setP2pExpiresAt]     = useState(null) // mốc timestamp hết hạn (10 phút)
+  const [p2pTimeLeft,      setP2pTimeLeft]      = useState(0)    // giây còn lại, cập nhật mỗi giây
+  const [p2pCopied,        setP2pCopied]        = useState(false)
+  const p2pPollingRef = useRef(false) // chặn 2 lần poll tự động chồng lên nhau
 
   const videoRef     = useRef(null)
   const canvasRef     = useRef(null)
@@ -452,6 +467,10 @@ export default function CreateTransactionPage() {
     setP2pCheckMsg('')
     setP2pChecking(false)
     setP2pCancelling(false)
+    setP2pExpiresAt(null)
+    setP2pTimeLeft(0)
+    setP2pCopied(false)
+    p2pPollingRef.current = false
     setAmount('')
     setOrderInfo(genOrderId())
   }
@@ -474,6 +493,8 @@ export default function CreateTransactionPage() {
       setP2pDeeplink(data.deeplink || '')
       setP2pStatus('PENDING')
       setP2pCheckMsg('')
+      setP2pExpiresAt(Date.now() + P2P_DURATION_MS)
+      setP2pCopied(false)
       setOrderInfo(finalOrderInfo)
       setP2pActive(true)
     } catch (e) {
@@ -483,10 +504,18 @@ export default function CreateTransactionPage() {
 
   // Bấm "Kiểm tra giao dịch" — gọi /api/momo/status để lấy trạng thái mới
   // nhất (server sẽ tự đối chiếu với MoMo nếu cần) rồi cập nhật UI.
-  async function checkP2pStatus() {
-    if (!p2pOrderId || p2pChecking) return
-    setP2pChecking(true)
-    setP2pCheckMsg('')
+  // opts.silent = true khi gọi tự động từ vòng polling nền — không bật
+  // trạng thái loading trên nút "Kiểm tra giao dịch" và không hiện lỗi
+  // kết nối (tránh nháy UI liên tục), nhưng vẫn cập nhật trạng thái/QR khi
+  // có kết quả rõ ràng.
+  async function checkP2pStatus(opts = {}) {
+    const silent = opts.silent === true
+    if (!p2pOrderId) return
+    if (!silent) {
+      if (p2pChecking) return
+      setP2pChecking(true)
+      setP2pCheckMsg('')
+    }
     try {
       const res  = await fetch(`/api/momo/status?orderId=${encodeURIComponent(p2pOrderId)}`)
       const data = await res.json()
@@ -505,15 +534,80 @@ export default function CreateTransactionPage() {
         setP2pCheckMsg('⚠ Mã QR đã hết hạn, vui lòng tạo đơn mới.')
       } else if (status === 'FAILED') {
         setP2pCheckMsg(`✗ Giao dịch thất bại${data.message ? `: ${data.message}` : ''}`)
-      } else {
+      } else if (!silent) {
         setP2pCheckMsg('⏳ Chưa nhận được thanh toán, khách vui lòng quét mã QR.')
       }
+      // silent + vẫn PENDING → không đụng vào p2pCheckMsg, tránh spam UI
     } catch (e) {
-      setP2pCheckMsg('⚠ Lỗi kết nối, thử kiểm tra lại.')
+      if (!silent) setP2pCheckMsg('⚠ Lỗi kết nối, thử kiểm tra lại.')
+      // silent lỗi mạng tạm thời thì bỏ qua, vòng poll sau sẽ tự thử lại
     } finally {
-      setP2pChecking(false)
+      if (!silent) setP2pChecking(false)
     }
   }
+
+  // Copy URL thanh toán (payUrl) vào clipboard — dùng khi admin muốn gửi
+  // link tay cho khách thay vì bắt khách quét QR trên màn hình.
+  async function copyP2pPayUrl() {
+    const text = p2pPayUrl
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch (e) {
+      // Fallback cho trình duyệt/context không hỗ trợ Clipboard API (vd. http)
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch {
+        return
+      }
+    }
+    setP2pCopied(true)
+    setTimeout(() => setP2pCopied(false), 2000)
+  }
+
+  // ─── ĐẾM NGƯỢC 10 PHÚT ────────────────────────────────────────
+  // Mỗi giao dịch P2P có hạn 10 phút kể từ lúc tạo. Khi hết giờ mà vẫn
+  // đang PENDING → tự chuyển UI sang EXPIRED (không cần khách/admin bấm gì).
+  useEffect(() => {
+    if (!p2pActive || !p2pExpiresAt) return
+    const tick = () => {
+      const remain = Math.max(0, Math.ceil((p2pExpiresAt - Date.now()) / 1000))
+      setP2pTimeLeft(remain)
+      if (remain <= 0) {
+        setP2pStatus(prev => (prev === 'PENDING' ? 'EXPIRED' : prev))
+        setP2pCheckMsg(prev => prev || '⚠ Mã QR đã hết hạn, vui lòng tạo đơn mới.')
+      }
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [p2pActive, p2pExpiresAt])
+
+  // ─── TỰ ĐỘNG POLL TRẠNG THÁI ────────────────────────────────
+  // Thay vì bắt admin bấm "Kiểm tra giao dịch" liên tục, tự động gọi ngầm
+  // mỗi P2P_POLL_MS trong lúc đơn còn PENDING. Dừng ngay khi có kết quả
+  // cuối (PAID/EXPIRED/FAILED) hoặc khi rời khỏi màn hình P2P.
+  useEffect(() => {
+    if (!p2pActive || !p2pOrderId || p2pStatus !== 'PENDING') return
+    const id = setInterval(async () => {
+      if (p2pPollingRef.current) return
+      p2pPollingRef.current = true
+      try {
+        await checkP2pStatus({ silent: true })
+      } finally {
+        p2pPollingRef.current = false
+      }
+    }, P2P_POLL_MS)
+    return () => clearInterval(id)
+  }, [p2pActive, p2pOrderId, p2pStatus])
 
   // Bấm "Hủy giao dịch" — chỉ đánh dấu FAILED nếu đơn còn PENDING bên server
   // (route /api/momo/cancel tự bảo vệ, không ghi đè đơn đã PAID/FAILED/EXPIRED).
@@ -1304,6 +1398,40 @@ export default function CreateTransactionPage() {
         }
         .p2p-open-link:hover { color: #7a0056; }
 
+        .p2p-countdown {
+          font-size: 13px; font-weight: 800; color: var(--mm);
+          font-variant-numeric: tabular-nums;
+          letter-spacing: 0.5px;
+        }
+        .p2p-countdown-warn { color: #dc2626; }
+
+        .p2p-poll-hint {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 11px; font-weight: 600; color: var(--muted);
+          padding: 2px 2px 0;
+        }
+        .p2p-poll-dot {
+          width: 6px; height: 6px; border-radius: 50%;
+          background: #16a34a; flex-shrink: 0;
+          animation: p2pPollPulse 1.4s ease-in-out infinite;
+        }
+        @keyframes p2pPollPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.35; transform: scale(0.7); }
+        }
+
+        .p2p-copy-btn {
+          width: 100%; padding: 10px; border-radius: 12px;
+          border: 1.5px solid var(--border); background: #fff;
+          font-family: inherit; font-size: 12.5px; font-weight: 700;
+          color: var(--text); cursor: pointer;
+          transition: border-color 0.15s, color 0.15s, background 0.15s;
+        }
+        .p2p-copy-btn:hover { border-color: var(--mm); color: var(--mm); }
+        .p2p-copy-btn.copied {
+          border-color: #16a34a; color: #16a34a; background: #f0fdf4;
+        }
+
         /* ── CANCEL MODAL ── */
         .cancel-modal-backdrop {
           position: fixed; inset: 0; z-index: 200;
@@ -1895,7 +2023,25 @@ export default function CreateTransactionPage() {
                         : 'Đang chờ'}
                     </span>
                   </div>
+                  {p2pStatus === 'PENDING' && (
+                    <>
+                      <div className="scan-order-divider" />
+                      <div className="scan-order-row">
+                        <span>Thời gian còn lại</span>
+                        <span className={`p2p-countdown${p2pTimeLeft <= 60 ? ' p2p-countdown-warn' : ''}`}>
+                          {formatCountdown(p2pTimeLeft)}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
+
+                {p2pStatus === 'PENDING' && (
+                  <div className="p2p-poll-hint">
+                    <span className="p2p-poll-dot" />
+                    Đang tự động kiểm tra giao dịch mỗi {P2P_POLL_MS / 1000}s…
+                  </div>
+                )}
 
                 {p2pCheckMsg && (
                   <div className={`p2p-check-msg${p2pStatus === 'PAID' ? ' ok' : (p2pStatus === 'EXPIRED' || p2pStatus === 'FAILED') ? ' err' : ''}`}>
@@ -1945,10 +2091,20 @@ export default function CreateTransactionPage() {
                   </a>
                 )}
 
+                {p2pPayUrl && (
+                  <button
+                    type="button"
+                    className={`p2p-copy-btn${p2pCopied ? ' copied' : ''}`}
+                    onClick={copyP2pPayUrl}
+                  >
+                    {p2pCopied ? '✓ Đã copy link thanh toán' : '📋 Copy link thanh toán (URL)'}
+                  </button>
+                )}
+
                 <button
                   type="button"
                   className={`scan-confirm-btn${p2pChecking ? ' loading' : ''}`}
-                  onClick={checkP2pStatus}
+                  onClick={() => checkP2pStatus()}
                   disabled={p2pChecking || p2pStatus === 'PAID'}
                 >
                   {p2pChecking
