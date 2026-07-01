@@ -1272,30 +1272,87 @@ export default function CreateTransactionPage() {
         .p2p-check-msg.err { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
 
         .p2p-qr-card {
-          display: flex; flex-direction: column; align-items: center; gap: 14px;
-          width: 100%; max-width: 260px; margin: 0 auto;
-          background: linear-gradient(160deg, #d6006c 0%, var(--mm) 60%, #8f0059 100%);
-          border-radius: 20px;
-          padding: 18px 16px 20px;
+          position: relative;
+          overflow: hidden;
+          display: flex; flex-direction: column; align-items: center; gap: 12px;
+          width: 100%; max-width: 280px; margin: 0 auto;
+          background: linear-gradient(160deg, #e6007e 0%, var(--mm) 55%, #7a0056 100%);
+          border-radius: 22px;
+          padding: 16px 16px 14px;
           box-shadow: 0 14px 34px rgba(174,0,112,0.28);
+        }
+        .p2p-deco-dots {
+          position: absolute; top: -14px; left: -14px; width: 100px; height: 100px;
+          background-image: radial-gradient(rgba(255,255,255,0.35) 1.4px, transparent 1.4px);
+          background-size: 9px 9px;
+          -webkit-mask-image: radial-gradient(circle at top left, #000 55%, transparent 80%);
+          mask-image: radial-gradient(circle at top left, #000 55%, transparent 80%);
+          pointer-events: none;
+        }
+        .p2p-deco-diamond {
+          position: absolute; bottom: 10px; left: -36px; width: 110px; height: 110px;
+          border: 1.5px solid rgba(255,255,255,0.16);
+          transform: rotate(45deg);
+          pointer-events: none;
+        }
+
+        .p2p-promo-banner {
+          position: relative; z-index: 1;
+          display: flex; align-items: center; gap: 6px;
+          width: 100%;
+          background: rgba(255,255,255,0.15);
+          border-radius: 30px;
+          padding: 4px 8px 4px 4px;
+        }
+        .p2p-promo-mascot {
+          flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+          background: #fff;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 12px; line-height: 1;
+        }
+        .p2p-promo-text {
+          flex: 1; min-width: 0;
+          font-size: 9.5px; font-weight: 700; color: #fff;
+          line-height: 1.3;
+        }
+        .p2p-promo-logo {
+          flex-shrink: 0; display: flex; gap: 1px;
+          background: #fff; border-radius: 8px; padding: 3px 6px;
+        }
+        .p2p-promo-logo span {
+          font-size: 8.5px; font-weight: 900; color: var(--mm); line-height: 1;
         }
 
         .p2p-brand-row {
-          display: flex; align-items: center; gap: 6px;
+          position: relative; z-index: 1;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          width: 100%;
           background: #fff; border-radius: 30px;
-          padding: 5px 6px;
+          padding: 7px 10px;
         }
         .p2p-brand-chip {
-          font-size: 9.5px; font-weight: 800; letter-spacing: 0.2px;
-          padding: 4px 9px; border-radius: 20px;
-          color: var(--mm); background: var(--mm-light);
-          white-space: nowrap;
+          display: flex; align-items: center; gap: 5px;
+          font-weight: 800; white-space: nowrap;
         }
-        .p2p-brand-chip.solid { background: var(--mm); color: #fff; }
-        .p2p-brand-chip.alt   { background: #eef2ff; color: #4338ca; }
+        .p2p-brand-chip + .p2p-brand-chip { border-left: 1px solid var(--border); padding-left: 8px; }
+        .p2p-brand-chip.trasau {
+          font-size: 9.5px; color: var(--mm);
+        }
+        .p2p-mini-badge {
+          background: var(--mm); color: #fff;
+          font-size: 5.5px; font-weight: 900; line-height: 1.1;
+          text-align: center; padding: 2px 4px; border-radius: 4px;
+        }
+        .p2p-brand-chip.momo-logo {
+          font-size: 15px; font-weight: 900; color: var(--mm); letter-spacing: -0.5px;
+        }
+        .p2p-brand-chip.vietqr {
+          font-size: 12px; font-weight: 900; color: #dc2626;
+        }
+        .p2p-brand-chip.vietqr b { color: #2563eb; }
 
         .p2p-qr-frame {
-          position: relative;
+          position: relative; z-index: 1;
           width: 100%; aspect-ratio: 1 / 1; max-width: 220px;
           background: #fff; border-radius: 14px;
           padding: 12px;
@@ -1308,36 +1365,45 @@ export default function CreateTransactionPage() {
         }
         .p2p-qr-corner {
           position: absolute; width: 22px; height: 22px;
-          border: 3px solid #fff;
+          border: 3px solid var(--mm);
         }
-        .p2p-qr-corner.tl { top: -3px;  left: -3px;  border-right: none;  border-bottom: none; border-radius: 8px 0 0 0; }
-        .p2p-qr-corner.tr { top: -3px;  right: -3px; border-left: none;   border-bottom: none; border-radius: 0 8px 0 0; }
-        .p2p-qr-corner.bl { bottom: -3px; left: -3px; border-right: none; border-top: none;    border-radius: 0 0 0 8px; }
-        .p2p-qr-corner.br { bottom: -3px; right: -3px; border-left: none; border-top: none;    border-radius: 0 0 8px 0; }
+        .p2p-qr-corner.tl { top: 4px;  left: 4px;  border-right: none;  border-bottom: none; border-radius: 8px 0 0 0; }
+        .p2p-qr-corner.tr { top: 4px;  right: 4px; border-left: none;   border-bottom: none; border-radius: 0 8px 0 0; }
+        .p2p-qr-corner.bl { bottom: 4px; left: 4px; border-right: none; border-top: none;    border-radius: 0 0 0 8px; }
+        .p2p-qr-corner.br { bottom: 4px; right: 4px; border-left: none; border-top: none;    border-radius: 0 0 8px 0; }
 
         .p2p-qr-logo {
           position: absolute; top: 50%; left: 50%;
           transform: translate(-50%, -50%);
-          width: 42px; height: 42px; border-radius: 50%;
-          background: #fff; border: 3px solid #fff;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.18);
-          display: flex; align-items: center; justify-content: center;
-          overflow: hidden;
+          width: 40px; height: 40px; border-radius: 50%;
+          background: var(--mm); border: 3px solid #fff;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          line-height: 1;
         }
-        .p2p-qr-logo img { width: 100%; height: 100%; object-fit: contain; }
+        .p2p-qr-logo span {
+          font-size: 8px; font-weight: 900; color: #fff;
+        }
 
         .p2p-qr-hint {
-          font-size: 11.5px; font-weight: 600; color: #fce7f3;
+          position: relative; z-index: 1;
+          display: flex; align-items: center; gap: 6px;
+          justify-content: center;
+          width: 100%;
+          font-size: 11px; font-weight: 600; color: #fce7f3;
           text-align: center; line-height: 1.5;
         }
+        .p2p-qr-hint svg { flex-shrink: 0; color: #fff; }
         .p2p-qr-hint b { color: #fff; font-weight: 800; }
 
         .p2p-open-link {
+          position: relative; z-index: 1;
           display: block; text-align: center;
-          font-size: 12.5px; font-weight: 700; color: var(--mm);
-          text-decoration: none; padding: 4px 0 2px;
+          font-size: 11.5px; font-weight: 700; color: #fde68a;
+          text-decoration: underline; text-underline-offset: 2px;
+          padding: 2px 0 0;
         }
-        .p2p-open-link:hover { text-decoration: underline; }
+        .p2p-open-link:hover { color: #fff; }
 
         /* ── CANCEL MODAL ── */
         .cancel-modal-backdrop {
@@ -1953,10 +2019,24 @@ export default function CreateTransactionPage() {
                 <div className="field-label">Khách quét mã QR để thanh toán</div>
 
                 <div className="p2p-qr-card">
+                  <span className="p2p-deco-dots" />
+                  <span className="p2p-deco-diamond" />
+
+                  <div className="p2p-promo-banner">
+                    <span className="p2p-promo-mascot">🎀</span>
+                    <span className="p2p-promo-text">Tích xu đổi quà cho mọi giao dịch</span>
+                    <span className="p2p-promo-logo">
+                      <span>mo</span><span>mo</span>
+                    </span>
+                  </div>
+
                   <div className="p2p-brand-row">
-                    <span className="p2p-brand-chip">Ví Trả Sau</span>
-                    <span className="p2p-brand-chip solid">MoMo</span>
-                    <span className="p2p-brand-chip alt">VietQR</span>
+                    <span className="p2p-brand-chip trasau">
+                      <span className="p2p-mini-badge">mo<br/>mo</span>
+                      Ví Trả Sau
+                    </span>
+                    <span className="p2p-brand-chip momo-logo">moMo</span>
+                    <span className="p2p-brand-chip vietqr">Viet<b>QR</b></span>
                   </div>
 
                   <div className="p2p-qr-frame">
@@ -1975,26 +2055,27 @@ export default function CreateTransactionPage() {
 
                     {p2pQrImage && (
                       <span className="p2p-qr-logo">
-                        <img src="/Main.png" alt="" />
+                        <span>mo</span><span>mo</span>
                       </span>
                     )}
                   </div>
 
                   <div className="p2p-qr-hint">
-                    Sử dụng <b>App MoMo</b> hoặc <b>ứng dụng ngân hàng</b> để quét mã
+                    <IconScan />
+                    <span>Sử dụng <b>App MoMo</b> hoặc <b>ứng dụng ngân hàng</b> để quét mã</span>
                   </div>
-                </div>
 
-                {p2pPayUrl && (
-                  <a
-                    href={p2pDeeplink || p2pPayUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p2p-open-link"
-                  >
-                    Mở trong ứng dụng MoMo ↗
-                  </a>
-                )}
+                  {p2pPayUrl && (
+                    <a
+                      href={p2pDeeplink || p2pPayUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p2p-open-link"
+                    >
+                      Mở trong ứng dụng MoMo ↗
+                    </a>
+                  )}
+                </div>
 
                 <button
                   type="button"
