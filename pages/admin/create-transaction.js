@@ -1445,6 +1445,64 @@ export default function CreateTransactionPage() {
           .card.split { max-width: 760px; }
         }
 
+        /* ── FULL-SCREEN KIOSK MODE ──────────────────────────────────
+           Khung quét/QR (scan & p2p) là phần sau này sẽ đẩy nguyên sang
+           màn hình phụ cho khách nhìn (setup sau) → cần LẤP ĐẦY toàn bộ
+           viewport ngay từ bây giờ thay vì bó hẹp giữa trang như form
+           nhập liệu, tránh khoảng trắng thừa quanh & bên trong card. */
+        .page-root.fullscreen {
+          padding: 0 !important;
+        }
+        .page-root.fullscreen .card.split {
+          width: 100vw;
+          height: 100dvh;
+          max-width: 100vw;
+          max-height: 100dvh;
+          border-radius: 0;
+          box-shadow: none;
+        }
+        .page-root.fullscreen .scan-split {
+          width: 100%;
+          max-width: 1600px;
+          margin: 0 auto;
+        }
+        .page-root.fullscreen .card-header {
+          padding: 32px 40px 0;
+        }
+        .page-root.fullscreen .header-logo { width: 52px; height: 52px; }
+        .page-root.fullscreen .header-text-title { font-size: 26px; }
+        .page-root.fullscreen .header-text-sub { font-size: 14.5px; }
+        .page-root.fullscreen .scan-pane {
+          justify-content: center;
+          padding: 40px 56px;
+          gap: 20px;
+        }
+        .page-root.fullscreen .field-label { font-size: 13px; margin-bottom: 12px; }
+        .page-root.fullscreen .scan-order-card { padding: 22px 26px; border-radius: 18px; }
+        .page-root.fullscreen .scan-order-row { font-size: 16px; padding: 9px 0; }
+        .page-root.fullscreen .scan-order-mono { font-size: 15px; }
+        .page-root.fullscreen .scan-order-amount span:last-child { font-size: 34px; }
+        .page-root.fullscreen .scan-order-divider { margin: 9px 0; }
+        .page-root.fullscreen .p2p-status-badge { font-size: 14px; padding: 5px 14px; }
+        .page-root.fullscreen .p2p-check-msg { font-size: 14px; padding: 12px 14px; }
+        .page-root.fullscreen .p2p-poll-hint { font-size: 13px; }
+        .page-root.fullscreen .p2p-countdown { font-size: 20px; }
+        .page-root.fullscreen .scan-cam-status,
+        .page-root.fullscreen .scan-cam-error { font-size: 14px; }
+        .page-root.fullscreen .scan-code-input { padding: 16px 18px; font-size: 17px; }
+        .page-root.fullscreen .scan-confirm-btn,
+        .page-root.fullscreen .scan-retry-btn,
+        .page-root.fullscreen .scan-cancel-btn,
+        .page-root.fullscreen .p2p-copy-btn { padding: 16px; font-size: 15px; }
+        .page-root.fullscreen .p2p-qr-card {
+          max-width: min(58vh, 480px);
+        }
+        .page-root.fullscreen .p2p-open-link { font-size: 13px; }
+        /* Bỏ ghim nút "Hủy" xuống đáy — để toàn bộ nội dung được canh
+           giữa theo chiều dọc (justify-content: center ở trên), tránh
+           khoảng trắng lửng lơ ở giữa panel như trước. */
+        .page-root.fullscreen .scan-cancel-btn { margin-top: 4px; }
+
         .scan-split {
           flex: 1;
           display: grid;
@@ -1992,9 +2050,10 @@ export default function CreateTransactionPage() {
         </div>
       )}
 
-      <div className="page-root">
+      <div className={`page-root${(scanActive || p2pActive) ? ' fullscreen' : ''}`}>
         <div className={`card${(scanActive || p2pActive) ? ' split' : ''}`}>
           <div className="top-stripe" />
+
 
           <div className="card-header">
             <img src="/Main.png" alt="" className="header-logo" />
