@@ -821,6 +821,11 @@ export default function CreateTransactionPage() {
     setManualCode('')
     setManualErr('')
     setIsServerErr(false)
+    setScanStatus('PENDING')
+    setScanChecking(false)
+    setScanCheckMsg('')
+    setScanSubmittedCode('')
+    scanPollingRef.current = false
     setScanActive(true)
   }
 
