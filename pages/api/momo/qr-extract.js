@@ -75,13 +75,12 @@ export default async function handler(req, res) {
 
     const debug = req.query.debug === '1'
 
-    // ─── Tìm element chứa QR ───
-    // Ưu tiên 1: container chính xác MoMo dùng cho khối QR — xác nhận qua
-    // DevTools thật trên trang thanh toán (id="form-qr-code", nằm trong
-    // "#qr-web-ui"). MoMo tự vẽ QR bằng JS (script qrcode.min2.js) nên phải
-    // đợi networkidle để canvas kịp render trước khi chụp.
-    // Ưu tiên 2 (fallback): nếu MoMo đổi cấu trúc/đổi id, dò toàn trang theo
-    // heuristic (img/canvas vuông, đủ lớn) như cũ.
+    // ─── Tìm element chứa cả CARD QR (banner + mã QR + text hướng dẫn) ───
+    // Chụp nguyên container #form-qr-code — đây là khối card hồng đầy đủ
+    // (không phải chỉ riêng ảnh QR trần) theo đúng yêu cầu hiển thị.
+    // Ưu tiên 1: #form-qr-code / #qr-web-ui — xác nhận qua DevTools thật.
+    // Ưu tiên 2 (fallback): nếu MoMo đổi cấu trúc, dò tìm riêng ảnh/canvas QR
+    // (vuông, đủ lớn) rồi chụp phần tử đó thay vì cả card.
     const elementHandle = await page.evaluateHandle(() => {
       const isVisible = (el) => {
         const r = el.getBoundingClientRect()
@@ -90,14 +89,11 @@ export default async function handler(req, res) {
         return style.display !== 'none' && style.visibility !== 'hidden'
       }
 
-      // Ưu tiên 1: container thật của MoMo
-      const container = document.querySelector('#form-qr-code, #qr-web-ui')
-      if (container) {
-        const inner = [...container.querySelectorAll('img, canvas')].find(isVisible)
-        if (inner) return inner
-      }
+      // Ưu tiên 1: cả card container thật của MoMo
+      const container = document.querySelector('#form-qr-code') || document.querySelector('#qr-web-ui')
+      if (container && isVisible(container)) return container
 
-      // Ưu tiên 2: fallback dò toàn trang
+      // Ưu tiên 2: fallback dò riêng ảnh/canvas QR (vuông) nếu không thấy card
       const candidates = [...document.querySelectorAll('img, canvas')]
       let best = null
       let bestScore = 0
