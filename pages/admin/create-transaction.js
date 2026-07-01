@@ -346,7 +346,6 @@ export default function CreateTransactionPage() {
   const [p2pChecking,      setP2pChecking]      = useState(false)
   const [p2pCancelling,    setP2pCancelling]    = useState(false)
   const [p2pCheckMsg,      setP2pCheckMsg]      = useState('')
-  const [p2pIframeLoaded,  setP2pIframeLoaded]  = useState(false)
   const [showP2pCancelModal, setShowP2pCancelModal] = useState(false)
 
   const videoRef     = useRef(null)
@@ -453,7 +452,6 @@ export default function CreateTransactionPage() {
     setP2pCheckMsg('')
     setP2pChecking(false)
     setP2pCancelling(false)
-    setP2pIframeLoaded(false)
     setAmount('')
     setOrderInfo(genOrderId())
   }
@@ -466,7 +464,7 @@ export default function CreateTransactionPage() {
     try {
       const res  = await fetch(url)
       const data = await res.json()
-      if (!res.ok || !data.payUrl) {
+      if (!res.ok || !data.qrCodeImage) {
         alert(data.error || 'Tạo giao dịch thất bại, thử lại sau')
         return
       }
@@ -476,7 +474,6 @@ export default function CreateTransactionPage() {
       setP2pDeeplink(data.deeplink || '')
       setP2pStatus('PENDING')
       setP2pCheckMsg('')
-      setP2pIframeLoaded(false)
       setOrderInfo(finalOrderInfo)
       setP2pActive(true)
     } catch (e) {
@@ -1274,18 +1271,21 @@ export default function CreateTransactionPage() {
         .p2p-check-msg.ok  { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
         .p2p-check-msg.err { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
 
-        .p2p-iframe-card {
+        .p2p-qr-card {
           position: relative;
-          width: 100%; margin: 0 auto;
-          min-height: 420px;
+          width: 100%; max-width: 260px; margin: 0 auto;
+          aspect-ratio: 1 / 1;
+          display: flex; align-items: center; justify-content: center;
           background: var(--subtle);
           border: 1.5px solid var(--border);
           border-radius: 16px;
           overflow: hidden;
+          padding: 12px;
         }
-        .p2p-iframe {
-          width: 100%; height: 420px;
-          border: none;
+        .p2p-qr-img {
+          width: 100%; height: 100%;
+          object-fit: contain;
+          border-radius: 8px;
           display: block;
         }
         .p2p-iframe-loading {
@@ -1917,24 +1917,9 @@ export default function CreateTransactionPage() {
               <div className="scan-pane scan-pane-code">
                 <div className="field-label">Khách quét mã QR để thanh toán</div>
 
-                <div className="p2p-iframe-card">
-                  {p2pPayUrl ? (
-                    <>
-                      {!p2pIframeLoaded && (
-                        <div className="p2p-iframe-loading">
-                          <div className="spinner" style={{ borderTopColor: 'var(--mm)', borderColor: 'rgba(174,0,112,0.25)' }} />
-                          <span>Đang tải trang thanh toán MoMo…</span>
-                        </div>
-                      )}
-                      <iframe
-                        key={p2pOrderId}
-                        src={p2pPayUrl}
-                        title="Trang thanh toán MoMo"
-                        className="p2p-iframe"
-                        style={{ display: p2pIframeLoaded ? 'block' : 'none' }}
-                        onLoad={() => setP2pIframeLoaded(true)}
-                      />
-                    </>
+                <div className="p2p-qr-card">
+                  {p2pQrImage ? (
+                    <img src={p2pQrImage} alt="Mã QR thanh toán MoMo" className="p2p-qr-img" />
                   ) : (
                     <div className="p2p-iframe-loading">
                       <div className="spinner" style={{ borderTopColor: 'var(--mm)', borderColor: 'rgba(174,0,112,0.25)' }} />
