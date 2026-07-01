@@ -464,7 +464,7 @@ export default function CreateTransactionPage() {
     try {
       const res  = await fetch(url)
       const data = await res.json()
-      if (!res.ok || !data.qrCodeImage) {
+      if (!res.ok || !data.payUrl) {
         alert(data.error || 'Tạo giao dịch thất bại, thử lại sau')
         return
       }
@@ -1918,8 +1918,14 @@ export default function CreateTransactionPage() {
                 <div className="field-label">Khách quét mã QR để thanh toán</div>
 
                 <div className="p2p-qr-card">
-                  {p2pQrImage ? (
-                    <img src={p2pQrImage} alt="Mã QR thanh toán MoMo" className="p2p-qr-img" />
+                  {p2pPayUrl ? (
+                    <img
+                      key={p2pOrderId}
+                      src={`/api/momo/qr-extract?payUrl=${encodeURIComponent(p2pPayUrl)}`}
+                      alt="Mã QR thanh toán MoMo"
+                      className="p2p-qr-img"
+                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                    />
                   ) : (
                     <div className="p2p-iframe-loading">
                       <div className="spinner" style={{ borderTopColor: 'var(--mm)', borderColor: 'rgba(174,0,112,0.25)' }} />

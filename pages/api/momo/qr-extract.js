@@ -75,12 +75,14 @@ export default async function handler(req, res) {
 
     const debug = req.query.debug === '1'
 
-    // ─── Tìm element chứa cả CARD QR (banner + mã QR + text hướng dẫn) ───
-    // Chụp nguyên container #form-qr-code — đây là khối card hồng đầy đủ
-    // (không phải chỉ riêng ảnh QR trần) theo đúng yêu cầu hiển thị.
-    // Ưu tiên 1: #form-qr-code / #qr-web-ui — xác nhận qua DevTools thật.
-    // Ưu tiên 2 (fallback): nếu MoMo đổi cấu trúc, dò tìm riêng ảnh/canvas QR
-    // (vuông, đủ lớn) rồi chụp phần tử đó thay vì cả card.
+    // ─── Tìm đúng CARD QR (banner + mã QR + text hướng dẫn) ───
+    // #form-qr-code là CẢ payment form (bao gồm cả "Thông tin đơn hàng" phía
+    // trên) — quá to, không phải cái card hồng cần lấy. Card hồng là 1 <div>
+    // con nằm sâu bên trong, không có id/class cố định để trỏ thẳng tới.
+    // Chiến thuật: tìm đúng ảnh/canvas QR trước (đáng tin cậy — luôn vuông),
+    // rồi đi ngược lên từng cấp cha tới khi gặp phần tử có nền MÀU THẬT
+    // (khác trắng/trong suốt) — đó chính là ranh giới card hồng trong ảnh
+    // MoMo, không cần biết trước tên class.
     const elementHandle = await page.evaluateHandle(() => {
       const isVisible = (el) => {
         const r = el.getBoundingClientRect()
@@ -89,13 +91,18 @@ export default async function handler(req, res) {
         return style.display !== 'none' && style.visibility !== 'hidden'
       }
 
-      // Ưu tiên 1: cả card container thật của MoMo
-      const container = document.querySelector('#form-qr-code') || document.querySelector('#qr-web-ui')
-      if (container && isVisible(container)) return container
+      const hasRealBackground = (el) => {
+        const bg = window.getComputedStyle(el).backgroundColor
+        // Loại: transparent, rgba(0,0,0,0) và trắng thuần rgb(255,255,255)
+        if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') return false
+        const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+        if (m && m[1] === '255' && m[2] === '255' && m[3] === '255') return false
+        return true
+      }
 
-      // Ưu tiên 2: fallback dò riêng ảnh/canvas QR (vuông) nếu không thấy card
+      // Bước 1: tìm đúng ảnh/canvas QR (vuông, đủ lớn, đang hiển thị)
       const candidates = [...document.querySelectorAll('img, canvas')]
-      let best = null
+      let qrEl = null
       let bestScore = 0
       for (const el of candidates) {
         if (!isVisible(el)) continue
@@ -105,10 +112,27 @@ export default async function handler(req, res) {
         const score = rect.width * rect.height
         if (score > bestScore) {
           bestScore = score
-          best = el
+          qrEl = el
         }
       }
-      return best
+      if (!qrEl) return document.querySelector('#form-qr-code') || document.querySelector('#qr-web-ui')
+
+      // Bước 2: đi ngược lên tối đa 6 cấp cha, tìm phần tử đầu tiên có nền
+      // màu thật + kích thước hợp lý (200-700px cao) — đó là card hồng.
+      let node = qrEl.parentElement
+      let depth = 0
+      while (node && depth < 6) {
+        const r = node.getBoundingClientRect()
+        if (hasRealBackground(node) && r.height >= 200 && r.height <= 700 && r.width >= 200) {
+          return node
+        }
+        node = node.parentElement
+        depth++
+      }
+
+      // Không tìm thấy card có nền màu -> trả về chính ảnh QR (an toàn hơn
+      // là trả cả #form-qr-code quá to)
+      return qrEl
     })
 
     if (debug) {
