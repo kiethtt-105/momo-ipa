@@ -3,9 +3,17 @@
 import crypto from 'crypto'
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
-const COOKIE_SECRET   = process.env.COOKIE_SECRET || 'change-me-please'
+// KHÔNG fallback về chuỗi cứng nữa — nếu thiếu env, ai đọc được source (hoặc
+// đoán default phổ biến) đều tự ký được cookie session hợp lệ, bypass toàn
+// bộ requireAdmin() mà không cần biết ADMIN_PASSWORD. Thà fail rõ ràng ngay
+// lúc khởi động còn hơn chạy "êm" với 1 secret không an toàn.
+const COOKIE_SECRET   = process.env.COOKIE_SECRET
 const COOKIE_NAME     = 'momo_admin_session'
-const SESSION_TTL_MS  = 12 * 60 * 60 * 1000 
+const SESSION_TTL_MS  = 12 * 60 * 60 * 1000
+
+if (!COOKIE_SECRET) {
+  throw new Error('[admin/login] Thiếu biến môi trường COOKIE_SECRET — bắt buộc phải set trước khi chạy, không được dùng giá trị mặc định.')
+}
 
 function sign(payload) {
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url')
