@@ -71,7 +71,10 @@ async function handlePosCharge(req, res) {
 
   let orderInfo = String(rawOrderInfo || '').trim()
   if (!orderInfo) {
-    orderInfo = orderId
+    // Đồng bộ với create-p2p.js / pos-charge.js: "Thanh Toán {mã đơn hàng}"
+    // thay vì gán bằng chính orderId (trước đây orderInfo === orderId trông
+    // như thiếu nội dung hiển thị cho khách).
+    orderInfo = `Thanh Toán ${orderId}`
   }
 
   const paymentCode = String(rawPaymentCode).trim()

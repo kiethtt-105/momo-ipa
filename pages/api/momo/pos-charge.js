@@ -72,17 +72,32 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Thiếu thông tin bắt buộc: amount, paymentCode' })
   }
 
-  let orderId = rawOrderId
-    ? String(rawOrderId).trim()
-    : `iPOS${Date.now()}${Math.random().toString(36).slice(2, 6)}`
+  // Sanitize: chỉ giữ chữ/số/_-, bỏ khoảng trắng và ký tự đặc biệt vì MoMo
+  // không chấp nhận orderId chứa dấu cách (lỗi resultCode 20 "Yêu cầu sai định dạng")
+  const sanitize = (s) => s.replace(/[^a-zA-Z0-9_-]/g, '')
 
-  if (!orderId.startsWith('iPOS') && !orderId.startsWith('POS')) {
-    orderId = `iPOS${orderId}`
+  let orderId
+  if (rawOrderId) {
+    const clean = sanitize(String(rawOrderId).trim())
+    orderId = (clean.startsWith('iPOS') || clean.startsWith('POS')) ? clean : `iPOS${clean}`
+  } else if (rawOrderInfo) {
+    // Shortcut trên iPhone thường chỉ gửi amount + orderInfo, không gửi
+    // orderId riêng — trước đây rơi vào nhánh dưới, sinh 1 orderId ngẫu
+    // nhiên hoàn toàn khác orderInfo, khiến "Mã đơn hàng" và "Nội dung"
+    // lệch nhau (cùng lỗi đã gặp ở create-p2p.js). Giờ dùng chính orderInfo
+    // (đã sanitize) làm orderId, chỉ fallback ngẫu nhiên nếu sanitize xong rỗng.
+    const clean = sanitize(String(rawOrderInfo).trim())
+    orderId = clean
+      ? ((clean.startsWith('iPOS') || clean.startsWith('POS')) ? clean : `iPOS${clean}`)
+      : `iPOS${Date.now()}${Math.random().toString(36).slice(2, 6)}`
+  } else {
+    orderId = `iPOS${Date.now()}${Math.random().toString(36).slice(2, 6)}`
   }
 
   let orderInfo = String(rawOrderInfo || '').trim()
   if (!orderInfo) {
-    orderInfo = orderId
+    // Đồng bộ với create-p2p.js / scan.js: "Thanh Toán {mã đơn hàng}"
+    orderInfo = `Thanh Toán ${orderId}`
   }
 
   const paymentCode = String(rawPaymentCode).trim()
