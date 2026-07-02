@@ -246,15 +246,27 @@ const OrderCard = memo(function OrderCard({ o, selected, onToggle, onOpenDetail,
           <div className="mt-0.5 text-[11px] text-[#9ca3af]">{fmtDate(o.createdAt)}</div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-1" onClick={e => e.stopPropagation()}>
-          <button className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[#6366f1] transition-all hover:bg-[#eef2ff]" onClick={() => onQuery(o.orderId)} title="Tra cứu">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/></svg>
+          <button
+            className="flex h-9 w-9 items-center justify-center rounded-[9px] text-[#6366f1] transition-all hover:bg-[#eef2ff] active:scale-90"
+            onClick={() => onQuery(o.orderId)}
+            title="Tra cứu"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/></svg>
           </button>
-          <button className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[#9ca3af] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]" onClick={() => onDelete([o.orderId])} title="Xóa">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          <button
+            className="flex h-9 w-9 items-center justify-center rounded-[9px] text-[#9ca3af] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626] active:scale-90"
+            onClick={() => onDelete([o.orderId])}
+            title="Xóa"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
           </button>
           {o.resultCode === 9000 && (
-            <button className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[rgba(22,163,74,0.3)] bg-[#f0fdf4] text-[#16a34a] transition-all hover:bg-[#16a34a] hover:text-white" onClick={() => onConfirm(o.orderId, o.amount)} title="Xác nhận">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            <button
+              className="flex h-9 w-9 items-center justify-center rounded-[9px] border border-[rgba(22,163,74,0.3)] bg-[#f0fdf4] text-[#16a34a] transition-all hover:bg-[#16a34a] hover:text-white hover:border-[#16a34a] active:scale-90"
+              onClick={() => onConfirm(o.orderId, o.amount)}
+              title="Xác nhận 9000"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
             </button>
           )}
         </div>
@@ -496,22 +508,36 @@ function DetailModal({ order: o, onClose, onDelete, onQuery, onConfirm }) {
         {/* Footer */}
         <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-t border-[#f3f4f6] px-[22px] py-3.5">
           <div className="flex flex-wrap gap-2">
-            <button className="inline-flex items-center gap-[7px] rounded-[9px] border border-[#fecaca] bg-[#fff5f5] px-3.5 py-2 text-[13px] font-bold text-[#dc2626] transition-all hover:bg-[#fee2e2] hover:border-[#dc2626]" onClick={() => { onClose(); onDelete(o.orderId) }}>
+            <button
+              className="inline-flex items-center gap-[7px] rounded-[9px] border border-[#fecaca] bg-[#fff5f5] px-3.5 py-2 text-[13px] font-bold text-[#dc2626] transition-all hover:bg-[#fee2e2] hover:border-[#dc2626] active:scale-95"
+              onClick={() => { onClose(); onDelete(o.orderId) }}
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-              Xóa
+              Xóa đơn
             </button>
-            <button className="inline-flex items-center gap-[7px] rounded-[9px] border border-[rgba(99,102,241,0.3)] bg-[#eef2ff] px-3.5 py-2 text-[13px] font-bold text-[#4f46e5] transition-all hover:bg-[#4f46e5] hover:text-white hover:border-[#4f46e5]" onClick={() => onQuery(o.orderId)}>
+            <button
+              className="inline-flex items-center gap-[7px] rounded-[9px] border border-[rgba(99,102,241,0.3)] bg-[#eef2ff] px-3.5 py-2 text-[13px] font-bold text-[#4f46e5] transition-all hover:bg-[#4f46e5] hover:text-white hover:border-[#4f46e5] active:scale-95"
+              onClick={() => onQuery(o.orderId)}
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/></svg>
               Tra cứu MoMo
             </button>
             {o.resultCode === 9000 && (
-              <button className="inline-flex items-center gap-[7px] rounded-[9px] border border-[rgba(22,163,74,0.3)] bg-[#f0fdf4] px-3.5 py-2 text-[13px] font-bold text-[#16a34a] transition-all hover:bg-[#16a34a] hover:text-white hover:border-[#16a34a]" onClick={() => { onClose(); onConfirm(o.orderId, o.amount) }}>
+              <button
+                className="inline-flex items-center gap-[7px] rounded-[9px] border border-[rgba(22,163,74,0.3)] bg-[#f0fdf4] px-3.5 py-2 text-[13px] font-bold text-[#16a34a] transition-all hover:bg-[#16a34a] hover:text-white hover:border-[#16a34a] active:scale-95"
+                onClick={() => { onClose(); onConfirm(o.orderId, o.amount) }}
+              >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                 Xác nhận (9000)
               </button>
             )}
           </div>
-          <button className="rounded-[9px] border border-[rgba(174,0,112,0.1)] bg-[#f9fafb] px-5 py-2 text-[13px] font-semibold text-[#374151] transition-all hover:bg-white" onClick={onClose}>Đóng</button>
+          <button
+            className="rounded-[9px] border border-[rgba(174,0,112,0.1)] bg-[#f9fafb] px-5 py-2 text-[13px] font-semibold text-[#374151] transition-all hover:bg-white hover:border-[rgba(174,0,112,0.25)] active:scale-95"
+            onClick={onClose}
+          >
+            Đóng
+          </button>
         </div>
       </div>
     </div>
@@ -672,11 +698,77 @@ function QueryResultModal({ orderId, loading, result, error, onClose, stacked })
   )
 }
 
+// ─── COL FILTER BAR ────────────────────────────────────────────────────────
+function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered, scoped }) {
+  const hasActive = Object.values(colFilters).some(v => v !== '')
+  const set = (key, val) => setColFilters(f => ({ ...f, [key]: val }))
+  const clear = () => setColFilters({ payType: '', source: '', resultCode: '' })
+
+  const selClass = (active) =>
+    `h-[30px] cursor-pointer appearance-none rounded-[8px] border py-0 pl-[9px] pr-[22px] text-[12px] font-semibold transition-all focus:outline-none ${
+      active
+        ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]'
+        : 'border-[rgba(174,0,112,0.1)] bg-white/70 text-[#6b7280] hover:border-[rgba(174,0,112,0.25)]'
+    }`
+
+  return (
+    <div className={`mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3.5 py-2 text-[12px] transition-all ${hasActive ? 'border-[rgba(174,0,112,0.2)] bg-[#fff8fc]' : 'border-[rgba(174,0,112,0.08)] bg-white/60'}`}>
+      <span className="flex-shrink-0 text-[11px] font-bold uppercase tracking-wide text-[#9b4470]">Lọc cột</span>
+
+      {/* Hình thức thanh toán */}
+      <div className="relative">
+        <select value={colFilters.payType} onChange={e => set('payType', e.target.value)} className={selClass(!!colFilters.payType)}>
+          <option value="">Hình thức</option>
+          {colFilterOptions.payType.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+
+      {/* Nguồn đơn (pos / create-p2p) */}
+      {colFilterOptions.source.length > 0 && (
+        <div className="relative">
+          <select value={colFilters.source} onChange={e => set('source', e.target.value)} className={selClass(!!colFilters.source)}>
+            <option value="">Loại đơn</option>
+            {colFilterOptions.source.map(v => <option key={v} value={v}>{v === 'pos' ? 'POS / Scan' : v === 'create-p2p' ? 'P2P / QR' : v}</option>)}
+          </select>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      )}
+
+      {/* Result code */}
+      <div className="relative">
+        <select value={colFilters.resultCode} onChange={e => set('resultCode', e.target.value)} className={selClass(!!colFilters.resultCode)}>
+          <option value="">Result</option>
+          <option value="ok">✓ Thành công (0)</option>
+          <option value="fail">✗ Thất bại (≠0)</option>
+          <option value="pending">Chưa có result</option>
+        </select>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+
+      <span className="ml-auto text-[11px] font-semibold text-[#6b7280]">
+        {filtered.length} kết quả
+      </span>
+
+      {hasActive && (
+        <button
+          onClick={clear}
+          className="flex items-center gap-1 rounded-[7px] border border-[rgba(220,38,38,0.2)] bg-[#fff5f5] px-2 py-[3px] text-[11px] font-bold text-[#dc2626] transition-all hover:bg-[#fee2e2]"
+        >
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          Xóa lọc
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ─── HISTORY SECTION ───────────────────────────────────────────────────────
 function HistorySection({
   counts, totalRevenue, filter, setFilter, search, setSearch,
   dateFrom, setDateFrom, dateTo, setDateTo,
   activePresetKey, setActivePresetKey, filtered,
+  colFilters, setColFilters, colFilterOptions,
   selected, toggleOne, toggleAll, sortKey, sortDir, toggleSort,
   setDetail, openQueryForOrder, openConfirmForOrder, doDelete,
   onReconcileAll, reconcilingAll, reconcileMsg,
@@ -750,17 +842,17 @@ function HistorySection({
           <div className="relative">
             <button
               type="button"
-              title="Cập nhật lại trạng thái tất cả giao dịch"
+              title="Cập nhật lại trạng thái tất cả giao dịch đang chờ"
               disabled={reconcilingAll}
               onClick={onReconcileAll}
-              className={`relative z-10 flex h-[33px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-2.5 text-[12.5px] font-semibold transition-all disabled:cursor-not-allowed ${
+              className={`relative z-10 flex h-[33px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-3 text-[12.5px] font-semibold transition-all active:scale-95 disabled:cursor-not-allowed ${
                 reconcilingAll
                   ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]'
-                  : 'cursor-pointer border-[rgba(174,0,112,0.1)] bg-white/70 text-[#ae0070] hover:border-[#ae0070] hover:bg-[#fff0f7]'
+                  : 'cursor-pointer border-[rgba(174,0,112,0.15)] bg-white/70 text-[#ae0070] hover:border-[#ae0070] hover:bg-[#fff0f7] hover:shadow-[0_0_0_3px_rgba(174,0,112,0.08)]'
               }`}
             >
               <IconRefresh className={`h-[14px] w-[14px] flex-shrink-0 ${reconcilingAll ? 'animate-spin' : ''}`} />
-              Cập nhật
+              {reconcilingAll ? 'Đang quét...' : 'Cập nhật'}
             </button>
             {reconcileMsg && (
               <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-max max-w-[260px] rounded-lg bg-[#111827] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)]" style={{ animation:'fadein 0.15s ease' }}>
@@ -769,12 +861,19 @@ function HistorySection({
             )}
           </div>
           {selected.size > 0 && (
-            <button className="flex-shrink-0 whitespace-nowrap rounded-[9px] bg-[#dc2626] px-3.5 py-[7px] text-[13px] font-bold text-white transition-all hover:bg-[#b91c1c]" onClick={() => doDelete([...selected])}>
+            <button
+              className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[9px] bg-[#dc2626] px-3.5 py-[7px] text-[13px] font-bold text-white transition-all hover:bg-[#b91c1c] active:scale-95"
+              onClick={() => doDelete([...selected])}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
               Xóa ({selected.size})
             </button>
           )}
         </div>
       </div>
+
+      {/* Column filter bar */}
+      <ColFilterBar colFilters={colFilters} setColFilters={setColFilters} colFilterOptions={colFilterOptions} filtered={filtered} />
 
       {/* Stat cards — based on scoped (date+search), not further filtered by status tab */}
       <div className="mb-5 grid grid-cols-2 gap-4 max-md:gap-3 md:grid-cols-4">
@@ -857,15 +956,27 @@ function HistorySection({
                         </td>
                         <td className="px-4 py-3.5 text-center align-middle" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-center gap-1">
-                            <button className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-[#6366f1] transition-all hover:bg-[#eef2ff] hover:text-[#4f46e5]" onClick={() => openQueryForOrder(o.orderId)} title="Tra cứu MoMo API">
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/></svg>
+                            <button
+                              className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[8px] text-[#6366f1] transition-all hover:bg-[#eef2ff] hover:text-[#4f46e5] active:scale-90"
+                              onClick={() => openQueryForOrder(o.orderId)}
+                              title="Tra cứu MoMo API"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/></svg>
                             </button>
-                            <button className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-[#9ca3af] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]" onClick={() => doDelete([o.orderId])} title="Xóa">
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                            <button
+                              className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[8px] text-[#9ca3af] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626] active:scale-90"
+                              onClick={() => doDelete([o.orderId])}
+                              title="Xóa giao dịch này"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                             </button>
                             {o.resultCode === 9000 && (
-                              <button className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] border border-[rgba(22,163,74,0.3)] bg-[#f0fdf4] text-[#16a34a] transition-all hover:bg-[#16a34a] hover:text-white" onClick={() => openConfirmForOrder(o.orderId, o.amount)} title="Xác nhận / Huỷ (9000)">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                              <button
+                                className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[8px] border border-[rgba(22,163,74,0.25)] bg-[#f0fdf4] text-[#16a34a] transition-all hover:bg-[#16a34a] hover:text-white hover:border-[#16a34a] active:scale-90"
+                                onClick={() => openConfirmForOrder(o.orderId, o.amount)}
+                                title="Xác nhận / Huỷ (9000 Authorized)"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                               </button>
                             )}
                           </div>
@@ -1041,6 +1152,7 @@ export default function AdminDashboardPage() {
   const [sortDir,         setSortDir]         = useState('desc')
   const [selected,        setSelected]        = useState(new Set())
   const [detail,          setDetail]          = useState(null)
+  const [colFilters,      setColFilters]      = useState({ payType: '', source: '', resultCode: '' })
 
   const [queryOrderId,    setQueryOrderId]    = useState('')
   const [queryLoading,    setQueryLoading]    = useState(false)
@@ -1259,9 +1371,19 @@ export default function AdminDashboardPage() {
     .filter(o => o.status === 'PAID')
     .reduce((s, o) => s + parseInt(o.amount || 0), 0), [scoped])
 
-  // Step 5: table = scoped + status filter + sort
+  // Step 5: table = scoped + status filter + colFilters + sort
   const filtered = useMemo(() => scoped
     .filter(o => filter === 'ALL' || o.status === filter)
+    .filter(o => {
+      if (colFilters.payType && (o.payType || '') !== colFilters.payType) return false
+      if (colFilters.source && (o.source || '') !== colFilters.source) return false
+      if (colFilters.resultCode !== '') {
+        if (colFilters.resultCode === 'ok'   && o.resultCode !== 0)  return false
+        if (colFilters.resultCode === 'fail' && o.resultCode === 0)  return false
+        if (colFilters.resultCode === 'pending' && o.resultCode !== undefined && o.resultCode !== null) return false
+      }
+      return true
+    })
     .sort((a, b) => {
       let av = a[sortKey], bv = b[sortKey]
       if (sortKey === 'createdAt' || sortKey === 'paidAt') {
@@ -1275,7 +1397,13 @@ export default function AdminDashboardPage() {
       if (av < bv) return sortDir==='asc' ? -1 : 1
       if (av > bv) return sortDir==='asc' ?  1 : -1
       return 0
-    }), [scoped, filter, sortKey, sortDir])
+    }), [scoped, filter, colFilters, sortKey, sortDir])
+
+  // Derive unique values for col filter dropdowns (from ALL scoped, not filtered, so options don't collapse)
+  const colFilterOptions = useMemo(() => ({
+    payType: [...new Set(scoped.map(o => o.payType).filter(Boolean))].sort(),
+    source:  [...new Set(scoped.map(o => o.source).filter(Boolean))].sort(),
+  }), [scoped])
 
   const detailOrder = detail ? displayed.find(o => o.orderId === detail) : null
 
@@ -1450,6 +1578,7 @@ export default function AdminDashboardPage() {
                   dateTo={dateTo} setDateTo={setDateTo}
                   activePresetKey={activePresetKey} setActivePresetKey={setActivePresetKey}
                   filtered={filtered}
+                  colFilters={colFilters} setColFilters={setColFilters} colFilterOptions={colFilterOptions}
                   selected={selected} toggleOne={toggleOne} toggleAll={toggleAll}
                   sortKey={sortKey} sortDir={sortDir} toggleSort={toggleSort}
                   setDetail={setDetail}
