@@ -29,6 +29,13 @@
 
 import chromium from '@sparticuz/chromium'
 import puppeteer from 'puppeteer-core'
+import { Redis } from '@upstash/redis'
+import { requireAdmin } from '../../../lib/requireAdmin'
+
+const redis = new Redis({
+  url:   process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+})
 
 export const config = {
   api: {
@@ -138,9 +145,28 @@ export default async function handler(req, res) {
     }
   }
 
-  const payUrl = (req.query.payUrl || '').toString().trim()
+  // Trước đây route này nhận thẳng `payUrl` từ query string — chỉ giới hạn
+  // theo domain (payment.momo.vn) nên vẫn PUBLIC hoàn toàn: ai cũng gọi
+  // được, mỗi lần tốn 1 lần khởi động Puppeteer/Chromium (bước tốn compute
+  // nhất hệ thống) → dễ bị lợi dụng để dội chi phí/DoS serverless.
+  // Giờ đổi sang nhận `orderId`, bắt buộc admin đã đăng nhập, rồi tự tra
+  // payUrl từ Redis (đơn phải có thật, do chính create-p2p.js tạo ra) thay
+  // vì tin payUrl do client tự truyền lên.
+  if (!requireAdmin(req, res)) return
+
+  const orderId = (req.query.orderId || '').toString().trim()
+  if (!orderId) {
+    return res.status(400).json({ error: 'Thiếu orderId' })
+  }
+
+  const raw = await redis.hget('momo:orders', orderId)
+  if (!raw) {
+    return res.status(404).json({ error: 'Không tìm thấy đơn hàng' })
+  }
+  const order = typeof raw === 'string' ? JSON.parse(raw) : raw
+  const payUrl = (order.payUrl || '').toString().trim()
   if (!payUrl || !payUrl.startsWith('https://payment.momo.vn')) {
-    return res.status(400).json({ error: 'payUrl không hợp lệ' })
+    return res.status(404).json({ error: 'Đơn hàng chưa có payUrl hợp lệ' })
   }
 
   const debug = req.query.debug === '1'

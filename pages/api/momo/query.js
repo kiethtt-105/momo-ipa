@@ -1,6 +1,7 @@
 // pages/api/momo/query.js
 import crypto from 'crypto'
 import { Redis } from '@upstash/redis'
+import { requireAdmin } from '../../../lib/requireAdmin'
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL,
@@ -56,6 +57,11 @@ export default async function handler(req, res) {
     res.setHeader('Allow', ['POST'])
     return res.status(405).json({ message: `Method ${req.method} không được hỗ trợ` })
   }
+
+  // Route này gọi thật sang MoMo (đã ký signature) cho orderId bất kỳ — không
+  // auth thì ai cũng spam được, dễ dính rate-limit MoMo (resultCode 29) và lộ
+  // thông tin đơn người khác. Chỉ admin đã đăng nhập mới được gọi.
+  if (!requireAdmin(req, res)) return
 
   if (!PARTNER_CODE || !ACCESS_KEY || !SECRET_KEY) {
     console.error('[momo/query] Thiếu env: MOMO_PARTNER_CODE / MOMO_ACCESS_KEY / MOMO_SECRET_KEY')

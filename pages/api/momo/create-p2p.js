@@ -1,6 +1,7 @@
 import { createMoMoPayment } from '../../../lib/momo'
 import { Redis } from '@upstash/redis'
 import QRCode from 'qrcode'
+import { requireAdmin } from '../../../lib/requireAdmin'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -15,6 +16,10 @@ export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
+
+  // Route này tạo giao dịch THẬT bằng credential merchant — chỉ admin đã
+  // đăng nhập mới được gọi (xem giải thích tương tự trong create-atm.js).
+  if (!requireAdmin(req, res)) return
 
   const params = req.method === 'GET' ? req.query : req.body
 

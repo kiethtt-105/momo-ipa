@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis'
+import { requireAdmin } from '../../../lib/requireAdmin'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -9,6 +10,11 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' })
   }
+
+  // Chỉ admin đang đăng nhập mới được tạo đơn nháp — trước đây route này
+  // public hoàn toàn, không nhất quán với scan.js (gọi ngay sau route này)
+  // vốn đã có check session.
+  if (!requireAdmin(req, res)) return
 
   const { orderId, amount, orderInfo } = req.body
 

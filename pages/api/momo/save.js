@@ -1,6 +1,7 @@
 // pages/api/momo/save.js
 import { queryMoMoTransaction } from '../../../lib/momo'
 import { Redis } from '@upstash/redis'
+import { requireAdmin } from '../../../lib/requireAdmin'
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL,
@@ -9,6 +10,12 @@ const redis = new Redis({
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+
+  // Route này trigger 1 lệnh gọi THẬT (đã ký signature) sang MoMo cho orderId
+  // bất kỳ — nếu để public, ai cũng có thể spam gọi (tốn quota/rate-limit
+  // MoMo) hoặc dò trạng thái/amount của đơn người khác. Chỉ admin đã đăng
+  // nhập mới được gọi.
+  if (!requireAdmin(req, res)) return
 
   const { orderId } = req.body
   if (!orderId) return res.status(400).json({ error: 'Thiếu orderId' })

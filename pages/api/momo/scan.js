@@ -4,6 +4,7 @@
 
 import crypto from 'crypto'
 import { Redis } from '@upstash/redis'
+import { requireAdmin } from '../../../lib/requireAdmin'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -18,10 +19,6 @@ const POS_ENDPOINT = 'https://payment.momo.vn/v2/gateway/api/pos'
 
 const STORE_ID   = process.env.MOMO_STORE_ID || ''
 const STORE_NAME = process.env.MOMO_STORE_NAME || ''
-
-const BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://kiehtt.vercel.app'
-  : 'http://localhost:3000'
 
 function sign(raw) {
   return crypto.createHmac('sha256', SECRET_KEY).update(raw).digest('hex')
@@ -50,22 +47,15 @@ export default async function handler(req, res) {
 }
 
 async function handlePosCharge(req, res) {
-  const cookie = req.headers.cookie || ''
+  // Trước đây check session bằng cách tự fetch(`${BASE_URL}/api/admin/session`)
+  // — tốn 1 round-trip HTTP không cần thiết, và BASE_URL hardcode theo
+  // NODE_ENV nên hỏng trên Vercel Preview deployment (không phải production,
+  // không phải localhost). Gọi thẳng requireAdmin như các route khác.
+  if (!requireAdmin(req, res)) return
 
-  try {
-    const sessionRes = await fetch(`${BASE_URL}/api/admin/session`, {
-      headers: { cookie },
-      credentials: 'include',
-    })
-
-    const sessionData = await sessionRes.json()
-
-    if (!sessionRes.ok || !sessionData.authed) {
-      return res.status(401).json({ error: 'Unauthorized - Vui lòng đăng nhập admin' })
-    }
-  } catch (err) {
-    console.error('[scan][POST] Auth check error:', err)
-    return res.status(401).json({ error: 'Lỗi kiểm tra phiên đăng nhập' })
+  if (!PARTNER_CODE || !ACCESS_KEY || !SECRET_KEY) {
+    console.error('[scan][POST] Thiếu env: MOMO_PARTNER_CODE / MOMO_ACCESS_KEY / MOMO_SECRET_KEY')
+    return res.status(500).json({ error: 'Server thiếu cấu hình MoMo (kiểm tra biến môi trường)' })
   }
 
   let { orderId: rawOrderId, amount, orderInfo: rawOrderInfo, paymentCode: rawPaymentCode } = req.body

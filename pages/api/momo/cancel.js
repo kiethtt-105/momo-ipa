@@ -2,6 +2,7 @@
 // Hủy 1 đơn hàng đang PENDING theo yêu cầu admin (nút "Hủy giao dịch" trên
 // trang create-transaction, cả luồng P2P lẫn Scan đều có thể dùng chung route này).
 import { Redis } from '@upstash/redis'
+import { requireAdmin } from '../../../lib/requireAdmin'
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL,
@@ -13,6 +14,10 @@ export default async function handler(req, res) {
     res.setHeader('Allow', ['POST'])
     return res.status(405).json({ error: 'Method not allowed' })
   }
+
+  // orderId dạng iPOS<timestamp> khá dễ đoán — không auth thì ai cũng huỷ
+  // được giao dịch PENDING của người khác. Chỉ admin đã đăng nhập mới được hủy.
+  if (!requireAdmin(req, res)) return
 
   const orderId = (req.body?.orderId || '').toString().trim()
   if (!orderId) {
