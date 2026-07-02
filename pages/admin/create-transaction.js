@@ -1636,11 +1636,7 @@ export default function CreateTransactionPage() {
           width: 100%; max-width: 260px; margin: 0 auto;
           aspect-ratio: 1 / 1;
           display: flex; align-items: center; justify-content: center;
-          background: var(--subtle);
-          border: 1.5px solid var(--border);
-          border-radius: 16px;
           overflow: hidden;
-          padding: 12px;
         }
         /* Co giãn theo màn hình: 260px chỉ hợp cho điện thoại (1 cột dọc).
            Từ 600px trở lên, .scan-split chia 2 cột (xem @media ở trên) nên
@@ -1658,7 +1654,7 @@ export default function CreateTransactionPage() {
         .p2p-qr-img {
           width: 100%; height: 100%;
           object-fit: contain;
-          border-radius: 8px;
+          border-radius: 12px;
           display: block;
         }
         .p2p-iframe-loading {
