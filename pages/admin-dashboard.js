@@ -699,101 +699,64 @@ function QueryResultModal({ orderId, loading, result, error, onClose, stacked })
 }
 
 // ─── COL FILTER BAR ────────────────────────────────────────────────────────
-function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered }) {
-  const set   = (key, val) => setColFilters(f => ({ ...f, [key]: val }))
+function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered, scoped }) {
+  const hasActive = Object.values(colFilters).some(v => v !== '')
+  const set = (key, val) => setColFilters(f => ({ ...f, [key]: val }))
   const clear = () => setColFilters({ payType: '', source: '', resultCode: '' })
-  const activeCount = Object.values(colFilters).filter(v => v !== '').length
 
-  const RESULT_OPTS = [
-    { value: 'ok',      label: 'Result: Thành công' },
-    { value: 'fail',    label: 'Result: Thất bại'   },
-    { value: 'pending', label: 'Result: Chưa có'    },
-  ]
-
-  // A single filter pill: dropdown that looks like a chip
-  function Chip({ value, placeholder, options, onChange }) {
-    const active = !!value
-    return (
-      <div className="relative flex items-center">
-        <select
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          className={`h-[28px] cursor-pointer appearance-none rounded-full border py-0 pl-3 pr-[26px] text-[12px] font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-[#ae0070]/20 ${
-            active
-              ? 'border-[#ae0070] bg-[#ae0070] text-white'
-              : 'border-[rgba(174,0,112,0.15)] bg-white text-[#6b7280] hover:border-[#ae0070] hover:text-[#ae0070]'
-          }`}
-        >
-          <option value="">{placeholder}</option>
-          {options.map(o => (
-            <option key={o.value ?? o} value={o.value ?? o}>
-              {o.label ?? o}
-            </option>
-          ))}
-        </select>
-        {/* chevron or ✕ */}
-        {active ? (
-          <button
-            type="button"
-            onClick={e => { e.stopPropagation(); onChange('') }}
-            className="pointer-events-auto absolute right-[7px] top-1/2 -translate-y-1/2 leading-none text-white/80 hover:text-white"
-            title="Bỏ lọc"
-          >
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
-        ) : (
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[8px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
-        )}
-      </div>
-    )
-  }
+  const selClass = (active) =>
+    `h-[30px] cursor-pointer appearance-none rounded-[8px] border py-0 pl-[9px] pr-[22px] text-[12px] font-semibold transition-all focus:outline-none ${
+      active
+        ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]'
+        : 'border-[rgba(174,0,112,0.1)] bg-white/70 text-[#6b7280] hover:border-[rgba(174,0,112,0.25)]'
+    }`
 
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
-      {/* icon + label */}
-      <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#9b4470]">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 3H2l8 9.46V19l4 2V12.46z"/></svg>
-        Lọc
-      </span>
+    <div className={`mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3.5 py-2 text-[12px] transition-all ${hasActive ? 'border-[rgba(174,0,112,0.2)] bg-[#fff8fc]' : 'border-[rgba(174,0,112,0.08)] bg-white/60'}`}>
+      <span className="flex-shrink-0 text-[11px] font-bold uppercase tracking-wide text-[#9b4470]">Lọc cột</span>
 
-      <Chip
-        value={colFilters.payType}
-        placeholder="Hình thức"
-        options={colFilterOptions.payType.map(v => ({ value: v, label: v }))}
-        onChange={v => set('payType', v)}
-      />
+      {/* Hình thức thanh toán */}
+      <div className="relative">
+        <select value={colFilters.payType} onChange={e => set('payType', e.target.value)} className={selClass(!!colFilters.payType)}>
+          <option value="">Hình thức</option>
+          {colFilterOptions.payType.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
 
+      {/* Nguồn đơn (pos / create-p2p) */}
       {colFilterOptions.source.length > 0 && (
-        <Chip
-          value={colFilters.source}
-          placeholder="Loại đơn"
-          options={colFilterOptions.source.map(v => ({
-            value: v,
-            label: v === 'pos' ? 'POS / Scan' : v === 'create-p2p' ? 'P2P / QR' : v,
-          }))}
-          onChange={v => set('source', v)}
-        />
+        <div className="relative">
+          <select value={colFilters.source} onChange={e => set('source', e.target.value)} className={selClass(!!colFilters.source)}>
+            <option value="">Loại đơn</option>
+            {colFilterOptions.source.map(v => <option key={v} value={v}>{v === 'pos' ? 'POS / Scan' : v === 'create-p2p' ? 'P2P / QR' : v}</option>)}
+          </select>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
       )}
 
-      <Chip
-        value={colFilters.resultCode}
-        placeholder="Result"
-        options={RESULT_OPTS}
-        onChange={v => set('resultCode', v)}
-      />
+      {/* Result code */}
+      <div className="relative">
+        <select value={colFilters.resultCode} onChange={e => set('resultCode', e.target.value)} className={selClass(!!colFilters.resultCode)}>
+          <option value="">Result</option>
+          <option value="ok">✓ Thành công (0)</option>
+          <option value="fail">✗ Thất bại (≠0)</option>
+          <option value="pending">Chưa có result</option>
+        </select>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
 
-      {/* Separator + count */}
-      <span className="text-[11px] text-[#9ca3af]">·</span>
-      <span className="text-[11px] font-semibold text-[#6b7280]">{filtered.length} kết quả</span>
+      <span className="ml-auto text-[11px] font-semibold text-[#6b7280]">
+        {filtered.length} kết quả
+      </span>
 
-      {/* Reset All — only when 2+ fields active */}
-      {activeCount >= 2 && (
+      {hasActive && (
         <button
           onClick={clear}
-          className="ml-1 flex items-center gap-1.5 rounded-full border border-[rgba(220,38,38,0.25)] bg-[#fff5f5] px-3 py-[4px] text-[11px] font-bold text-[#dc2626] transition-all hover:bg-[#fee2e2] hover:border-[#dc2626] active:scale-95"
+          className="flex items-center gap-1 rounded-[7px] border border-[rgba(220,38,38,0.2)] bg-[#fff5f5] px-2 py-[3px] text-[11px] font-bold text-[#dc2626] transition-all hover:bg-[#fee2e2]"
         >
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          Xóa tất cả
+          Xóa lọc
         </button>
       )}
     </div>
