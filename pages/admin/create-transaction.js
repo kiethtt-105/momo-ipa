@@ -2436,7 +2436,13 @@ export default function CreateTransactionPage() {
 
                 {p2pPayUrl && (
                   <a
-                    href={p2pDeeplink || p2pPayUrl}
+                    // Không trỏ thẳng payUrl/deeplink MoMo nữa (lộ URL thật + query
+                    // string dài trên thanh địa chỉ khi mở tab mới). Trỏ qua
+                    // /api/momo/status?open=1 — route cũ đã có sẵn logic tra Redis
+                    // theo orderId, giờ thêm nhánh redirect. Khách chỉ thấy
+                    // "…/api/momo/status?orderId=...&open=1" lúc bấm, trước khi
+                    // được điều hướng sang trang MoMo thật.
+                    href={`/api/momo/status?orderId=${encodeURIComponent(p2pOrderId)}&open=1`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p2p-open-link"

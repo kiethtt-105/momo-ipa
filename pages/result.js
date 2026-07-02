@@ -114,6 +114,8 @@ export default function ResultPage() {
             resolve('success', data); clearInterval(poll); cleanUrl()
           } else if (data.status === 'FAILED') {
             resolve('failed', data); clearInterval(poll); cleanUrl()
+          } else if (data.status === 'EXPIRED') {
+            resolvedRef.current = true; setStatus('expired'); setInfo(data); clearInterval(poll); cleanUrl()
           } else if (++attempts >= 10) {
             resolvedRef.current = true; setStatus('pending'); clearInterval(poll); cleanUrl()
           }
@@ -312,6 +314,16 @@ export default function ResultPage() {
                   {info?.amount > 0 && <InfoRow k="Số tiền" v={`${fmt(info.amount)} ₫`} />}
                 </div>
 
+                <Countdown sec={countdown} total={AUTO_CLOSE_SEC} />
+              </div>
+            )}
+
+            {/* ── EXPIRED ── */}
+            {status === 'expired' && (
+              <div className="center-msg">
+                <div className="icon">⏰</div>
+                <h2 style={{ color: '#d97706' }}>Giao dịch đã hết hạn</h2>
+                <p>Link/QR thanh toán này không còn hiệu lực.<br />Vui lòng tạo đơn hàng mới.</p>
                 <Countdown sec={countdown} total={AUTO_CLOSE_SEC} />
               </div>
             )}

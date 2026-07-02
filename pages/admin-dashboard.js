@@ -462,7 +462,10 @@ function DetailModal({ order: o, onClose, onDelete, onQuery, onConfirm }) {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <a
-                      href={o.payUrl}
+                      // Text/box phía trên vẫn hiện payUrl đầy đủ cho admin xem —
+                      // chỉ nút bấm "mở" này đi qua status.js?open=1 để đồng bộ với
+                      // hành vi ẩn URL bên trang create-transaction.js.
+                      href={`/api/momo/status?orderId=${encodeURIComponent(o.orderId)}&open=1`}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-[7px] rounded-[9px] border border-[rgba(174,0,112,0.25)] bg-[#fff0f7] px-3.5 py-2 text-[13px] font-bold text-[#ae0070] transition-all hover:bg-[#ae0070] hover:text-white"

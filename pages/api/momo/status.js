@@ -27,10 +27,28 @@ const EXPIRED_CODES = [1005]
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
 
-  const { orderId } = req.query
+  const { orderId, open } = req.query
   if (!orderId) return res.status(400).json({ error: 'Thiếu orderId' })
 
   const raw = await redis.hget('momo:orders', orderId)
+
+  // ── Chế độ "open=1": redirect thẳng sang payUrl/deeplink MoMo, dùng cho
+  // link "Mở trang thanh toán trong tab mới" bên create-transaction.js —
+  // tận dụng lại logic tra Redis của route status.js sẵn có, không tạo
+  // route riêng, đồng thời ẩn payUrl/deeplink thật (query string dài) khỏi
+  // thanh địa chỉ ngay lúc bấm, chỉ để lộ "…/api/momo/status?orderId=…&open=1".
+  if (open) {
+    if (!raw) return res.status(404).send('Không tìm thấy đơn hàng hoặc đã hết hạn')
+    const o = typeof raw === 'string' ? JSON.parse(raw) : raw
+    // Đơn đã có kết luận cuối → đưa về trang result thay vì mở lại link MoMo cũ/hết hạn.
+    if (o.status === 'PAID' || o.status === 'FAILED' || o.status === 'EXPIRED') {
+      return res.redirect(302, `/result?orderId=${encodeURIComponent(orderId)}`)
+    }
+    const target = o.deeplink || o.payUrl
+    if (!target) return res.status(404).send('Đơn hàng chưa có link thanh toán')
+    return res.redirect(302, target)
+  }
+
   if (!raw) return res.status(200).json({ status: 'PENDING', orderId })
 
   let order = typeof raw === 'string' ? JSON.parse(raw) : raw
