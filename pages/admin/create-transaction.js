@@ -2417,7 +2417,7 @@ export default function CreateTransactionPage() {
                   {p2pPayUrl ? (
                     <img
                       key={p2pOrderId}
-                      src={`/api/momo/qr-extract?payUrl=${encodeURIComponent(p2pPayUrl)}`}
+                      src={`/api/momo/qr-extract?orderId=${encodeURIComponent(p2pOrderId)}`}
                       alt="Mã QR thanh toán MoMo"
                       className="p2p-qr-img"
                       onError={(e) => { e.currentTarget.style.display = 'none' }}
