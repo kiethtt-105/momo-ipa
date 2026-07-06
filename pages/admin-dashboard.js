@@ -1090,7 +1090,7 @@ function HistorySection({
       {/* Thanh lọc — GỘP LÀM 1 (trước đây tách 2 thanh: toolbar ngày/tìm kiếm ở trên
           và "Lọc cột" riêng ở dưới). Nay chung 1 khối bo góc duy nhất, chia 2 hàng
           bằng đường kẻ mảnh cho gọn mắt, thay vì 2 khối viền riêng biệt như cũ. */}
-      <div className="mb-5 rounded-2xl border border-white/70 bg-white/88 shadow-[0_2px_20px_rgba(174,0,112,0.04)] backdrop-blur-[12px]">
+      <div className="relative z-20 mb-5 rounded-2xl border border-white/70 bg-white/88 shadow-[0_2px_20px_rgba(174,0,112,0.04)] backdrop-blur-[12px]">
       <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-1.5">
           {DATE_PRESETS.map(p => {
