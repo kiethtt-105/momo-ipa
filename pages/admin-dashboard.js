@@ -410,6 +410,140 @@ function DateRangePicker({ dateFrom, setDateFrom, dateTo, setDateTo, setActivePr
   )
 }
 
+// ─── FLOATING WINDOW (cửa sổ nổi, kéo-thả được) ────────────────────────────
+// Thay cho modal cũ (nền tối full-screen chặn thao tác) — giờ mỗi popup
+// (Chi tiết / Tra cứu / Xác nhận) là 1 "cửa sổ" nổi lơ lửng trên dashboard,
+// đổ bóng mềm kiểu bong bóng, tự nâng lên trên (bring-to-front) khi bấm vào,
+// và có thể kéo đi bất kỳ đâu qua thanh header — giống hệt tinh thần cửa sổ
+// nổi đang xây ở create-transaction.js, áp dụng lại cho admin-dashboard.js.
+let __floatWinTopZ = 300
+function bringFloatWinToFront() { return ++__floatWinTopZ }
+
+// Mỗi lần có cửa sổ mới mở, lệch nhẹ vị trí so với cửa sổ trước để tránh
+// chồng khít 100% lên nhau (hiệu ứng "xếp chồng" như cửa sổ thật).
+let __floatWinCascade = 0
+function nextCascadeOffset() {
+  __floatWinCascade = (__floatWinCascade + 1) % 6
+  return { x: __floatWinCascade * 26, y: __floatWinCascade * 22 }
+}
+
+function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor = '#ae0070', onClose, children, footer, width = 560 }) {
+  const [pos,      setPos]      = useState(null)
+  const [z,        setZ]        = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const dragState = useRef({ startX: 0, startY: 0, origX: 0, origY: 0 })
+  const cascadeRef = useRef(null)
+  if (cascadeRef.current === null) cascadeRef.current = nextCascadeOffset()
+
+  // Canh giữa màn hình lúc mount (1 lần), cộng thêm lệch cascade để nhiều
+  // cửa sổ mở cùng lúc không đè khít lên nhau.
+  useEffect(() => {
+    const w = typeof window !== 'undefined' ? window.innerWidth  : 1200
+    const h = typeof window !== 'undefined' ? window.innerHeight : 800
+    const winW = Math.min(width, w - 32)
+    const estH = Math.min(h * 0.7, 560)
+    const baseX = Math.max(16, (w - winW) / 2)
+    const baseY = Math.max(16, (h - estH) / 2)
+    setPos({ x: baseX + cascadeRef.current.x, y: baseY + cascadeRef.current.y })
+    setZ(bringFloatWinToFront())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function clamp(x, y) {
+    const w = typeof window !== 'undefined' ? window.innerWidth  : 1200
+    const h = typeof window !== 'undefined' ? window.innerHeight : 800
+    return {
+      x: Math.min(Math.max(x, -width + 120), w - 80),
+      y: Math.min(Math.max(y, 0), h - 60),
+    }
+  }
+
+  function onHeaderPointerDown(e) {
+    if (e.target.closest('button')) return // không kéo khi bấm nút đóng
+    setZ(bringFloatWinToFront())
+    setDragging(true)
+    dragState.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }
+  function onPointerMove(e) {
+    const dx = e.clientX - dragState.current.startX
+    const dy = e.clientY - dragState.current.startY
+    setPos(clamp(dragState.current.origX + dx, dragState.current.origY + dy))
+  }
+  function onPointerUp() {
+    setDragging(false)
+    window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('pointerup', onPointerUp)
+  }
+  useEffect(() => () => {
+    window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('pointerup', onPointerUp)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (!pos) return null // chờ tính vị trí xong mới hiện, tránh nháy ở góc (0,0)
+
+  return (
+    <div
+      className="fixed flex max-h-[88vh] flex-col overflow-hidden rounded-[20px] bg-white"
+      style={{
+        left: pos.x, top: pos.y,
+        width: `min(${width}px, calc(100vw - 32px))`,
+        zIndex: z,
+        boxShadow: dragging
+          ? '0 46px 110px rgba(23,7,20,0.38), 0 10px 30px rgba(174,0,112,0.18), 0 0 0 1px rgba(174,0,112,0.14)'
+          : '0 24px 70px rgba(23,7,20,0.20), 0 8px 22px rgba(174,0,112,0.10), 0 0 0 1px rgba(174,0,112,0.07)',
+        transition: dragging ? 'none' : 'box-shadow 0.25s ease, transform 0.15s ease',
+        animation: 'floatWinIn 0.28s cubic-bezier(0.34,1.35,0.64,1) both',
+      }}
+      onMouseDownCapture={() => setZ(bringFloatWinToFront())}
+    >
+      {/* Header — kéo bằng vùng này */}
+      <div
+        className="flex flex-shrink-0 cursor-grab select-none items-center justify-between border-b border-[#f3f4f6] px-[22px] py-4 active:cursor-grabbing"
+        style={{ touchAction: 'none' }}
+        onPointerDown={onHeaderPointerDown}
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          {icon && (
+            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px]" style={{ background: iconBg, color: iconColor }}>
+              {icon}
+            </span>
+          )}
+          <div className="min-w-0">
+            {title}
+            {subtitle}
+          </div>
+        </div>
+        <button
+          className="ml-3 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-[#f3f4f6] text-sm text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]"
+          onClick={onClose}
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto py-1">{children}</div>
+
+      {/* Footer */}
+      {footer && (
+        <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-[#f3f4f6] px-[22px] py-3.5">
+          {footer}
+        </div>
+      )}
+
+      <style jsx global>{`
+        @keyframes floatWinIn {
+          from { opacity: 0; transform: translateY(16px) scale(0.95); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 // ─── DETAIL MODAL ──────────────────────────────────────────────────────────
 function DetailModal({ order: o, onClose, onDelete, onQuery, onConfirm }) {
   const sm    = STATUS_META[o.status] || STATUS_META.PENDING
@@ -417,96 +551,19 @@ function DetailModal({ order: o, onClose, onDelete, onQuery, onConfirm }) {
   const extra = decodeExtra(o.extraData)
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-[rgba(17,7,13,0.5)] p-5 backdrop-blur-[8px]" style={{ animation:'fadein 0.15s ease' }} onClick={onClose}>
-      <div className="flex max-h-[88vh] w-full max-w-[600px] flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_32px_80px_rgba(0,0,0,0.2),0_0_0_1px_rgba(174,0,112,0.08)]" style={{ animation:'slideup 0.2s ease' }} onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex flex-shrink-0 items-start justify-between border-b border-[#f3f4f6] px-[22px] pb-4 pt-5">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 rounded-[20px] px-[11px] py-[5px] text-xs font-bold" style={{ background:sm.bg, color:sm.color }}>
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background:sm.dot }} />{sm.label}
-            </span>
-            <span className="text-[20px] font-extrabold tracking-tight text-[#ae0070]">{fmt(o.amount)} ₫</span>
-          </div>
-          <button className="ml-3 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-[#f3f4f6] text-sm text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]" onClick={onClose}>✕</button>
+    <FloatingWindow
+      width={600}
+      onClose={onClose}
+      title={
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-[20px] px-[11px] py-[5px] text-xs font-bold" style={{ background:sm.bg, color:sm.color }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background:sm.dot }} />{sm.label}
+          </span>
+          <span className="text-[20px] font-extrabold tracking-tight text-[#ae0070]">{fmt(o.amount)} ₫</span>
         </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto py-1">
-          <Section title="Thông tin giao dịch">
-            <Row label="Mã đơn hàng"   value={o.orderId}   mono copy={() => copy(o.orderId)} />
-            <Row label="Nội dung"       value={o.orderInfo || '—'} />
-            <Row label="Số tiền"        value={`${fmt(o.amount)} ₫`} />
-            <Row label="Hình thức"      value={o.payType || (o.orderId?.startsWith('POS')||o.orderId?.startsWith('iPOS')?'POS':'P2P')} />
-            <Row label="Mã GD MoMo"     value={o.transId || '—'} mono copy={() => copy(o.transId)} />
-            <Row label="Result Code"    value={o.resultCode !== undefined
-              ? <span className="font-mono font-bold" style={{ color: o.resultCode===0?'#16a34a':'#dc2626' }}>{o.resultCode} — {getResultDesc(o.resultCode)}</span>
-              : '—'} />
-            <Row label="Thông điệp"     value={o.message || '—'} />
-          </Section>
-
-          <Section title="Thời gian">
-            <Row label="Tạo đơn"        value={fmtDate(o.createdAt)} />
-            <Row label="Thanh toán"     value={o.paidAt ? fmtDate(o.paidAt) : '—'} />
-            <Row label="responseTime"   value={o.responseTime ? fmtMs(o.responseTime) : '—'} />
-          </Section>
-
-          {extra && (
-            <Section title="Extra Data">
-              <div className="max-h-[160px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">
-                {typeof extra === 'object' ? JSON.stringify(extra, null, 2) : String(extra)}
-              </div>
-            </Section>
-          )}
-
-          {o.payUrl && (
-            <Section title="Thanh toán nhanh (QR / Link)">
-              <div className="flex flex-col items-center gap-3 px-1 py-2 sm:flex-row sm:items-start">
-                {o.qrCodeImage && (
-                  <img
-                    src={o.qrCodeImage}
-                    alt="QR thanh toán"
-                    className="h-[160px] w-[160px] flex-shrink-0 rounded-lg border border-[#e5e7eb] bg-white p-1.5"
-                  />
-                )}
-                <div className="flex w-full flex-1 flex-col gap-2">
-                  <div className="break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 font-mono text-[11.5px] text-[#374151]">
-                    {o.payUrl}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <a
-                      // Text/box phía trên vẫn hiện payUrl đầy đủ cho admin xem —
-                      // chỉ nút bấm "mở" này đi qua status.js?open=1 để đồng bộ với
-                      // hành vi ẩn URL bên trang create-transaction.js.
-                      href={`/api/momo/status?orderId=${encodeURIComponent(o.orderId)}&open=1`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-[7px] rounded-[9px] border border-[rgba(174,0,112,0.25)] bg-[#fff0f7] px-3.5 py-2 text-[13px] font-bold text-[#ae0070] transition-all hover:bg-[#ae0070] hover:text-white"
-                    >
-                      Mở link thanh toán
-                    </a>
-                    <button
-                      className="inline-flex items-center gap-[7px] rounded-[9px] border border-[#e5e7eb] bg-white px-3.5 py-2 text-[13px] font-bold text-[#374151] transition-all hover:bg-[#f3f4f6]"
-                      onClick={() => copy(o.payUrl)}
-                    >
-                      Copy link
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </Section>
-          )}
-
-          {o.requestId && (
-            <Section title="IDs kỹ thuật">
-              <Row label="requestId"    value={o.requestId}   mono copy={() => copy(o.requestId)} />
-              <Row label="partnerCode"  value={o.partnerCode} mono />
-              <Row label="orderGroupId" value={o.orderGroupId || '—'} mono />
-            </Section>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-t border-[#f3f4f6] px-[22px] py-3.5">
+      }
+      footer={
+        <>
           <div className="flex flex-wrap gap-2">
             <button
               className="inline-flex items-center gap-[7px] rounded-[9px] border border-[#fecaca] bg-[#fff5f5] px-3.5 py-2 text-[13px] font-bold text-[#dc2626] transition-all hover:bg-[#fee2e2] hover:border-[#dc2626] active:scale-95"
@@ -538,9 +595,81 @@ function DetailModal({ order: o, onClose, onDelete, onQuery, onConfirm }) {
           >
             Đóng
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <Section title="Thông tin giao dịch">
+        <Row label="Mã đơn hàng"   value={o.orderId}   mono copy={() => copy(o.orderId)} />
+        <Row label="Nội dung"       value={o.orderInfo || '—'} />
+        <Row label="Số tiền"        value={`${fmt(o.amount)} ₫`} />
+        <Row label="Hình thức"      value={o.payType || (o.orderId?.startsWith('POS')||o.orderId?.startsWith('iPOS')?'POS':'P2P')} />
+        <Row label="Mã GD MoMo"     value={o.transId || '—'} mono copy={() => copy(o.transId)} />
+        <Row label="Result Code"    value={o.resultCode !== undefined
+          ? <span className="font-mono font-bold" style={{ color: o.resultCode===0?'#16a34a':'#dc2626' }}>{o.resultCode} — {getResultDesc(o.resultCode)}</span>
+          : '—'} />
+        <Row label="Thông điệp"     value={o.message || '—'} />
+      </Section>
+
+      <Section title="Thời gian">
+        <Row label="Tạo đơn"        value={fmtDate(o.createdAt)} />
+        <Row label="Thanh toán"     value={o.paidAt ? fmtDate(o.paidAt) : '—'} />
+        <Row label="responseTime"   value={o.responseTime ? fmtMs(o.responseTime) : '—'} />
+      </Section>
+
+      {extra && (
+        <Section title="Extra Data">
+          <div className="max-h-[160px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">
+            {typeof extra === 'object' ? JSON.stringify(extra, null, 2) : String(extra)}
+          </div>
+        </Section>
+      )}
+
+      {o.payUrl && (
+        <Section title="Thanh toán nhanh (QR / Link)">
+          <div className="flex flex-col items-center gap-3 px-1 py-2 sm:flex-row sm:items-start">
+            {o.qrCodeImage && (
+              <img
+                src={o.qrCodeImage}
+                alt="QR thanh toán"
+                className="h-[160px] w-[160px] flex-shrink-0 rounded-lg border border-[#e5e7eb] bg-white p-1.5"
+              />
+            )}
+            <div className="flex w-full flex-1 flex-col gap-2">
+              <div className="break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 font-mono text-[11.5px] text-[#374151]">
+                {o.payUrl}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  // Text/box phía trên vẫn hiện payUrl đầy đủ cho admin xem —
+                  // chỉ nút bấm "mở" này đi qua status.js?open=1 để đồng bộ với
+                  // hành vi ẩn URL bên trang create-transaction.js.
+                  href={`/api/momo/status?orderId=${encodeURIComponent(o.orderId)}&open=1`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-[7px] rounded-[9px] border border-[rgba(174,0,112,0.25)] bg-[#fff0f7] px-3.5 py-2 text-[13px] font-bold text-[#ae0070] transition-all hover:bg-[#ae0070] hover:text-white"
+                >
+                  Mở link thanh toán
+                </a>
+                <button
+                  className="inline-flex items-center gap-[7px] rounded-[9px] border border-[#e5e7eb] bg-white px-3.5 py-2 text-[13px] font-bold text-[#374151] transition-all hover:bg-[#f3f4f6]"
+                  onClick={() => copy(o.payUrl)}
+                >
+                  Copy link
+                </button>
+              </div>
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {o.requestId && (
+        <Section title="IDs kỹ thuật">
+          <Row label="requestId"    value={o.requestId}   mono copy={() => copy(o.requestId)} />
+          <Row label="partnerCode"  value={o.partnerCode} mono />
+          <Row label="orderGroupId" value={o.orderGroupId || '—'} mono />
+        </Section>
+      )}
+    </FloatingWindow>
   )
 }
 
@@ -550,151 +679,128 @@ function ConfirmModal({ orderId, amount, loading, result, error, onConfirm, onCa
   const isOk = rc === 0
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-[rgba(17,7,13,0.5)] p-5 backdrop-blur-[8px]" style={{ animation:'fadein 0.15s ease' }} onClick={onClose}>
-      <div className="flex max-h-[88vh] w-full max-w-[580px] flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_32px_80px_rgba(0,0,0,0.2),0_0_0_1px_rgba(174,0,112,0.08)]" style={{ animation:'slideup 0.2s ease' }} onClick={e => e.stopPropagation()}>
-        <div className="flex flex-shrink-0 items-start justify-between border-b border-[#f3f4f6] px-[22px] pb-4 pt-5">
-          <div>
-            <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#6b7280]">Xác nhận / Huỷ giao dịch</div>
-            <div className="text-xs text-[#6b7280]">POST /v2/gateway/api/confirm · {orderId}</div>
-          </div>
-          <button className="ml-3 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-[#f3f4f6] text-sm text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]" onClick={onClose}>✕</button>
-        </div>
-
-        <div className="flex-shrink-0 border-b border-[#f3f4f6] px-[22px] py-4">
-          <div className="mb-3 text-[13px] text-[#374151]">
-            Giao dịch <strong className="font-mono">{orderId}</strong> đang ở trạng thái <strong className="text-[#d97706]">9000 — Authorized</strong>.
-            <br />Số tiền: <strong>{parseInt(amount||0).toLocaleString('vi-VN')} ₫</strong>
-          </div>
-          <div className="flex gap-2">
-            <button className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[10px] bg-[#16a34a] px-[18px] py-2.5 text-[13px] font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50" onClick={onConfirm} disabled={loading || !!result}>
-              {loading ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation:'rot 0.8s linear infinite' }}><path d="M3 12a9 9 0 0 1 9-9"/></svg>
-                       : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
-              Capture (xác nhận)
-            </button>
-            <button className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[10px] bg-[#dc2626] px-[18px] py-2.5 text-[13px] font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50" onClick={onCancel} disabled={loading || !!result}>
-              {loading ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation:'rot 0.8s linear infinite' }}><path d="M3 12a9 9 0 0 1 9-9"/></svg>
-                       : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>}
-              Cancel (huỷ)
-            </button>
-          </div>
-          <div className="mt-1.5 text-[11px] text-[#6b7280]">Capture → chuyển tiền về ví đối tác. Cancel → hoàn tiền về người dùng.</div>
-        </div>
-
-        {error && (
-          <div className="mx-[22px] my-3 flex flex-shrink-0 items-center gap-2 rounded-[10px] border border-[#fecaca] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] font-semibold text-[#dc2626]">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
-            {error}
-          </div>
-        )}
-
-        {result && (
-          <div className="flex-1 overflow-y-auto py-1">
-            <div className="flex flex-shrink-0 flex-col gap-1 px-[22px] py-4" style={{ background: isOk?'#dcfce7':'#fee2e2' }}>
-              <div className="font-mono text-[22px] font-extrabold tracking-[-0.5px]" style={{ color: isOk?'#16a34a':'#dc2626' }}>{isOk?'✓':'✗'} {rc}</div>
-              <div className="text-sm font-bold text-[#374151]">{result.requestType==='capture'?'Capture':'Cancel'} — {getResultDesc(rc)}</div>
-              {result.message && <div className="text-xs text-[#6b7280]">{result.message}</div>}
-            </div>
-            <Section title="Raw Response">
-              <div className="max-h-[180px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">{JSON.stringify(result, null, 2)}</div>
-            </Section>
-          </div>
-        )}
-
-        <div className="flex flex-shrink-0 items-center justify-between border-t border-[#f3f4f6] px-[22px] py-3.5">
+    <FloatingWindow
+      width={580}
+      onClose={onClose}
+      title={<div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#6b7280]">Xác nhận / Huỷ giao dịch</div>}
+      subtitle={<div className="text-xs text-[#6b7280]">POST /v2/gateway/api/confirm · {orderId}</div>}
+      footer={
+        <>
           <div className="text-xs text-[#9ca3af]">Chỉ áp dụng cho giao dịch resultCode = 9000</div>
           <button className="rounded-[9px] border border-[rgba(174,0,112,0.1)] bg-[#f9fafb] px-5 py-2 text-[13px] font-semibold text-[#374151] transition-all hover:bg-white" onClick={onClose}>Đóng</button>
+        </>
+      }
+    >
+      <div className="flex-shrink-0 border-b border-[#f3f4f6] px-[22px] py-4">
+        <div className="mb-3 text-[13px] text-[#374151]">
+          Giao dịch <strong className="font-mono">{orderId}</strong> đang ở trạng thái <strong className="text-[#d97706]">9000 — Authorized</strong>.
+          <br />Số tiền: <strong>{parseInt(amount||0).toLocaleString('vi-VN')} ₫</strong>
         </div>
+        <div className="flex gap-2">
+          <button className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[10px] bg-[#16a34a] px-[18px] py-2.5 text-[13px] font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50" onClick={onConfirm} disabled={loading || !!result}>
+            {loading ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation:'rot 0.8s linear infinite' }}><path d="M3 12a9 9 0 0 1 9-9"/></svg>
+                     : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
+            Capture (xác nhận)
+          </button>
+          <button className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[10px] bg-[#dc2626] px-[18px] py-2.5 text-[13px] font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50" onClick={onCancel} disabled={loading || !!result}>
+            {loading ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation:'rot 0.8s linear infinite' }}><path d="M3 12a9 9 0 0 1 9-9"/></svg>
+                     : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>}
+            Cancel (huỷ)
+          </button>
+        </div>
+        <div className="mt-1.5 text-[11px] text-[#6b7280]">Capture → chuyển tiền về ví đối tác. Cancel → hoàn tiền về người dùng.</div>
       </div>
-    </div>
+
+      {error && (
+        <div className="mx-[22px] my-3 flex flex-shrink-0 items-center gap-2 rounded-[10px] border border-[#fecaca] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] font-semibold text-[#dc2626]">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="py-1">
+          <div className="flex flex-shrink-0 flex-col gap-1 px-[22px] py-4" style={{ background: isOk?'#dcfce7':'#fee2e2' }}>
+            <div className="font-mono text-[22px] font-extrabold tracking-[-0.5px]" style={{ color: isOk?'#16a34a':'#dc2626' }}>{isOk?'✓':'✗'} {rc}</div>
+            <div className="text-sm font-bold text-[#374151]">{result.requestType==='capture'?'Capture':'Cancel'} — {getResultDesc(rc)}</div>
+            {result.message && <div className="text-xs text-[#6b7280]">{result.message}</div>}
+          </div>
+          <Section title="Raw Response">
+            <div className="max-h-[180px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">{JSON.stringify(result, null, 2)}</div>
+          </Section>
+        </div>
+      )}
+    </FloatingWindow>
   )
 }
 
 // ─── QUERY RESULT MODAL (popup tra cứu MoMo) ──────────────────────────────
-function QueryResultModal({ orderId, loading, result, error, onClose, stacked }) {
+function QueryResultModal({ orderId, loading, result, error, onClose }) {
   const copy   = t => navigator.clipboard?.writeText(String(t))
   const rc     = result?.resultCode
   const isOk   = rc === 0 || rc === 9000
   const rcDesc = rc !== undefined ? getResultDesc(rc) : null
 
   return (
-    <div
-      className={`fixed inset-0 z-[320] flex items-center justify-center p-5 ${stacked ? 'bg-[rgba(17,7,13,0.35)]' : 'bg-[rgba(17,7,13,0.5)] backdrop-blur-[8px]'}`}
-      style={{ animation:'fadein 0.15s ease' }}
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[88vh] w-full max-w-[560px] flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_32px_80px_rgba(0,0,0,0.25),0_0_0_1px_rgba(99,102,241,0.1)]"
-        style={{ animation:'slideup 0.2s ease' }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-[#f3f4f6] px-[22px] py-4">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-[#eef2ff] text-[#4f46e5]">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            </span>
-            <div>
-              <div className="text-[15px] font-extrabold tracking-[-0.2px] text-[#111827]">Tra cứu MoMo</div>
-              <div className="max-w-[320px] truncate font-mono text-[11px] text-[#9ca3af]" title={orderId}>{orderId}</div>
-            </div>
-          </div>
-          <button className="ml-3 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-[#f3f4f6] text-sm text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]" onClick={onClose}>✕</button>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto py-1">
-          {loading && (
-            <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" style={{ animation:'rot 0.8s linear infinite' }}><path d="M3 12a9 9 0 0 1 9-9"/></svg>
-              <div className="text-[13px] font-semibold text-[#6b7280]">Đang tra cứu trên MoMo server...</div>
-            </div>
-          )}
-
-          {!loading && error && (
-            <div className="mx-[22px] my-4 flex items-center gap-2 rounded-[10px] border border-[#fecaca] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] font-semibold text-[#dc2626]">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
-              {error}
-            </div>
-          )}
-
-          {!loading && result && (
-            <>
-              {result._reconciled && (
-                <div className="mx-[22px] mt-4 flex items-center gap-2 rounded-[10px] border border-[#fde68a] bg-[#fffbeb] px-3.5 py-2.5 text-[13px] font-semibold text-[#92400e]">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-                  Phát hiện lệch trạng thái (IPN có thể đã bị rớt) — đã tự động cập nhật từ "{STATUS_META[result._previousStatus]?.label || result._previousStatus}" sang "{STATUS_META[result._newStatus]?.label || result._newStatus}"
-                </div>
-              )}
-              <div className="flex flex-col gap-1 px-[22px] py-4" style={{ background: isOk?'#f0fdf4':'#fff5f5' }}>
-                <div className="font-mono text-[22px] font-extrabold tracking-[-0.5px]" style={{ color: isOk?'#16a34a':'#dc2626' }}>{isOk?'✓':'✗'} {rc}</div>
-                <div className="text-sm font-bold text-[#374151]">{rcDesc}</div>
-                {result.message && <div className="text-xs text-[#6b7280]">{result.message}</div>}
-              </div>
-
-              <Section title="Thông tin giao dịch">
-                <Row label="orderId"      value={result.orderId}   mono copy={() => copy(result.orderId)} />
-                <Row label="requestId"    value={result.requestId} mono copy={() => copy(result.requestId)} />
-                <Row label="transId"      value={result.transId?.toString()||'—'} mono />
-                <Row label="partnerCode"  value={result.partnerCode} mono />
-                <Row label="amount"        value={result.amount !== undefined ? `${fmt(result.amount)} ₫` : '—'} />
-                <Row label="payType"       value={result.payType || '—'} />
-                <Row label="paymentOption" value={result.paymentOption || '—'} />
-                <Row label="responseTime"  value={result.responseTime ? fmtMs(result.responseTime) : '—'} />
-              </Section>
-
-              <Section title="Raw Response">
-                <div className="mb-4 max-h-[200px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">{JSON.stringify(result, null, 2)}</div>
-              </Section>
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex flex-shrink-0 items-center justify-end border-t border-[#f3f4f6] px-[22px] py-3.5">
+    <FloatingWindow
+      width={560}
+      onClose={onClose}
+      iconBg="#eef2ff"
+      iconColor="#4f46e5"
+      icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>}
+      title={<div className="text-[15px] font-extrabold tracking-[-0.2px] text-[#111827]">Tra cứu MoMo</div>}
+      subtitle={<div className="max-w-[320px] truncate font-mono text-[11px] text-[#9ca3af]" title={orderId}>{orderId}</div>}
+      footer={
+        <div className="ml-auto">
           <button className="rounded-[9px] border border-[rgba(174,0,112,0.1)] bg-[#f9fafb] px-5 py-2 text-[13px] font-semibold text-[#374151] transition-all hover:bg-white" onClick={onClose}>Đóng</button>
         </div>
-      </div>
-    </div>
+      }
+    >
+      {loading && (
+        <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" style={{ animation:'rot 0.8s linear infinite' }}><path d="M3 12a9 9 0 0 1 9-9"/></svg>
+          <div className="text-[13px] font-semibold text-[#6b7280]">Đang tra cứu trên MoMo server...</div>
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="mx-[22px] my-4 flex items-center gap-2 rounded-[10px] border border-[#fecaca] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] font-semibold text-[#dc2626]">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+          {error}
+        </div>
+      )}
+
+      {!loading && result && (
+        <>
+          {result._reconciled && (
+            <div className="mx-[22px] mt-4 flex items-center gap-2 rounded-[10px] border border-[#fde68a] bg-[#fffbeb] px-3.5 py-2.5 text-[13px] font-semibold text-[#92400e]">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+              Phát hiện lệch trạng thái (IPN có thể đã bị rớt) — đã tự động cập nhật từ "{STATUS_META[result._previousStatus]?.label || result._previousStatus}" sang "{STATUS_META[result._newStatus]?.label || result._newStatus}"
+            </div>
+          )}
+          <div className="flex flex-col gap-1 px-[22px] py-4" style={{ background: isOk?'#f0fdf4':'#fff5f5' }}>
+            <div className="font-mono text-[22px] font-extrabold tracking-[-0.5px]" style={{ color: isOk?'#16a34a':'#dc2626' }}>{isOk?'✓':'✗'} {rc}</div>
+            <div className="text-sm font-bold text-[#374151]">{rcDesc}</div>
+            {result.message && <div className="text-xs text-[#6b7280]">{result.message}</div>}
+          </div>
+
+          <Section title="Thông tin giao dịch">
+            <Row label="orderId"      value={result.orderId}   mono copy={() => copy(result.orderId)} />
+            <Row label="requestId"    value={result.requestId} mono copy={() => copy(result.requestId)} />
+            <Row label="transId"      value={result.transId?.toString()||'—'} mono />
+            <Row label="partnerCode"  value={result.partnerCode} mono />
+            <Row label="amount"        value={result.amount !== undefined ? `${fmt(result.amount)} ₫` : '—'} />
+            <Row label="payType"       value={result.payType || '—'} />
+            <Row label="paymentOption" value={result.paymentOption || '—'} />
+            <Row label="responseTime"  value={result.responseTime ? fmtMs(result.responseTime) : '—'} />
+          </Section>
+
+          <Section title="Raw Response">
+            <div className="mb-4 max-h-[200px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">{JSON.stringify(result, null, 2)}</div>
+          </Section>
+        </>
+      )}
+    </FloatingWindow>
   )
 }
 
@@ -1540,7 +1646,6 @@ export default function AdminDashboardPage() {
           <QueryResultModal
             orderId={queryOrderId}
             loading={queryLoading} result={queryResult} error={queryError}
-            stacked={!!detailOrder}
             onClose={() => { setQueryModal(false); setQueryResult(null); setQueryError(null) }}
           />
         )}
