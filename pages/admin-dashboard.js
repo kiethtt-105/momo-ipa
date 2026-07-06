@@ -179,6 +179,9 @@ function IconLogout(props)  { return <svg {...props} viewBox="0 0 24 24" fill="n
 function IconMenu(props)    { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg> }
 function IconX(props)       { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
 function IconRefresh(props) { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg> }
+function IconMinus(props)      { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg> }
+function IconSquare(props)     { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="5" y="5" width="14" height="14" rx="2"/></svg> }
+function IconRestoreWin(props) { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="7.5" y="3.5" width="13" height="13" rx="2"/><path d="M16.5 16.5H5.5a2 2 0 0 1-2-2V5.5"/></svg> }
 
 // ─── ANIMATED ORBS ─────────────────────────────────────────────────────────
 function Orbs() {
@@ -427,13 +430,72 @@ function nextCascadeOffset() {
   return { x: __floatWinCascade * 26, y: __floatWinCascade * 22 }
 }
 
-function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor = '#ae0070', onClose, children, footer, width = 560 }) {
-  const [pos,      setPos]      = useState(null)
-  const [z,        setZ]        = useState(0)
-  const [dragging, setDragging] = useState(false)
-  const dragState = useRef({ startX: 0, startY: 0, origX: 0, origY: 0 })
+// ─── WINDOW REGISTRY (hệ đa cửa sổ thật) ───────────────────────────────────
+// Sổ đăng ký toàn cục, độc lập với cây React của từng FloatingWindow — mỗi
+// cửa sổ tự "đăng ký" mình khi mount và "gỡ đăng ký" khi đóng hẳn. Khi 1 cửa
+// sổ bấm "thu nhỏ", nó chỉ cập nhật cờ minimized trong registry (chứ không
+// unmount), rồi FloatingWinDock (thanh dock cố định dưới màn hình) render lại
+// theo registry này để hiện icon "khôi phục" cho từng cửa sổ đang thu nhỏ.
+// Nhờ tách registry ra ngoài, nhiều cửa sổ (Chi tiết / Tra cứu / Xác nhận /
+// Xác nhận xoá...) có thể tồn tại song song, độc lập, đúng nghĩa multi-window.
+const __floatWinRegistry  = new Map()
+const __floatWinListeners = new Set()
+function __notifyFloatWin() { __floatWinListeners.forEach(fn => fn()) }
+function registerFloatWin(id, meta) { __floatWinRegistry.set(id, meta); __notifyFloatWin() }
+function updateFloatWin(id, patch) {
+  const cur = __floatWinRegistry.get(id)
+  if (!cur) return
+  __floatWinRegistry.set(id, { ...cur, ...patch })
+  __notifyFloatWin()
+}
+function unregisterFloatWin(id) { __floatWinRegistry.delete(id); __notifyFloatWin() }
+let __floatWinIdSeq = 0
+function useFloatWinList() {
+  const [, forceTick] = useState(0)
+  useEffect(() => {
+    const fn = () => forceTick(t => t + 1)
+    __floatWinListeners.add(fn)
+    return () => __floatWinListeners.delete(fn)
+  }, [])
+  return Array.from(__floatWinRegistry.entries()).map(([id, meta]) => ({ id, ...meta }))
+}
+
+// Dock cố định dưới màn hình — chỉ hiện khi có ít nhất 1 cửa sổ đang thu nhỏ.
+// Bấm vào 1 "thẻ" trong dock sẽ khôi phục đúng cửa sổ đó về vị trí cũ.
+function FloatingWinDock() {
+  const wins = useFloatWinList().filter(w => w.minimized)
+  if (!wins.length) return null
+  return (
+    <div className="fixed inset-x-0 bottom-4 z-[500] flex flex-wrap items-center justify-center gap-2 px-4" style={{ animation: 'fadein 0.15s ease' }}>
+      {wins.map(w => (
+        <button
+          key={w.id}
+          onClick={w.onRestore}
+          className="group flex max-w-[240px] items-center gap-2 rounded-full border border-[rgba(174,0,112,0.12)] bg-white/95 py-2 pl-2 pr-3.5 shadow-[0_10px_30px_rgba(23,7,20,0.18),0_0_0_1px_rgba(174,0,112,0.05)] backdrop-blur-[16px] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(23,7,20,0.22)] active:scale-95"
+          title="Khôi phục cửa sổ"
+        >
+          <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full" style={{ background: w.iconBg || '#fff0f7', color: w.iconColor || '#ae0070' }}>
+            <IconRestoreWin className="h-3 w-3" />
+          </span>
+          <span className="truncate text-[12.5px] font-bold text-[#374151]">{w.label}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor = '#ae0070', onClose, children, footer, width = 560, taskbarLabel }) {
+  const [pos,       setPos]       = useState(null)
+  const [z,         setZ]         = useState(0)
+  const [dragging,  setDragging]  = useState(false)
+  const [minimized, setMinimized] = useState(false)
+  const [maximized, setMaximized] = useState(false)
+  const dragState  = useRef({ startX: 0, startY: 0, origX: 0, origY: 0 })
   const cascadeRef = useRef(null)
+  const prevGeom   = useRef(null) // { pos } trước khi phóng to, để khôi phục lại
+  const winId      = useRef(null)
   if (cascadeRef.current === null) cascadeRef.current = nextCascadeOffset()
+  if (winId.current === null) winId.current = `fw-${++__floatWinIdSeq}`
 
   // Canh giữa màn hình lúc mount (1 lần), cộng thêm lệch cascade để nhiều
   // cửa sổ mở cùng lúc không đè khít lên nhau.
@@ -449,6 +511,18 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Đăng ký cửa sổ vào registry chung khi mount, gỡ khi đóng hẳn — đây là
+  // "nguồn sự thật" để FloatingWinDock biết cửa sổ nào đang bị thu nhỏ.
+  useEffect(() => {
+    registerFloatWin(winId.current, {
+      label: taskbarLabel || 'Cửa sổ', iconBg, iconColor, minimized: false,
+      onRestore: () => { setMinimized(false); setZ(bringFloatWinToFront()) },
+    })
+    return () => unregisterFloatWin(winId.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => { updateFloatWin(winId.current, { minimized }) }, [minimized])
+
   function clamp(x, y) {
     const w = typeof window !== 'undefined' ? window.innerWidth  : 1200
     const h = typeof window !== 'undefined' ? window.innerHeight : 800
@@ -459,7 +533,8 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
   }
 
   function onHeaderPointerDown(e) {
-    if (e.target.closest('button')) return // không kéo khi bấm nút đóng
+    if (e.target.closest('button')) return // không kéo khi bấm các nút điều khiển
+    if (maximized) return // đang phóng to thì không kéo (bấm nút khôi phục trước)
     setZ(bringFloatWinToFront())
     setDragging(true)
     dragState.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
@@ -482,12 +557,34 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (!pos) return null // chờ tính vị trí xong mới hiện, tránh nháy ở góc (0,0)
+  function toggleMaximize() {
+    setZ(bringFloatWinToFront())
+    if (!maximized) {
+      prevGeom.current = pos
+      setMaximized(true)
+    } else {
+      setMaximized(false)
+      if (prevGeom.current) setPos(prevGeom.current)
+    }
+  }
+  function minimize() {
+    setMinimized(true)
+  }
+
+  if (!pos) return null    // chờ tính vị trí xong mới hiện, tránh nháy ở góc (0,0)
+  if (minimized) return null // đang thu nhỏ — hiện dưới dạng thẻ trong FloatingWinDock
 
   return (
     <div
-      className="fixed flex max-h-[88vh] flex-col overflow-hidden rounded-[20px] bg-white"
-      style={{
+      className={`fixed flex flex-col overflow-hidden rounded-[20px] bg-white ${maximized ? '' : 'max-h-[88vh]'}`}
+      style={maximized ? {
+        left: 16, top: 16, right: 16, bottom: 16,
+        width: 'auto', height: 'auto',
+        zIndex: z,
+        boxShadow: '0 24px 70px rgba(23,7,20,0.20), 0 8px 22px rgba(174,0,112,0.10), 0 0 0 1px rgba(174,0,112,0.07)',
+        transition: 'left 0.2s ease, top 0.2s ease, right 0.2s ease, bottom 0.2s ease',
+        animation: 'floatWinIn 0.22s cubic-bezier(0.34,1.35,0.64,1) both',
+      } : {
         left: pos.x, top: pos.y,
         width: `min(${width}px, calc(100vw - 32px))`,
         zIndex: z,
@@ -499,11 +596,12 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
       }}
       onMouseDownCapture={() => setZ(bringFloatWinToFront())}
     >
-      {/* Header — kéo bằng vùng này */}
+      {/* Header — kéo bằng vùng này, double-click để phóng to/khôi phục */}
       <div
-        className="flex flex-shrink-0 cursor-grab select-none items-center justify-between border-b border-[#f3f4f6] px-[22px] py-4 active:cursor-grabbing"
+        className={`flex flex-shrink-0 select-none items-center justify-between border-b border-[#f3f4f6] px-[22px] py-4 ${maximized ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
         style={{ touchAction: 'none' }}
         onPointerDown={onHeaderPointerDown}
+        onDoubleClick={e => { if (!e.target.closest('button')) toggleMaximize() }}
       >
         <div className="flex min-w-0 items-center gap-2.5">
           {icon && (
@@ -516,12 +614,29 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
             {subtitle}
           </div>
         </div>
-        <button
-          className="ml-3 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-[#f3f4f6] text-sm text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]"
-          onClick={onClose}
-        >
-          ✕
-        </button>
+        <div className="ml-3 flex flex-shrink-0 items-center gap-1.5">
+          <button
+            className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-[#f3f4f6] text-[#6b7280] transition-all hover:bg-[#e5e7eb] hover:text-[#374151]"
+            onClick={minimize}
+            title="Thu nhỏ"
+          >
+            <IconMinus className="h-3.5 w-3.5" />
+          </button>
+          <button
+            className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-[#f3f4f6] text-[#6b7280] transition-all hover:bg-[#e5e7eb] hover:text-[#374151]"
+            onClick={toggleMaximize}
+            title={maximized ? 'Khôi phục kích thước' : 'Phóng to'}
+          >
+            {maximized ? <IconRestoreWin className="h-3.5 w-3.5" /> : <IconSquare className="h-3 w-3" />}
+          </button>
+          <button
+            className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-[#f3f4f6] text-sm text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]"
+            onClick={onClose}
+            title="Đóng"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* Body */}
@@ -554,6 +669,7 @@ function DetailModal({ order: o, onClose, onDelete, onQuery, onConfirm }) {
     <FloatingWindow
       width={600}
       onClose={onClose}
+      taskbarLabel={`Chi tiết · ${o.orderId}`}
       title={
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1.5 rounded-[20px] px-[11px] py-[5px] text-xs font-bold" style={{ background:sm.bg, color:sm.color }}>
@@ -682,6 +798,7 @@ function ConfirmModal({ orderId, amount, loading, result, error, onConfirm, onCa
     <FloatingWindow
       width={580}
       onClose={onClose}
+      taskbarLabel={`Xác nhận GD · ${orderId}`}
       title={<div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#6b7280]">Xác nhận / Huỷ giao dịch</div>}
       subtitle={<div className="text-xs text-[#6b7280]">POST /v2/gateway/api/confirm · {orderId}</div>}
       footer={
@@ -747,6 +864,7 @@ function QueryResultModal({ orderId, loading, result, error, onClose }) {
       onClose={onClose}
       iconBg="#eef2ff"
       iconColor="#4f46e5"
+      taskbarLabel={`Tra cứu MoMo · ${orderId}`}
       icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>}
       title={<div className="text-[15px] font-extrabold tracking-[-0.2px] text-[#111827]">Tra cứu MoMo</div>}
       subtitle={<div className="max-w-[320px] truncate font-mono text-[11px] text-[#9ca3af]" title={orderId}>{orderId}</div>}
@@ -800,6 +918,57 @@ function QueryResultModal({ orderId, loading, result, error, onClose }) {
           </Section>
         </>
       )}
+    </FloatingWindow>
+  )
+}
+
+// ─── DELETE CONFIRM MODAL (xác nhận mật khẩu trước khi xoá) ────────────────
+// Thay cho window.confirm() cũ — giờ xoá đơn (dù 1 đơn hay xoá hàng loạt) đều
+// phải nhập lại mật khẩu quản trị để xác nhận, tránh bấm nhầm gây mất dữ liệu
+// không thể hoàn tác. Mật khẩu được xác thực qua endpoint /api/admin/login
+// có sẵn (cùng cơ chế với màn đăng nhập), không tự so sánh chuỗi ở client.
+function DeleteConfirmModal({ count, password, setPassword, checking, error, onConfirm, onClose }) {
+  return (
+    <FloatingWindow
+      width={440}
+      onClose={onClose}
+      taskbarLabel={`Xác nhận xoá (${count})`}
+      iconBg="#fee2e2"
+      iconColor="#dc2626"
+      icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>}
+      title={<div className="text-[15px] font-extrabold tracking-[-0.2px] text-[#111827]">Xác nhận xoá {count} đơn</div>}
+      subtitle={<div className="text-xs font-semibold text-[#dc2626]">Không thể hoàn tác — nhập mật khẩu để tiếp tục</div>}
+      footer={
+        <div className="ml-auto flex gap-2">
+          <button className="rounded-[9px] border border-[rgba(174,0,112,0.1)] bg-[#f9fafb] px-5 py-2 text-[13px] font-semibold text-[#374151] transition-all hover:bg-white" onClick={onClose} disabled={checking}>
+            Huỷ
+          </button>
+          <button
+            className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#dc2626] px-5 py-2 text-[13px] font-bold text-white transition-all hover:bg-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={onConfirm}
+            disabled={checking || !password}
+          >
+            {checking && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation:'rot 0.8s linear infinite' }}><path d="M3 12a9 9 0 0 1 9-9"/></svg>}
+            Xác nhận xoá
+          </button>
+        </div>
+      }
+    >
+      <div className="px-[22px] py-4">
+        <p className="mb-3 text-[13px] text-[#374151]">
+          Bạn sắp xoá vĩnh viễn <strong>{count}</strong> giao dịch khỏi hệ thống. Vui lòng nhập mật khẩu quản trị để xác nhận.
+        </p>
+        <input
+          type="password" autoFocus value={password}
+          onChange={e => setPassword(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && password && !checking && onConfirm()}
+          placeholder="Mật khẩu quản trị..."
+          className={`w-full rounded-xl border-[1.5px] bg-[rgba(245,237,242,0.5)] px-4 py-[11px] font-[Inter,sans-serif] text-[14px] text-[#111827] transition-all focus:border-[#ae0070] focus:bg-white focus:shadow-[0_0_0_4px_rgba(174,0,112,0.07)] ${
+            error ? 'border-[#dc2626] bg-[#fff5f5]' : 'border-[rgba(174,0,112,0.15)]'
+          }`}
+        />
+        {error && <p className="mt-2 text-[12.5px] font-semibold text-[#dc2626]">⚠ Mật khẩu không chính xác</p>}
+      </div>
     </FloatingWindow>
   )
 }
@@ -1273,6 +1442,14 @@ export default function AdminDashboardPage() {
   const [confirmResult,   setConfirmResult]   = useState(null)
   const [confirmError,    setConfirmError]    = useState(null)
 
+  // Popup nhập mật khẩu để xác nhận trước khi xoá đơn — deleteRequest giữ
+  // danh sách orderId đang chờ xoá; chỉ thực sự gọi API xoá sau khi mật khẩu
+  // được xác thực đúng qua /api/admin/login.
+  const [deleteRequest,   setDeleteRequest]   = useState(null) // { ids: string[] } | null
+  const [deletePassword,  setDeletePassword]  = useState('')
+  const [deleteChecking,  setDeleteChecking]  = useState(false)
+  const [deleteError,     setDeleteError]     = useState(false)
+
   const ordersRef   = useRef([])
   const fetchingRef = useRef(false)
   const reconcilingAllRef = useRef(false)
@@ -1382,7 +1559,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     const fn = e => {
-      if (e.key === 'Escape') { setDetail(null); setConfirmModal(false); setSidebarOpen(false) }
+      if (e.key === 'Escape') { setDetail(null); setConfirmModal(false); setSidebarOpen(false); setDeleteRequest(null) }
     }
     window.addEventListener('keydown', fn)
     return () => window.removeEventListener('keydown', fn)
@@ -1533,8 +1710,8 @@ export default function AdminDashboardPage() {
     })
   }, [])
 
-  const doDelete = useCallback(async (ids) => {
-    if (!confirm(`Xóa ${ids.length} đơn?\nKhông thể hoàn tác!`)) return
+  // Thực thi xoá thật sự — chỉ được gọi SAU KHI mật khẩu đã xác thực đúng.
+  const performDelete = useCallback(async (ids) => {
     try {
       await Promise.all(ids.map(id => fetch('/api/momo/delete', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ orderId:id }) })))
       setDetail(d => (d && ids.includes(d)) ? null : d)
@@ -1544,6 +1721,33 @@ export default function AdminDashboardPage() {
       console.error(err); alert('Lỗi khi xóa')
     }
   }, [fetchOrders])
+
+  // doDelete giờ chỉ MỞ popup xác nhận mật khẩu (thay cho window.confirm cũ) —
+  // việc xoá thật sự dời vào performDelete, chạy sau khi confirmDeleteWithPassword thành công.
+  const doDelete = useCallback((ids) => {
+    if (!ids.length) return
+    setDeleteError(false)
+    setDeletePassword('')
+    setDeleteRequest({ ids })
+  }, [])
+
+  const confirmDeleteWithPassword = useCallback(async () => {
+    if (!deleteRequest) return
+    setDeleteChecking(true)
+    setDeleteError(false)
+    try {
+      const res = await fetch('/api/admin/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ password: deletePassword }) })
+      if (!res.ok) { setDeleteError(true); setDeleteChecking(false); return }
+      const ids = deleteRequest.ids
+      setDeleteRequest(null)
+      setDeletePassword('')
+      setDeleteChecking(false)
+      await performDelete(ids)
+    } catch {
+      setDeleteError(true)
+      setDeleteChecking(false)
+    }
+  }, [deleteRequest, deletePassword, performDelete])
 
   async function login() {
     setPwError(false)
@@ -1649,6 +1853,20 @@ export default function AdminDashboardPage() {
             onClose={() => { setQueryModal(false); setQueryResult(null); setQueryError(null) }}
           />
         )}
+
+        {/* Delete Confirm Modal (xác nhận mật khẩu trước khi xoá) */}
+        {deleteRequest && (
+          <DeleteConfirmModal
+            count={deleteRequest.ids.length}
+            password={deletePassword} setPassword={setDeletePassword}
+            checking={deleteChecking} error={deleteError}
+            onConfirm={confirmDeleteWithPassword}
+            onClose={() => { setDeleteRequest(null); setDeletePassword(''); setDeleteError(false) }}
+          />
+        )}
+
+        {/* Dock hiển thị các cửa sổ đang thu nhỏ — hệ đa cửa sổ thật */}
+        <FloatingWinDock />
 
         <div className="relative z-[1] flex min-h-screen">
         <Sidebar
