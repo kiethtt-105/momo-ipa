@@ -421,26 +421,31 @@ function useFloatWinList() {
   return Array.from(__floatWinRegistry.entries()).map(([id, meta]) => ({ id, ...meta }))
 }
 
-// Dock cố định dưới màn hình — chỉ hiện khi có ít nhất 1 cửa sổ đang thu nhỏ.
-// Bấm vào 1 "thẻ" trong dock sẽ khôi phục đúng cửa sổ đó về vị trí cũ.
-function FloatingWinDock() {
-  const wins = useFloatWinList().filter(w => w.minimized)
+// Trước đây dock các cửa sổ thu nhỏ nằm ở 1 thanh RIÊNG, nổi phía trên thanh
+// LookupBar (bottom-[76px]) → tạo thành 2 hàng chồng lên nhau, và vì bảng chỉ
+// chừa padding-bottom đúng bằng chiều cao của LookupBar nên hàng dock này đè
+// lên hàng cuối cùng của bảng, che mất thông tin.
+// => Gộp chung vào ĐÚNG 1 HÀNG duy nhất với LookupBar (xem bên dưới), không
+// còn là 1 lớp nổi tách biệt nữa. Giờ chỉ trả về danh sách chip để LookupBar
+// tự render ngay trong hàng của nó.
+function MinimizedChips({ wins }) {
   if (!wins.length) return null
   return (
-    <div className="fixed inset-x-0 bottom-[76px] z-[500] flex flex-nowrap items-center gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ animation: 'fadein 0.15s ease', justifyContent: wins.length > 3 ? 'flex-start' : 'center' }}>
+    <div className="flex flex-shrink-0 items-center gap-2 overflow-x-auto pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ animation: 'fadein 0.15s ease' }}>
       {wins.map(w => (
         <button
           key={w.id}
           onClick={w.onRestore}
-          className="group flex max-w-[240px] flex-shrink-0 items-center gap-2 rounded-full border border-[rgba(174,0,112,0.12)] bg-white/95 py-2 pl-2 pr-3.5 shadow-[0_10px_30px_rgba(23,7,20,0.18),0_0_0_1px_rgba(174,0,112,0.05)] backdrop-blur-[16px] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(23,7,20,0.22)] active:scale-95"
+          className="group flex max-w-[180px] flex-shrink-0 items-center gap-1.5 rounded-full border border-[rgba(174,0,112,0.15)] bg-[#fff0f7] py-1.5 pl-1.5 pr-3 transition-all hover:-translate-y-0.5 hover:bg-[#fde3f0] active:scale-95"
           title="Khôi phục cửa sổ"
         >
-          <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full" style={{ background: w.iconBg || '#fff0f7', color: w.iconColor || '#ae0070' }}>
-            <IconRestoreWin className="h-3 w-3" />
+          <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full" style={{ background: w.iconBg || '#fff', color: w.iconColor || '#ae0070' }}>
+            <IconRestoreWin className="h-2.5 w-2.5" />
           </span>
-          <span className="truncate text-[12.5px] font-bold text-[#374151]">{w.label}</span>
+          <span className="truncate text-[12px] font-bold text-[#374151]">{w.label}</span>
         </button>
       ))}
+      <span className="mr-1 h-6 w-px flex-shrink-0 bg-[rgba(174,0,112,0.12)]" />
     </div>
   )
 }
@@ -456,9 +461,14 @@ function FloatingWinDock() {
 // Trên màn hình hẹp, dãy tab lọc scroll ngang riêng, 2 nút luôn cố định bên
 // phải (flex-shrink-0) để không bị đẩy khuất.
 function LookupBar({ onOpenLookup, onOpenCreate, filter, setFilter, counts }) {
+  // Danh sách cửa sổ đang thu nhỏ — hiện chung NGAY TRONG hàng này (không còn
+  // là 1 thanh dock nổi riêng phía trên nữa), để không đè lên bảng phía trên.
+  const minimizedWins = useFloatWinList().filter(w => w.minimized)
   return (
     <div className="fixed inset-x-0 bottom-0 z-[450] border-t border-[rgba(174,0,112,0.1)] bg-white/92 px-3 py-2 shadow-[0_-6px_24px_rgba(174,0,112,0.08)] backdrop-blur-[20px] max-md:px-2">
       <div className="mx-auto flex max-w-[1500px] items-center gap-2">
+        <MinimizedChips wins={minimizedWins} />
+
         {/* Tab lọc trạng thái — scroll ngang riêng khi không đủ chỗ */}
         <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {FILTERS.map(f => (
@@ -2096,8 +2106,8 @@ export default function AdminDashboardPage() {
           />
         )}
 
-        {/* Dock hiển thị các cửa sổ đang thu nhỏ — hệ đa cửa sổ thật */}
-        <FloatingWinDock />
+        {/* Các cửa sổ đang thu nhỏ giờ hiện ngay trong LookupBar bên dưới —
+            gộp thành 1 hàng duy nhất, không còn thanh dock nổi riêng đè lên bảng. */}
 
         {/* Thanh cố định ở đáy màn hình — nút "Tra cứu giao dịch" luôn hiện sẵn,
             bấm vào bất kỳ lúc nào (không cần vào menu nào trước) để mở cửa sổ
