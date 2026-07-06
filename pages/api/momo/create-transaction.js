@@ -357,6 +357,12 @@ export default function CreateTransactionPage() {
   const [scanSubmittedCode, setScanSubmittedCode] = useState('') // mã đã gửi, hiển thị bên panel trạng thái
   const scanPollingRef = useRef(false) // chặn 2 lần poll tự động chồng lên nhau
 
+  // ─── SCAN: DỮ LIỆU HIỂN THỊ LẤY TỪ SERVER (không dùng state `amount`/`orderInfo`
+  // đang gõ trên form nữa) — sau khi tạo đơn nháp, gọi /api/momo/status để đọc lại
+  // đúng bản ghi đã lưu trong Redis, và mỗi lần poll trạng thái cũng đồng bộ lại
+  // 2 field này để panel luôn khớp với dữ liệu thật trên server.
+  const [scanOrderData, setScanOrderData] = useState(null) // { orderId, amount, orderInfo }
+
   // ─── P2P QR INLINE STATE ────────────────────────────────────
   // Khi method = p2p và đã bấm "Xác nhận", QR thanh toán hiện ngay
   // trong trang (chia đôi màn hình) thay vì mở tab MoMo mới.
@@ -374,6 +380,11 @@ export default function CreateTransactionPage() {
   const [p2pTimeLeft,      setP2pTimeLeft]      = useState(0)    // giây còn lại, cập nhật mỗi giây
   const [p2pCopied,        setP2pCopied]        = useState(false)
   const p2pPollingRef = useRef(false) // chặn 2 lần poll tự động chồng lên nhau
+
+  // ─── P2P: DỮ LIỆU HIỂN THỊ LẤY TỪ SERVER — tương tự scanOrderData ở trên,
+  // panel "Thông tin đơn hàng" của P2P cũng đọc từ /api/momo/status thay vì
+  // dùng thẳng state `amount`/`orderInfo` mà admin đang gõ trên form tạo đơn.
+  const [p2pOrderData,     setP2pOrderData]     = useState(null) // { orderId, amount, orderInfo }
 
   const videoRef     = useRef(null)
   const canvasRef     = useRef(null)
@@ -415,6 +426,26 @@ export default function CreateTransactionPage() {
         setCamError('Không tìm thấy camera.')
       else
         setCamError(`Lỗi camera: ${err.message}`)
+    }
+  }
+
+  // Đọc lại bản ghi thật của 1 đơn hàng từ server (Redis, qua /api/momo/status)
+  // — dùng cho panel hiển thị "Thông tin đơn hàng" thay vì tin vào state form.
+  // Trả về null nếu lỗi/không có, để nơi gọi tự quyết định fallback.
+  async function fetchOrderRecord(orderId) {
+    if (!orderId) return null
+    try {
+      const res = await fetch(`/api/momo/status?orderId=${encodeURIComponent(orderId)}`)
+      if (!res.ok) return null
+      const data = await res.json()
+      return {
+        orderId,
+        amount: (data.amount !== undefined && data.amount !== null) ? parseInt(data.amount, 10) : null,
+        orderInfo: data.orderInfo || null,
+        status: data.status || null,
+      }
+    } catch (e) {
+      return null
     }
   }
 
@@ -469,6 +500,7 @@ export default function CreateTransactionPage() {
     setScanCheckMsg('')
     setScanSubmittedCode('')
     scanPollingRef.current = false
+    setScanOrderData(null)
     setAmount('')
     setOrderInfo(genOrderId())
   }
@@ -490,6 +522,7 @@ export default function CreateTransactionPage() {
     p2pPollingRef.current = false
     p2pSyncedOrderRef.current = null
     p2pAutoVerifyTickRef.current = 0
+    setP2pOrderData(null)
     setAmount('')
     setOrderInfo(genOrderId())
     // Chỉ xoá URL cứng (orderId/payUrl) ở ĐÂY — lúc panel thực sự đóng.
@@ -510,7 +543,8 @@ export default function CreateTransactionPage() {
         alert(data.error || 'Tạo giao dịch thất bại, thử lại sau')
         return
       }
-      setP2pOrderId(data.orderId || finalOrderInfo)
+      const finalOrderId = data.orderId || finalOrderInfo
+      setP2pOrderId(finalOrderId)
       setP2pQrImage(data.qrCodeImage || '')
       setP2pPayUrl(data.payUrl || '')
       setP2pDeeplink(data.deeplink || '')
@@ -520,7 +554,12 @@ export default function CreateTransactionPage() {
       setP2pExpiresAt(expiresAt)
       setP2pCopied(false)
       setOrderInfo(finalOrderInfo)
+      // Tương tự Scan: dùng tạm giá trị vừa tạo, rồi ghi đè bằng bản ghi thật
+      // đọc từ /api/momo/status ngay sau đó.
+      setP2pOrderData({ orderId: finalOrderId, amount: parseInt(amt, 10) || null, orderInfo: finalOrderInfo })
       setP2pActive(true)
+
+      fetchOrderRecord(finalOrderId).then(record => { if (record) setP2pOrderData(record) })
 
       // Ghi "cứng" thông tin đơn vào URL (shallow, không reload trang) —
       // nếu admin lỡ bấm F5, trang sẽ đọc lại đúng đơn này ở effect resume
@@ -579,6 +618,14 @@ export default function CreateTransactionPage() {
       const data = await res.json()
       const status = data.status || 'PENDING'
       setP2pStatus(status)
+      // Đồng bộ lại dữ liệu hiển thị (số tiền, nội dung) theo đúng bản ghi
+      // server đang có — không để panel tụt lại theo giá trị lúc tạo đơn.
+      setP2pOrderData(prev => ({
+        orderId: p2pOrderId,
+        amount: (data.amount !== undefined && data.amount !== null) ? parseInt(data.amount, 10) : (prev?.amount ?? null),
+        orderInfo: data.orderInfo || prev?.orderInfo || null,
+        status,
+      }))
 
       if (status === 'PAID') {
         setP2pCheckMsg('✓ Thanh toán thành công!')
@@ -622,6 +669,14 @@ export default function CreateTransactionPage() {
       const data = await res.json()
       const status = data.status || 'PENDING'
       setScanStatus(status)
+      // Đồng bộ lại dữ liệu hiển thị (số tiền, nội dung) theo đúng bản ghi
+      // server đang có — không để panel tụt lại theo giá trị lúc tạo đơn.
+      setScanOrderData(prev => ({
+        orderId: targetOrderId,
+        amount: (data.amount !== undefined && data.amount !== null) ? parseInt(data.amount, 10) : (prev?.amount ?? null),
+        orderInfo: data.orderInfo || prev?.orderInfo || null,
+        status,
+      }))
 
       if (status === 'PAID') {
         setScanCheckMsg('✓ Thanh toán thành công!')
@@ -826,7 +881,13 @@ export default function CreateTransactionPage() {
     setScanCheckMsg('')
     setScanSubmittedCode('')
     scanPollingRef.current = false
+    // Panel hiển thị dùng tạm giá trị vừa tạo trong lúc chờ server xác nhận,
+    // rồi được ghi đè ngay bằng bản ghi thật đọc từ /api/momo/status bên dưới.
+    setScanOrderData({ orderId: generatedId, amount: parseInt(amt, 10) || null, orderInfo: finalOrderInfo })
     setScanActive(true)
+
+    const record = await fetchOrderRecord(generatedId)
+    if (record) setScanOrderData(record)
   }
 
   // Gửi mã thanh toán (18 số, có thể có MM) lên /api/momo/scan (POST)
@@ -989,6 +1050,9 @@ export default function CreateTransactionPage() {
       setP2pDeeplink(deeplinkStr)
       setP2pCheckMsg('')
       setP2pActive(true)
+      // Resume qua F5 chỉ có orderId/payUrl trên URL, chưa có amount/orderInfo
+      // thật — đọc lại từ server để panel hiển thị đúng, không đoán.
+      fetchOrderRecord(orderIdStr).then(record => { if (record) setP2pOrderData(record) })
 
       if (expiresAtNum && expiresAtNum > Date.now()) {
         setP2pExpiresAt(expiresAtNum)
@@ -2195,16 +2259,16 @@ export default function CreateTransactionPage() {
                 <div className="scan-order-card">
                   <div className="scan-order-row">
                     <span>Mã đơn hàng</span>
-                    <span className="scan-order-mono">{scanOrderId || '—'}</span>
+                    <span className="scan-order-mono">{scanOrderData?.orderId || scanOrderId || '—'}</span>
                   </div>
                   <div className="scan-order-row scan-order-amount">
                     <span>Số tiền</span>
-                    <span>{formatAmount(amount)}₫</span>
+                    <span>{scanOrderData?.amount != null ? formatAmount(String(scanOrderData.amount)) : '…'}₫</span>
                   </div>
                   <div className="scan-order-divider" />
                   <div className="scan-order-row">
                     <span>Nội dung</span>
-                    <span className="scan-order-mono">{orderInfo}</span>
+                    <span className="scan-order-mono">{scanOrderData?.orderInfo || '—'}</span>
                   </div>
                   {scanSubmittedCode && (
                     <>
@@ -2352,16 +2416,16 @@ export default function CreateTransactionPage() {
                 <div className="scan-order-card">
                   <div className="scan-order-row">
                     <span>Mã đơn hàng</span>
-                    <span className="scan-order-mono">{p2pOrderId || '—'}</span>
+                    <span className="scan-order-mono">{p2pOrderData?.orderId || p2pOrderId || '—'}</span>
                   </div>
                   <div className="scan-order-row scan-order-amount">
                     <span>Số tiền</span>
-                    <span>{formatAmount(amount)}₫</span>
+                    <span>{p2pOrderData?.amount != null ? formatAmount(String(p2pOrderData.amount)) : '…'}₫</span>
                   </div>
                   <div className="scan-order-divider" />
                   <div className="scan-order-row">
                     <span>Nội dung</span>
-                    <span className="scan-order-mono">{orderInfo}</span>
+                    <span className="scan-order-mono">{p2pOrderData?.orderInfo || '—'}</span>
                   </div>
                   <div className="scan-order-divider" />
                   <div className="scan-order-row">
