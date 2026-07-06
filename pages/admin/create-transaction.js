@@ -132,6 +132,14 @@ const IconArrow = () => (
     <path d="M5 12h14M12 5l7 7-7 7"/>
   </svg>
 )
+const IconStore = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <path d="M3 9.5 4.5 4h15L21 9.5"/>
+    <path d="M3 9.5a2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0"/>
+    <path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/>
+    <path d="M10 20v-5h4v5"/>
+  </svg>
+)
 
 // ─── AI AMOUNT WIDGET ───────────────────────────────────────
 function AiAmountWidget({ onAmountSelect }) {
@@ -1367,28 +1375,38 @@ export default function CreateTransactionPage() {
         }
 
         .store-section { margin-bottom: 20px; }
-        .store-select-wrap { position: relative; }
-        .store-select {
-          width: 100%;
-          appearance: none; -webkit-appearance: none;
+        .store-tabs {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .store-tab {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 9px 14px;
+          border-radius: 999px;
           border: 1.5px solid var(--border);
-          border-radius: 12px;
           background: var(--subtle);
-          padding: 11px 38px 11px 13px;
+          cursor: pointer;
+          transition: all 0.18s ease;
           font-family: inherit;
-          font-size: 13.5px; font-weight: 700;
-          color: var(--text);
-          outline: none; cursor: pointer; transition: all 0.18s ease;
+          font-size: 12.5px; font-weight: 700;
+          color: var(--muted);
+          outline: none;
           -webkit-tap-highlight-color: transparent;
         }
-        .store-select:focus { border-color: var(--mm); background: #fff; box-shadow: 0 0 0 3px var(--mm-mid); }
-        .store-select:disabled { opacity: 0.6; cursor: not-allowed; }
-        .store-select-arrow {
-          position: absolute; right: 13px; top: 50%; transform: translateY(-50%);
-          pointer-events: none; color: var(--muted);
+        .store-tab:hover:not(:disabled) { border-color: rgba(174,0,112,0.3); background: var(--mm-light); }
+        .store-tab.active {
+          border-color: var(--mm);
+          background: var(--mm-light);
+          color: var(--mm);
+          box-shadow: 0 0 0 3px var(--mm-mid);
         }
+        .store-tab-icon { display: flex; line-height: 0; color: inherit; }
+        .store-tab:disabled { opacity: 0.55; cursor: not-allowed; }
         .store-select-hint {
-          margin-top: 6px; font-size: 11px; font-weight: 600; color: var(--muted);
+          margin-top: 8px; font-size: 11px; font-weight: 600; color: var(--muted);
         }
 
         .order-section { margin-bottom: 20px; }
@@ -2175,20 +2193,19 @@ export default function CreateTransactionPage() {
             {stores.length > 1 && (
               <div className="store-section">
                 <div className="field-label">Cửa hàng</div>
-                <div className="store-select-wrap">
-                  <select
-                    className="store-select"
-                    value={storeId}
-                    onChange={e => setStoreId(e.target.value)}
-                    disabled={p2pActive || scanActive || storesLoading}
-                  >
-                    {stores.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}{s.default ? ' (mặc định)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="store-select-arrow" style={{ transform: 'translateY(-50%) rotate(90deg)' }}><IconArrow /></span>
+                <div className="store-tabs">
+                  {stores.map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`store-tab${storeId === s.id ? ' active' : ''}`}
+                      onClick={() => setStoreId(s.id)}
+                      disabled={p2pActive || scanActive || storesLoading}
+                    >
+                      <span className="store-tab-icon"><IconStore /></span>
+                      {s.name}
+                    </button>
+                  ))}
                 </div>
                 {(p2pActive || scanActive) && (
                   <div className="store-select-hint">Hủy giao dịch hiện tại để đổi cửa hàng khác</div>
