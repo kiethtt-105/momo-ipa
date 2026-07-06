@@ -224,6 +224,54 @@ const SortableTh = memo(function SortableTh({ label, sortKey: sk, currentKey, di
   )
 })
 
+// ─── SORTABLE + FILTERABLE TH ───────────────────────────────────────────────
+// Thêm "phễu lọc" ngay tại cột: bấm icon phễu mở 1 popover nhỏ chứa đúng select
+// đang có trong ColFilterBar (dùng chung state colFilters) — cho phép lọc ngay
+// tại cột thay vì phải kéo lên thanh lọc phía trên. Nhãn cột vẫn bấm để sort.
+const FilterableTh = memo(function FilterableTh({ label, sortKey: sk, currentKey, dir, onSort, filterKey, colFilters, setColFilters, options, renderOptionLabel }) {
+  const [open, setOpen] = useState(false)
+  const active = currentKey === sk
+  const hasFilter = filterKey && colFilters[filterKey] !== ''
+  return (
+    <th className="relative select-none whitespace-nowrap border-b border-[rgba(174,0,112,0.08)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[#6b7280]">
+      <span className="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-[#ae0070]" onClick={() => onSort(sk)}>
+        {label}
+        {active
+          ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ae0070" strokeWidth="3">{dir==='asc'?<path d="m18 15-6-6-6 6"/>:<path d="m6 9 6 6 6-6"/>}</svg>
+          : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-30"><path d="M12 5v14M5 12l7-7 7 7"/></svg>}
+      </span>
+      {filterKey && options && (
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+          title="Lọc theo cột này"
+          className={`ml-1 inline-flex h-4 w-4 items-center justify-center rounded-[4px] align-middle transition-all ${hasFilter ? 'bg-[#ae0070] text-white' : 'text-[#9ca3af] hover:bg-[rgba(174,0,112,0.1)] hover:text-[#ae0070]'}`}
+        >
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 5h16l-6 8v5l-4 2v-7z"/></svg>
+        </button>
+      )}
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute left-2 top-full z-30 mt-1 min-w-[150px] rounded-[10px] border border-[rgba(174,0,112,0.12)] bg-white p-1.5 normal-case shadow-[0_14px_34px_rgba(23,7,20,0.16)]" style={{ animation:'fadein 0.12s ease' }}>
+            <button
+              className={`block w-full rounded-[7px] px-2.5 py-[5px] text-left text-[12px] font-semibold ${!colFilters[filterKey] ? 'bg-[#fff0f7] text-[#ae0070]' : 'text-[#374151] hover:bg-[#f9fafb]'}`}
+              onClick={() => { setColFilters(f => ({ ...f, [filterKey]: '' })); setOpen(false) }}
+            >Tất cả</button>
+            {options.map(opt => (
+              <button
+                key={opt}
+                className={`block w-full rounded-[7px] px-2.5 py-[5px] text-left text-[12px] font-semibold ${colFilters[filterKey] === String(opt) ? 'bg-[#fff0f7] text-[#ae0070]' : 'text-[#374151] hover:bg-[#f9fafb]'}`}
+                onClick={() => { setColFilters(f => ({ ...f, [filterKey]: String(opt) })); setOpen(false) }}
+              >{renderOptionLabel ? renderOptionLabel(opt) : opt}</button>
+            ))}
+          </div>
+        </>
+      )}
+    </th>
+  )
+})
+
 // ─── ORDER CARD (mobile) ────────────────────────────────────────────────────
 const OrderCard = memo(function OrderCard({ o, selected, onToggle, onOpenDetail, onQuery, onDelete, onConfirm }) {
   const sm = STATUS_META[o.status] || STATUS_META.PENDING
@@ -851,76 +899,6 @@ function ConfirmModal({ orderId, amount, loading, result, error, onConfirm, onCa
   )
 }
 
-// ─── QUERY RESULT MODAL (popup tra cứu MoMo) ──────────────────────────────
-function QueryResultModal({ orderId, loading, result, error, onClose }) {
-  const copy   = t => navigator.clipboard?.writeText(String(t))
-  const rc     = result?.resultCode
-  const isOk   = rc === 0 || rc === 9000
-  const rcDesc = rc !== undefined ? getResultDesc(rc) : null
-
-  return (
-    <FloatingWindow
-      width={560}
-      onClose={onClose}
-      iconBg="#eef2ff"
-      iconColor="#4f46e5"
-      taskbarLabel={`Tra cứu MoMo · ${orderId}`}
-      icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>}
-      title={<div className="text-[15px] font-extrabold tracking-[-0.2px] text-[#111827]">Tra cứu MoMo</div>}
-      subtitle={<div className="max-w-[320px] truncate font-mono text-[11px] text-[#9ca3af]" title={orderId}>{orderId}</div>}
-      footer={
-        <div className="ml-auto">
-          <button className="rounded-[9px] border border-[rgba(174,0,112,0.1)] bg-[#f9fafb] px-5 py-2 text-[13px] font-semibold text-[#374151] transition-all hover:bg-white" onClick={onClose}>Đóng</button>
-        </div>
-      }
-    >
-      {loading && (
-        <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" style={{ animation:'rot 0.8s linear infinite' }}><path d="M3 12a9 9 0 0 1 9-9"/></svg>
-          <div className="text-[13px] font-semibold text-[#6b7280]">Đang tra cứu trên MoMo server...</div>
-        </div>
-      )}
-
-      {!loading && error && (
-        <div className="mx-[22px] my-4 flex items-center gap-2 rounded-[10px] border border-[#fecaca] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] font-semibold text-[#dc2626]">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
-          {error}
-        </div>
-      )}
-
-      {!loading && result && (
-        <>
-          {result._reconciled && (
-            <div className="mx-[22px] mt-4 flex items-center gap-2 rounded-[10px] border border-[#fde68a] bg-[#fffbeb] px-3.5 py-2.5 text-[13px] font-semibold text-[#92400e]">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-              Phát hiện lệch trạng thái (IPN có thể đã bị rớt) — đã tự động cập nhật từ "{STATUS_META[result._previousStatus]?.label || result._previousStatus}" sang "{STATUS_META[result._newStatus]?.label || result._newStatus}"
-            </div>
-          )}
-          <div className="flex flex-col gap-1 px-[22px] py-4" style={{ background: isOk?'#f0fdf4':'#fff5f5' }}>
-            <div className="font-mono text-[22px] font-extrabold tracking-[-0.5px]" style={{ color: isOk?'#16a34a':'#dc2626' }}>{isOk?'✓':'✗'} {rc}</div>
-            <div className="text-sm font-bold text-[#374151]">{rcDesc}</div>
-            {result.message && <div className="text-xs text-[#6b7280]">{result.message}</div>}
-          </div>
-
-          <Section title="Thông tin giao dịch">
-            <Row label="orderId"      value={result.orderId}   mono copy={() => copy(result.orderId)} />
-            <Row label="requestId"    value={result.requestId} mono copy={() => copy(result.requestId)} />
-            <Row label="transId"      value={result.transId?.toString()||'—'} mono />
-            <Row label="partnerCode"  value={result.partnerCode} mono />
-            <Row label="amount"        value={result.amount !== undefined ? `${fmt(result.amount)} ₫` : '—'} />
-            <Row label="payType"       value={result.payType || '—'} />
-            <Row label="paymentOption" value={result.paymentOption || '—'} />
-            <Row label="responseTime"  value={result.responseTime ? fmtMs(result.responseTime) : '—'} />
-          </Section>
-
-          <Section title="Raw Response">
-            <div className="mb-4 max-h-[200px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">{JSON.stringify(result, null, 2)}</div>
-          </Section>
-        </>
-      )}
-    </FloatingWindow>
-  )
-}
 
 // ─── DELETE CONFIRM MODAL (xác nhận mật khẩu trước khi xoá) ────────────────
 // Thay cho window.confirm() cũ — giờ xoá đơn (dù 1 đơn hay xoá hàng loạt) đều
@@ -977,7 +955,7 @@ function DeleteConfirmModal({ count, password, setPassword, checking, error, onC
 function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered, scoped }) {
   const hasActive = Object.values(colFilters).some(v => v !== '')
   const set = (key, val) => setColFilters(f => ({ ...f, [key]: val }))
-  const clear = () => setColFilters({ payType: '', source: '', resultCode: '' })
+  const clear = () => setColFilters({ payType: '', source: '', resultCode: '', hour: '' })
 
   const selClass = (active) =>
     `h-[30px] cursor-pointer appearance-none rounded-[8px] border py-0 pl-[9px] pr-[22px] text-[12px] font-semibold transition-all focus:outline-none ${
@@ -987,7 +965,7 @@ function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered, s
     }`
 
   return (
-    <div className={`mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3.5 py-2 text-[12px] transition-all ${hasActive ? 'border-[rgba(174,0,112,0.2)] bg-[#fff8fc]' : 'border-[rgba(174,0,112,0.08)] bg-white/60'}`}>
+    <div className={`flex flex-wrap items-center gap-2 rounded-b-2xl border-t px-4 py-2 text-[12px] transition-all ${hasActive ? 'border-[rgba(174,0,112,0.15)] bg-[#fff8fc]' : 'border-[rgba(174,0,112,0.06)] bg-[#fbf7fa]/60'}`}>
       <span className="flex-shrink-0 text-[11px] font-bold uppercase tracking-wide text-[#9b4470]">Lọc cột</span>
 
       {/* Hình thức thanh toán */}
@@ -1020,6 +998,17 @@ function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered, s
         </select>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
       </div>
+
+      {/* Giờ tạo đơn — chỉ hiện danh sách giờ THỰC SỰ có giao dịch, không có thì ẩn cả select */}
+      {colFilterOptions.hour.length > 0 && (
+        <div className="relative">
+          <select value={colFilters.hour} onChange={e => set('hour', e.target.value)} className={selClass(colFilters.hour !== '')}>
+            <option value="">Giờ</option>
+            {colFilterOptions.hour.map(h => <option key={h} value={h}>{String(h).padStart(2,'0')}:00 – {String(h).padStart(2,'0')}:59</option>)}
+          </select>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      )}
 
       <span className="ml-auto text-[11px] font-semibold text-[#6b7280]">
         {filtered.length} kết quả
@@ -1088,8 +1077,11 @@ function HistorySection({
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-white/70 bg-white/88 px-4 py-2.5 shadow-[0_2px_20px_rgba(174,0,112,0.04)] backdrop-blur-[12px]">
+      {/* Thanh lọc — GỘP LÀM 1 (trước đây tách 2 thanh: toolbar ngày/tìm kiếm ở trên
+          và "Lọc cột" riêng ở dưới). Nay chung 1 khối bo góc duy nhất, chia 2 hàng
+          bằng đường kẻ mảnh cho gọn mắt, thay vì 2 khối viền riêng biệt như cũ. */}
+      <div className="mb-5 rounded-2xl border border-white/70 bg-white/88 shadow-[0_2px_20px_rgba(174,0,112,0.04)] backdrop-blur-[12px]">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-1.5">
           {DATE_PRESETS.map(p => {
             const active = activePresetKey === p.key
@@ -1147,8 +1139,9 @@ function HistorySection({
         </div>
       </div>
 
-      {/* Column filter bar */}
+      {/* Hàng lọc theo cột — cùng khối với hàng trên, chỉ ngăn bằng đường kẻ mảnh */}
       <ColFilterBar colFilters={colFilters} setColFilters={setColFilters} colFilterOptions={colFilterOptions} filtered={filtered} />
+      </div>
 
       {/* Stat cards — based on scoped (date+search), not further filtered by status tab */}
       <div className="mb-5 grid grid-cols-2 gap-4 max-md:gap-3 md:grid-cols-4">
@@ -1189,9 +1182,12 @@ function HistorySection({
                     <SortableTh label="Nội dung"   sortKey="orderInfo"  currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <SortableTh label="Mã đơn"     sortKey="orderId"    currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <SortableTh label="Mã GD MoMo" sortKey="transId"    currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                    <SortableTh label="Hình thức"  sortKey="payType"    currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                    <FilterableTh label="Hình thức" sortKey="payType" currentKey={sortKey} dir={sortDir} onSort={toggleSort}
+                      filterKey="payType" colFilters={colFilters} setColFilters={setColFilters} options={colFilterOptions.payType} />
                     <SortableTh label="Result"     sortKey="resultCode" currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                    <SortableTh label="Thời gian"  sortKey="createdAt"  currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                    <FilterableTh label="Thời gian" sortKey="createdAt" currentKey={sortKey} dir={sortDir} onSort={toggleSort}
+                      filterKey="hour" colFilters={colFilters} setColFilters={setColFilters} options={colFilterOptions.hour}
+                      renderOptionLabel={h => `${String(h).padStart(2,'0')}:00 – ${String(h).padStart(2,'0')}:59`} />
                     <th className="whitespace-nowrap border-b border-[rgba(174,0,112,0.08)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[#6b7280]">Thao tác</th>
                   </tr>
                 </thead>
@@ -1321,83 +1317,114 @@ function CreateSection() {
   )
 }
 
-// ─── LOOKUP SECTION ────────────────────────────────────────────────────────
-function LookupSection({ orderId, setOrderId, loading, result, error, onQuery }) {
-  const copy  = text => navigator.clipboard?.writeText(String(text))
-  const rc    = result?.resultCode
-  const isOk  = rc === 0 || rc === 9000
+// ─── LOOKUP WINDOW (cửa sổ nổi tra cứu — hỗ trợ ĐA CỬA SỔ) ────────────────
+// Thay cho LookupSection cũ (nhúng thẳng vào trang, chỉ có 1 bản duy nhất).
+// Giờ đây mỗi lần bấm "Tra cứu giao dịch" ở sidebar sẽ tạo ra 1 FloatingWindow
+// mới, độc lập với các cửa sổ tra cứu khác đang mở — y hệt cách Chi tiết /
+// Xác nhận đã hoạt động. Nếu win.orderId rỗng (mở từ menu), cửa sổ hiện ô nhập
+// orderId để tự tra; nếu đã có orderId (mở từ 1 dòng trong bảng), tự tra ngay.
+function LookupWindow({ win, onQuery, onClose }) {
+  const [input, setInput] = useState(win.orderId || '')
+  const copy   = text => navigator.clipboard?.writeText(String(text))
+  const rc     = win.result?.resultCode
+  const isOk   = rc === 0 || rc === 9000
   const rcDesc = rc !== undefined ? getResultDesc(rc) : null
+  const submit = () => input.trim() && onQuery(input)
 
   return (
-    <>
-      <div className="mb-4">
-        <h1 className="text-[19px] font-extrabold tracking-[-0.3px] text-[#111827]">Tra cứu giao dịch</h1>
-        <p className="mt-0.5 text-xs text-[#6b7280]">Gọi trực tiếp đến MoMo server để lấy trạng thái thực tế theo mã đơn (orderId)</p>
-      </div>
-
-      <div className="mx-auto max-w-[640px] overflow-hidden rounded-2xl border border-white/70 bg-white/92 shadow-[0_4px_30px_rgba(0,0,0,0.04)] backdrop-blur-[16px]">
-        <div className="border-b border-[rgba(174,0,112,0.06)] px-[22px] py-4">
-          <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[#6b7280]">Order ID</label>
-          <div className="flex gap-2">
-            <input
-              className="flex-1 rounded-[10px] border-[1.5px] border-[rgba(174,0,112,0.1)] bg-white px-3.5 py-2.5 font-mono text-sm text-[#111827] transition-all focus:border-[#6366f1] focus:shadow-[0_0_0_3px_rgba(99,102,241,0.1)]"
-              type="text" placeholder="Nhập mã đơn hàng (orderId)..."
-              value={orderId} onChange={e => setOrderId(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !loading && onQuery()}
-            />
-            <button
-              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[10px] bg-[#4f46e5] px-[18px] py-2.5 text-[13px] font-bold text-white transition-all hover:bg-[#4338ca] disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={onQuery} disabled={loading || !orderId.trim()}
-            >
-              {loading
-                ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation:'rot 0.8s linear infinite' }}><path d="M3 12a9 9 0 0 1 9-9"/></svg>
-                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>}
-              {loading ? 'Đang tra cứu...' : 'Tra cứu'}
-            </button>
-          </div>
+    <FloatingWindow
+      width={560}
+      onClose={onClose}
+      iconBg="#eef2ff"
+      iconColor="#4f46e5"
+      taskbarLabel={win.orderId ? `Tra cứu MoMo · ${win.orderId}` : 'Tra cứu giao dịch (mới)'}
+      icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>}
+      title={<div className="text-[15px] font-extrabold tracking-[-0.2px] text-[#111827]">Tra cứu MoMo</div>}
+      subtitle={win.orderId
+        ? <div className="max-w-[320px] truncate font-mono text-[11px] text-[#9ca3af]" title={win.orderId}>{win.orderId}</div>
+        : <div className="text-xs text-[#9ca3af]">Gọi trực tiếp đến MoMo server theo orderId</div>}
+      footer={
+        <div className="ml-auto">
+          <button className="rounded-[9px] border border-[rgba(174,0,112,0.1)] bg-[#f9fafb] px-5 py-2 text-[13px] font-semibold text-[#374151] transition-all hover:bg-white" onClick={onClose}>Đóng</button>
         </div>
-
-        {error && (
-          <div className="mx-[22px] my-3 flex items-center gap-2 rounded-[10px] border border-[#fecaca] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] font-semibold text-[#dc2626]">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
-            {error}
-          </div>
-        )}
-
-        {!result && !error && (
-          <div className="px-6 py-16 text-center">
-            <div className="mb-3 text-4xl">🔎</div>
-            <div className="text-[14px] font-semibold text-[#6b7280]">Nhập mã đơn để tra cứu</div>
-            <div className="mt-1 text-xs text-[#9ca3af]">Kết quả sẽ hiển thị ngay sau khi truy vấn</div>
-          </div>
-        )}
-
-        {result && (
-          <>
-            <div className="flex flex-col gap-1 px-[22px] py-4" style={{ background: isOk?'#f0fdf4':'#fff5f5' }}>
-              <div className="font-mono text-[22px] font-extrabold tracking-[-0.5px]" style={{ color: isOk?'#16a34a':'#dc2626' }}>{isOk?'✓':'✗'} {rc}</div>
-              <div className="text-sm font-bold text-[#374151]">{rcDesc}</div>
-              {result.message && <div className="text-xs text-[#6b7280]">{result.message}</div>}
-            </div>
-
-            <Section title="Thông tin giao dịch">
-              <Row label="orderId"      value={result.orderId}   mono copy={() => copy(result.orderId)} />
-              <Row label="requestId"    value={result.requestId} mono copy={() => copy(result.requestId)} />
-              <Row label="transId"      value={result.transId?.toString()||'—'} mono />
-              <Row label="partnerCode"  value={result.partnerCode} mono />
-              <Row label="amount"        value={result.amount !== undefined ? `${fmt(result.amount)} ₫` : '—'} />
-              <Row label="payType"       value={result.payType || '—'} />
-              <Row label="paymentOption" value={result.paymentOption || '—'} />
-              <Row label="responseTime"  value={result.responseTime ? fmtMs(result.responseTime) : '—'} />
-            </Section>
-
-            <Section title="Raw Response">
-              <div className="mb-4 max-h-[200px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">{JSON.stringify(result, null, 2)}</div>
-            </Section>
-          </>
-        )}
+      }
+    >
+      {/* Ô nhập orderId — luôn hiện để có thể tra lại 1 mã khác trong cùng cửa sổ */}
+      <div className="border-b border-[rgba(174,0,112,0.06)] px-[22px] py-4">
+        <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-[#6b7280]">Order ID</label>
+        <div className="flex gap-2">
+          <input
+            autoFocus={!win.orderId}
+            className="flex-1 rounded-[10px] border-[1.5px] border-[rgba(174,0,112,0.1)] bg-white px-3.5 py-2.5 font-mono text-sm text-[#111827] transition-all focus:border-[#6366f1] focus:shadow-[0_0_0_3px_rgba(99,102,241,0.1)]"
+            type="text" placeholder="Nhập mã đơn hàng (orderId)..."
+            value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !win.loading && submit()}
+          />
+          <button
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[10px] bg-[#4f46e5] px-[18px] py-2.5 text-[13px] font-bold text-white transition-all hover:bg-[#4338ca] disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={submit} disabled={win.loading || !input.trim()}
+          >
+            {win.loading
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation:'rot 0.8s linear infinite' }}><path d="M3 12a9 9 0 0 1 9-9"/></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>}
+            {win.loading ? 'Đang tra cứu...' : 'Tra cứu'}
+          </button>
+        </div>
       </div>
-    </>
+
+      {win.loading && (
+        <div className="flex flex-col items-center justify-center gap-3 px-6 py-14 text-center">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" style={{ animation:'rot 0.8s linear infinite' }}><path d="M3 12a9 9 0 0 1 9-9"/></svg>
+          <div className="text-[13px] font-semibold text-[#6b7280]">Đang tra cứu trên MoMo server...</div>
+        </div>
+      )}
+
+      {!win.loading && win.error && (
+        <div className="mx-[22px] my-3 flex items-center gap-2 rounded-[10px] border border-[#fecaca] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] font-semibold text-[#dc2626]">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+          {win.error}
+        </div>
+      )}
+
+      {!win.result && !win.error && !win.loading && (
+        <div className="px-6 py-14 text-center">
+          <div className="mb-3 text-4xl">🔎</div>
+          <div className="text-[14px] font-semibold text-[#6b7280]">Nhập mã đơn để tra cứu</div>
+          <div className="mt-1 text-xs text-[#9ca3af]">Kết quả sẽ hiển thị ngay sau khi truy vấn</div>
+        </div>
+      )}
+
+      {win.result && (
+        <>
+          {win.result._reconciled && (
+            <div className="mx-[22px] mt-4 flex items-center gap-2 rounded-[10px] border border-[#fde68a] bg-[#fffbeb] px-3.5 py-2.5 text-[13px] font-semibold text-[#92400e]">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+              Phát hiện lệch trạng thái (IPN có thể đã bị rớt) — đã tự động cập nhật lại
+            </div>
+          )}
+          <div className="flex flex-col gap-1 px-[22px] py-4" style={{ background: isOk?'#f0fdf4':'#fff5f5' }}>
+            <div className="font-mono text-[22px] font-extrabold tracking-[-0.5px]" style={{ color: isOk?'#16a34a':'#dc2626' }}>{isOk?'✓':'✗'} {rc}</div>
+            <div className="text-sm font-bold text-[#374151]">{rcDesc}</div>
+            {win.result.message && <div className="text-xs text-[#6b7280]">{win.result.message}</div>}
+          </div>
+
+          <Section title="Thông tin giao dịch">
+            <Row label="orderId"      value={win.result.orderId}   mono copy={() => copy(win.result.orderId)} />
+            <Row label="requestId"    value={win.result.requestId} mono copy={() => copy(win.result.requestId)} />
+            <Row label="transId"      value={win.result.transId?.toString()||'—'} mono />
+            <Row label="partnerCode"  value={win.result.partnerCode} mono />
+            <Row label="amount"        value={win.result.amount !== undefined ? `${fmt(win.result.amount)} ₫` : '—'} />
+            <Row label="payType"       value={win.result.payType || '—'} />
+            <Row label="paymentOption" value={win.result.paymentOption || '—'} />
+            <Row label="responseTime"  value={win.result.responseTime ? fmtMs(win.result.responseTime) : '—'} />
+          </Section>
+
+          <Section title="Raw Response">
+            <div className="mb-4 max-h-[200px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">{JSON.stringify(win.result, null, 2)}</div>
+          </Section>
+        </>
+      )}
+    </FloatingWindow>
   )
 }
 
@@ -1420,20 +1447,27 @@ export default function AdminDashboardPage() {
   const [lastSync,        setLastSync]        = useState(null)
   const [filter,          setFilter]          = useState('ALL')
   const [search,          setSearch]          = useState('')
-  const [dateFrom,        setDateFrom]        = useState(() => DATE_PRESETS.find(p=>p.key==='thisWeek').range()[0])
-  const [dateTo,          setDateTo]          = useState(() => DATE_PRESETS.find(p=>p.key==='thisWeek').range()[1])
-  const [activePresetKey, setActivePresetKey] = useState('thisWeek')
+  // Mặc định xem giao dịch HÔM NAY khi vào trang (trước đây mặc định "Tuần này").
+  const [dateFrom,        setDateFrom]        = useState(() => DATE_PRESETS.find(p=>p.key==='today').range()[0])
+  const [dateTo,          setDateTo]          = useState(() => DATE_PRESETS.find(p=>p.key==='today').range()[1])
+  const [activePresetKey, setActivePresetKey] = useState('today')
   const [sortKey,         setSortKey]         = useState('createdAt')
   const [sortDir,         setSortDir]         = useState('desc')
   const [selected,        setSelected]        = useState(new Set())
   const [detail,          setDetail]          = useState(null)
-  const [colFilters,      setColFilters]      = useState({ payType: '', source: '', resultCode: '' })
+  // colFilters gộp cả bộ lọc theo cột (payType/source/resultCode) và bộ lọc
+  // theo GIỜ (hour) — hour chỉ liệt kê các khung giờ THỰC SỰ có giao dịch
+  // (xem colFilterOptions bên dưới), giờ nào không có đơn thì không hiện lựa chọn đó.
+  const [colFilters,      setColFilters]      = useState({ payType: '', source: '', resultCode: '', hour: '' })
 
-  const [queryOrderId,    setQueryOrderId]    = useState('')
-  const [queryLoading,    setQueryLoading]    = useState(false)
-  const [queryResult,     setQueryResult]     = useState(null)
-  const [queryError,      setQueryError]      = useState(null)
-  const [queryModal,      setQueryModal]      = useState(false)
+  // ─── CỬA SỔ TRA CỨU (đa cửa sổ thật) ───────────────────────────────────
+  // Trước đây chỉ có 1 bộ state dùng chung (queryOrderId/queryModal/...) nên
+  // dù bấm "Tra cứu" ở nhiều đơn khác nhau vẫn chỉ có ĐÚNG 1 cửa sổ hiện ra,
+  // mở cái sau sẽ ghi đè cái trước. Nay đổi thành 1 MẢNG các cửa sổ độc lập
+  // (queryWindows), mỗi phần tử là 1 lượt tra cứu riêng, có thể mở song song
+  // nhiều cửa sổ cùng lúc (mỗi cửa sổ tự kéo/thu nhỏ/đóng độc lập qua FloatingWindow).
+  const [queryWindows,    setQueryWindows]    = useState([]) // { id, orderId, loading, result, error }[]
+  const queryWinSeq = useRef(0)
 
   const [confirmModal,    setConfirmModal]    = useState(false)
   const [confirmOrderId,  setConfirmOrderId]  = useState('')
@@ -1565,34 +1599,57 @@ export default function AdminDashboardPage() {
     return () => window.removeEventListener('keydown', fn)
   }, [])
 
-  const goToSection = useCallback(key => { setActiveSection(key); setSidebarOpen(false) }, [])
+  const updateQueryWindow = useCallback((id, patch) => {
+    setQueryWindows(ws => ws.map(w => w.id === id ? { ...w, ...patch } : w))
+  }, [])
 
-  const doMomoQuery = useCallback(async (idArg) => {
-    const id = (idArg ?? queryOrderId).trim()
-    if (!id) return
-    setQueryLoading(true); setQueryResult(null); setQueryError(null)
+  const closeQueryWindow = useCallback(id => {
+    setQueryWindows(ws => ws.filter(w => w.id !== id))
+  }, [])
+
+  // Thực hiện tra cứu cho ĐÚNG 1 cửa sổ (theo id) — không còn phụ thuộc vào 1 biến
+  // state dùng chung, nên nhiều cửa sổ chạy song song không dẫm lên nhau.
+  const runQuery = useCallback(async (id, orderIdArg) => {
+    const orderId = orderIdArg.trim()
+    if (!orderId) return
+    updateQueryWindow(id, { orderId, loading: true, result: null, error: null })
     try {
-      const res  = await fetch('/api/momo/query', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ orderId:id }) })
+      const res  = await fetch('/api/momo/query', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ orderId }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`)
-      setQueryResult(data)
+      updateQueryWindow(id, { loading: false, result: data })
       // Nếu backend phát hiện trạng thái lưu trữ bị lệch so với MoMo (do IPN rớt/lỗi)
       // và đã tự sửa lại trong Redis → refresh ngay danh sách đơn hàng để bảng/khung
       // chi tiết hiển thị đúng trạng thái mới, không phải đợi tới lượt poll kế tiếp.
-      if (data._reconciled) {
-        fetchOrders({ force: true })
-      }
+      if (data._reconciled) fetchOrders({ force: true })
     } catch (err) {
-      setQueryError(err.message || 'Lỗi không xác định')
-    } finally {
-      setQueryLoading(false)
+      updateQueryWindow(id, { loading: false, error: err.message || 'Lỗi không xác định' })
     }
-  }, [queryOrderId, fetchOrders])
+  }, [fetchOrders, updateQueryWindow])
 
+  // Mở cửa sổ tra cứu cho 1 đơn ĐÃ BIẾT orderId (từ bảng / OrderCard / Chi tiết) —
+  // tự chạy tra cứu ngay khi mở.
   const openQueryForOrder = useCallback(orderId => {
-    setQueryOrderId(orderId); setQueryResult(null); setQueryError(null)
-    setQueryModal(true); doMomoQuery(orderId)
-  }, [doMomoQuery])
+    const id = `qw-${++queryWinSeq.current}`
+    setQueryWindows(ws => [...ws, { id, orderId, loading: true, result: null, error: null }])
+    runQuery(id, orderId)
+  }, [runQuery])
+
+  // Mở cửa sổ tra cứu TRỐNG (từ menu "Tra cứu giao dịch") — người dùng tự nhập
+  // orderId trong cửa sổ rồi bấm tra cứu.
+  const openLookupWindow = useCallback(() => {
+    const id = `qw-${++queryWinSeq.current}`
+    setQueryWindows(ws => [...ws, { id, orderId: '', loading: false, result: null, error: null }])
+  }, [])
+
+  // "Tra cứu giao dịch" ở sidebar giờ luôn MỞ THÊM 1 cửa sổ nổi mới (không còn
+  // chuyển activeSection nữa) — đúng tinh thần đa cửa sổ: bấm nhiều lần sẽ có
+  // nhiều cửa sổ tra cứu độc lập cùng tồn tại, xếp chồng cascade như các cửa
+  // sổ Chi tiết / Xác nhận khác.
+  const goToSection = useCallback(key => {
+    if (key === 'lookup') { openLookupWindow(); setSidebarOpen(false); return }
+    setActiveSection(key); setSidebarOpen(false)
+  }, [openLookupWindow])
 
   const openConfirmForOrder = useCallback((orderId, amount) => {
     setConfirmOrderId(orderId); setConfirmAmount(amount)
@@ -1665,6 +1722,10 @@ export default function AdminDashboardPage() {
         if (colFilters.resultCode === 'fail' && o.resultCode === 0)  return false
         if (colFilters.resultCode === 'pending' && o.resultCode !== undefined && o.resultCode !== null) return false
       }
+      // Lọc theo GIỜ tạo đơn (0–23) — chỉ áp dụng khi người dùng chọn 1 giờ cụ thể.
+      if (colFilters.hour !== '' && o.createdAt) {
+        if (new Date(o.createdAt).getHours() !== Number(colFilters.hour)) return false
+      }
       return true
     })
     .sort((a, b) => {
@@ -1672,8 +1733,12 @@ export default function AdminDashboardPage() {
       if (sortKey === 'createdAt' || sortKey === 'paidAt') {
         av = av ? new Date(av).getTime() : 0
         bv = bv ? new Date(bv).getTime() : 0
-      } else if (sortKey === 'amount') {
-        av = parseInt(av || 0); bv = parseInt(bv || 0)
+      } else if (sortKey === 'amount' || sortKey === 'resultCode' || sortKey === 'transId') {
+        // BUG cũ: resultCode/transId là số nhưng bị rơi vào nhánh so sánh chuỗi
+        // bên dưới (vd "1000" < "20" theo kiểu chuỗi dù 1000 > 20) → sắp xếp sai.
+        // Nay ép về số để sort đúng thứ tự.
+        av = av === undefined || av === null || av === '' ? -Infinity : parseInt(av)
+        bv = bv === undefined || bv === null || bv === '' ? -Infinity : parseInt(bv)
       } else {
         av = (av??'').toString().toLowerCase(); bv = (bv??'').toString().toLowerCase()
       }
@@ -1682,10 +1747,14 @@ export default function AdminDashboardPage() {
       return 0
     }), [scoped, filter, colFilters, sortKey, sortDir])
 
-  // Derive unique values for col filter dropdowns (from ALL scoped, not filtered, so options don't collapse)
+  // Derive unique values for col filter dropdowns (from ALL scoped, not filtered, so options don't collapse).
+  // "hour" chỉ liệt kê những khung giờ THỰC SỰ có giao dịch trong khoảng ngày đang xem —
+  // giờ nào không có đơn thì tự động không xuất hiện trong danh sách (không hiện lựa chọn rỗng),
+  // và luôn được sắp xếp tăng dần theo giờ.
   const colFilterOptions = useMemo(() => ({
     payType: [...new Set(scoped.map(o => o.payType).filter(Boolean))].sort(),
     source:  [...new Set(scoped.map(o => o.source).filter(Boolean))].sort(),
+    hour:    [...new Set(scoped.filter(o => o.createdAt).map(o => new Date(o.createdAt).getHours()))].sort((a,b) => a-b),
   }), [scoped])
 
   const detailOrder = detail ? displayed.find(o => o.orderId === detail) : null
@@ -1845,14 +1914,17 @@ export default function AdminDashboardPage() {
           />
         )}
 
-        {/* Query Result Modal (Tra cứu MoMo) */}
-        {queryModal && (
-          <QueryResultModal
-            orderId={queryOrderId}
-            loading={queryLoading} result={queryResult} error={queryError}
-            onClose={() => { setQueryModal(false); setQueryResult(null); setQueryError(null) }}
+        {/* Cửa sổ Tra cứu MoMo — ĐA CỬA SỔ THẬT: mỗi lượt tra cứu (từ bảng, từ Chi
+            tiết, hoặc mở trống từ menu "Tra cứu giao dịch") là 1 cửa sổ độc lập,
+            có thể mở nhiều cái cùng lúc, mỗi cái tự kéo/thu nhỏ/đóng riêng. */}
+        {queryWindows.map(w => (
+          <LookupWindow
+            key={w.id}
+            win={w}
+            onQuery={orderId => runQuery(w.id, orderId)}
+            onClose={() => closeQueryWindow(w.id)}
           />
-        )}
+        ))}
 
         {/* Delete Confirm Modal (xác nhận mật khẩu trước khi xoá) */}
         {deleteRequest && (
@@ -1914,13 +1986,9 @@ export default function AdminDashboardPage() {
                 />
               )}
               {activeSection === 'create' && <CreateSection />}
-              {activeSection === 'lookup' && (
-                <LookupSection
-                  orderId={queryOrderId} setOrderId={setQueryOrderId}
-                  loading={queryLoading} result={queryResult} error={queryError}
-                  onQuery={() => doMomoQuery()}
-                />
-              )}
+              {/* 'lookup' không còn là 1 trang riêng — bấm mục "Tra cứu giao dịch" ở
+                  sidebar giờ mở 1 cửa sổ nổi mới (xem goToSection + LookupWindow),
+                  nên activeSection vẫn giữ nguyên giá trị trước đó, không có gì render ở đây. */}
             </main>
           </div>
         </div>
