@@ -427,12 +427,12 @@ function FloatingWinDock() {
   const wins = useFloatWinList().filter(w => w.minimized)
   if (!wins.length) return null
   return (
-    <div className="fixed inset-x-0 bottom-[76px] z-[500] flex flex-wrap items-center justify-center gap-2 px-4" style={{ animation: 'fadein 0.15s ease' }}>
+    <div className="fixed inset-x-0 bottom-[76px] z-[500] flex flex-nowrap items-center gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ animation: 'fadein 0.15s ease', justifyContent: wins.length > 3 ? 'flex-start' : 'center' }}>
       {wins.map(w => (
         <button
           key={w.id}
           onClick={w.onRestore}
-          className="group flex max-w-[240px] items-center gap-2 rounded-full border border-[rgba(174,0,112,0.12)] bg-white/95 py-2 pl-2 pr-3.5 shadow-[0_10px_30px_rgba(23,7,20,0.18),0_0_0_1px_rgba(174,0,112,0.05)] backdrop-blur-[16px] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(23,7,20,0.22)] active:scale-95"
+          className="group flex max-w-[240px] flex-shrink-0 items-center gap-2 rounded-full border border-[rgba(174,0,112,0.12)] bg-white/95 py-2 pl-2 pr-3.5 shadow-[0_10px_30px_rgba(23,7,20,0.18),0_0_0_1px_rgba(174,0,112,0.05)] backdrop-blur-[16px] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(23,7,20,0.22)] active:scale-95"
           title="Khôi phục cửa sổ"
         >
           <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full" style={{ background: w.iconBg || '#fff0f7', color: w.iconColor || '#ae0070' }}>
