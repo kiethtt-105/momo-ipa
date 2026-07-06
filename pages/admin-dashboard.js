@@ -446,18 +446,54 @@ function FloatingWinDock() {
 }
 
 // ─── LOOKUP BAR (thanh cố định ở đáy màn hình) ──────────────────────────────
-// Luôn hiện sẵn, không cần bấm vào bất kỳ menu nào trước — bấm vào nút "Tra
-// cứu giao dịch" ở đây sẽ mở 1 cửa sổ Tra cứu MoMo (LookupWindow) nổi lên.
-function LookupBar({ onOpen }) {
+// Luôn hiện sẵn, không cần bấm vào bất kỳ menu nào trước.
+// Giờ gộp thêm 2 thứ vào cùng 1 thanh ngang này:
+//   · Các tab lọc trạng thái (Tất cả/Thành công/Chờ xử lý/Thất bại/Hết hạn) —
+//     trước đây nằm ở đầu trang (HistorySection), giờ đưa xuống đây, ngang
+//     hàng với 2 nút hành động.
+//   · Nút "Tạo giao dịch" (mở /admin/create-transaction ở tab mới) — đứng
+//     cạnh nút "Tra cứu giao dịch" đã có sẵn.
+// Trên màn hình hẹp, dãy tab lọc scroll ngang riêng, 2 nút luôn cố định bên
+// phải (flex-shrink-0) để không bị đẩy khuất.
+function LookupBar({ onOpenLookup, onOpenCreate, filter, setFilter, counts }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[450] flex justify-center border-t border-[rgba(174,0,112,0.1)] bg-white/92 px-4 py-2.5 shadow-[0_-6px_24px_rgba(174,0,112,0.08)] backdrop-blur-[20px]">
-      <button
-        onClick={onOpen}
-        className="flex items-center gap-2 rounded-full bg-[#ae0070] px-6 py-2.5 text-[13.5px] font-bold text-white shadow-[0_6px_20px_rgba(174,0,112,0.28)] transition-all hover:-translate-y-0.5 hover:bg-[#91005d] hover:shadow-[0_8px_24px_rgba(174,0,112,0.32)] active:scale-95"
-      >
-        <IconSearch className="h-4 w-4 flex-shrink-0" />
-        Tra cứu giao dịch
-      </button>
+    <div className="fixed inset-x-0 bottom-0 z-[450] border-t border-[rgba(174,0,112,0.1)] bg-white/92 px-3 py-2 shadow-[0_-6px_24px_rgba(174,0,112,0.08)] backdrop-blur-[20px] max-md:px-2">
+      <div className="mx-auto flex max-w-[1500px] items-center gap-2">
+        {/* Tab lọc trạng thái — scroll ngang riêng khi không đủ chỗ */}
+        <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {FILTERS.map(f => (
+            <button key={f.key}
+              className={`flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-all ${
+                filter === f.key ? 'bg-[#ae0070] text-white' : 'bg-transparent text-[#6b7280] hover:bg-[#fff0f7] hover:text-[#ae0070]'
+              }`}
+              onClick={() => setFilter(f.key)}
+            >
+              {f.label}
+              <span className={`rounded-[20px] px-[6px] py-0.5 text-[10.5px] font-bold leading-[1.4] ${filter === f.key ? 'bg-white/25' : 'bg-black/[0.08]'}`}>
+                {counts[f.key]}
+              </span>
+            </button>
+          ))}
+        </nav>
+
+        {/* 2 nút hành động — luôn giữ nguyên kích thước, không co lại */}
+        <div className="flex flex-shrink-0 items-center gap-2">
+          <button
+            onClick={onOpenCreate}
+            className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[rgba(174,0,112,0.18)] bg-white px-4 py-2.5 text-[13.5px] font-bold text-[#ae0070] shadow-[0_2px_10px_rgba(174,0,112,0.08)] transition-all hover:-translate-y-0.5 hover:bg-[#fff0f7] active:scale-95 max-sm:px-3"
+          >
+            <IconPlus className="h-4 w-4 flex-shrink-0" />
+            <span className="max-sm:hidden">Tạo giao dịch</span>
+          </button>
+          <button
+            onClick={onOpenLookup}
+            className="flex items-center gap-2 whitespace-nowrap rounded-full bg-[#ae0070] px-6 py-2.5 text-[13.5px] font-bold text-white shadow-[0_6px_20px_rgba(174,0,112,0.28)] transition-all hover:-translate-y-0.5 hover:bg-[#91005d] hover:shadow-[0_8px_24px_rgba(174,0,112,0.32)] active:scale-95 max-sm:px-4"
+          >
+            <IconSearch className="h-4 w-4 flex-shrink-0" />
+            <span className="max-sm:hidden">Tra cứu giao dịch</span>
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1113,40 +1149,14 @@ function HistorySection({
 
   return (
     <>
-      {/* Title + status filter tabs */}
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[19px] font-extrabold tracking-[-0.3px] text-[#111827]">Lịch sử giao dịch</h1>
-          <p className="mt-0.5 text-xs text-[#6b7280]">
-            {filtered.length} giao dịch{filter !== 'ALL' && ` · "${FILTERS.find(f => f.key === filter)?.label}"`}
-          </p>
-        </div>
-
-        {/* Status tabs — desktop */}
-        <nav className="hidden flex-wrap gap-0.5 md:flex">
-          {FILTERS.map(f => (
-            <button key={f.key}
-              className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-1.5 text-[13px] font-semibold transition-all ${
-                filter === f.key ? 'bg-[#ae0070] text-white' : 'bg-transparent text-[#6b7280] hover:bg-[#fff0f7] hover:text-[#ae0070]'
-              }`}
-              onClick={() => setFilter(f.key)}
-            >
-              {f.label}
-              <span className={`rounded-[20px] px-[7px] py-0.5 text-[11px] font-bold leading-[1.4] ${filter === f.key ? 'bg-white/25' : 'bg-black/[0.08]'}`}>
-                {counts[f.key]}
-              </span>
-            </button>
-          ))}
-        </nav>
-
-        {/* Status select — mobile */}
-        <div className="relative w-full md:hidden">
-          <select value={filter} onChange={e => setFilter(e.target.value)}
-            className="w-full appearance-none rounded-lg border border-[rgba(174,0,112,0.1)] bg-[#fff0f7] px-3.5 py-2 pr-8 text-[13px] font-semibold text-[#ae0070]">
-            {FILTERS.map(f => <option key={f.key} value={f.key}>{f.label} ({counts[f.key]})</option>)}
-          </select>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#ae0070]"><path d="m6 9 6 6 6-6"/></svg>
-        </div>
+      {/* Title — tab lọc trạng thái (Tất cả/Thành công/...) đã chuyển xuống
+          thanh cố định ở đáy màn hình (LookupBar), ngang hàng với 2 nút
+          "Tạo giao dịch" / "Tra cứu giao dịch", nên ở đây chỉ còn tiêu đề. */}
+      <div className="mb-4">
+        <h1 className="text-[19px] font-extrabold tracking-[-0.3px] text-[#111827]">Lịch sử giao dịch</h1>
+        <p className="mt-0.5 text-xs text-[#6b7280]">
+          {filtered.length} giao dịch{filter !== 'ALL' && ` · "${FILTERS.find(f => f.key === filter)?.label}"`}
+        </p>
       </div>
 
       {/* Thanh lọc — tách rõ 2 tầng:
@@ -2092,7 +2102,13 @@ export default function AdminDashboardPage() {
         {/* Thanh cố định ở đáy màn hình — nút "Tra cứu giao dịch" luôn hiện sẵn,
             bấm vào bất kỳ lúc nào (không cần vào menu nào trước) để mở cửa sổ
             tra cứu MoMo. */}
-        <LookupBar onOpen={openLookupWindow} />
+        <LookupBar
+          onOpenLookup={openLookupWindow}
+          onOpenCreate={openCreateTransactionPopup}
+          filter={filter}
+          setFilter={setFilter}
+          counts={counts}
+        />
 
         <div className="relative z-[1] flex min-h-screen w-full flex-col">
           <TopBar
