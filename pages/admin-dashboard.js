@@ -22,10 +22,11 @@ const FILTERS = [
   { key: 'EXPIRED', label: 'Hết hạn'   },
 ]
 
-const NAV_ITEMS = [
-  { key: 'history', label: 'Lịch sử giao dịch', sub: 'Toàn bộ đơn hàng',  icon: IconHistory },
-  { key: 'lookup',  label: 'Tra cứu giao dịch', sub: 'Theo mã đơn MoMo',  icon: IconSearch },
-]
+// Trang giờ chỉ còn 1 khu vực nội dung duy nhất (Lịch sử giao dịch) nên sidebar
+// không cần menu điều hướng để chọn mục nữa — Lịch sử giao dịch luôn hiển thị.
+// Nút "Tra cứu giao dịch" đã chuyển thành 1 thanh cố định ở mép dưới màn hình
+// (xem LookupBar), luôn hiện sẵn để bấm vào bất kỳ lúc nào.
+const PAGE_TITLE = 'Lịch sử giao dịch'
 
 function openCreateTransactionPopup() {
   window.open('/admin/create-transaction', '_blank');
@@ -98,7 +99,7 @@ const getResultDesc = code => RESULT_CODE_MAP[code] !== undefined ? RESULT_CODE_
 // Quan trọng: goToSection/logout truyền vào PHẢI được useCallback ở component
 // cha, nếu không React.memo vô nghĩa vì function reference đổi mỗi render.
 const Sidebar = memo(function Sidebar({
-  sidebarOpen, setSidebarOpen, activeSection, goToSection,
+  sidebarOpen, setSidebarOpen,
   pendingCount, fetching, lastSync, logout,
   collapsed, setCollapsed,
 }) {
@@ -139,36 +140,18 @@ const Sidebar = memo(function Sidebar({
           </button>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <div className={`mb-2 px-2 text-[10px] font-bold uppercase tracking-wider text-[#6b7280] ${collapsed ? 'lg:hidden' : ''}`}>Quản lý giao dịch</div>
-          <div className="flex flex-col gap-1">
-            {NAV_ITEMS.map(item => {
-              const Icon   = item.icon
-              const active = activeSection === item.key
-              return (
-                <button key={item.key}
-                  title={collapsed ? item.label : undefined}
-                  className={`flex items-center gap-3 rounded-[12px] px-3 py-2.5 text-left transition-all ${collapsed ? 'lg:justify-center lg:px-0' : ''} ${
-                    active ? 'bg-[#ae0070] text-white shadow-[0_4px_14px_rgba(174,0,112,0.25)]' : 'text-[#111827] hover:bg-[#fff0f7] hover:text-[#ae0070]'
-                  }`}
-                  onClick={() => goToSection(item.key)}
-                >
-                  <Icon className={`h-[18px] w-[18px] flex-shrink-0 ${active ? 'text-white' : 'text-[#ae0070]'}`} />
-                  <span className={`flex flex-col leading-tight ${collapsed ? 'lg:hidden' : ''}`}>
-                    <span className="text-[13.5px] font-bold">{item.label}</span>
-                    <span className={`text-[11px] font-medium ${active ? 'text-white/75' : 'text-[#6b7280]'}`}>{item.sub}</span>
-                  </span>
-                  {item.key === 'history' && pendingCount > 0 && (
-                    <span className={`ml-auto flex-shrink-0 rounded-full px-[7px] py-[1px] text-[10px] font-bold ${collapsed ? 'lg:hidden' : ''} ${active ? 'bg-white/25 text-white' : 'bg-[#fef3c7] text-[#d97706]'}`}>
-                      {pendingCount}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </nav>
+        {/* Đã bỏ menu điều hướng: trang chỉ còn 1 khu vực nội dung duy nhất là
+            "Lịch sử giao dịch" nên không cần bấm chọn mục nữa — nó luôn hiển thị.
+            Vẫn giữ chỗ trống để đẩy nút Đăng xuất xuống đáy sidebar, và hiện số
+            đơn đang chờ xử lý (nếu có) ngay dưới trạng thái đồng bộ. */}
+        <div className="flex flex-1 flex-col justify-start overflow-y-auto px-3 py-4">
+          {pendingCount > 0 && (
+            <div className={`flex items-center gap-2 rounded-[12px] bg-[#fef3c7] px-3 py-2.5 text-[#d97706] ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}>
+              <span className="flex h-2 w-2 flex-shrink-0 rounded-full bg-[#f59e0b]" />
+              <span className={`text-[12.5px] font-bold ${collapsed ? 'lg:hidden' : ''}`}>{pendingCount} đơn đang chờ xử lý</span>
+            </div>
+          )}
+        </div>
 
         {/* Logout */}
         <div className="flex-shrink-0 border-t border-[rgba(174,0,112,0.1)] px-3 py-4">
@@ -482,7 +465,7 @@ function FloatingWinDock() {
   const wins = useFloatWinList().filter(w => w.minimized)
   if (!wins.length) return null
   return (
-    <div className="fixed inset-x-0 bottom-4 z-[500] flex flex-wrap items-center justify-center gap-2 px-4" style={{ animation: 'fadein 0.15s ease' }}>
+    <div className="fixed inset-x-0 bottom-[76px] z-[500] flex flex-wrap items-center justify-center gap-2 px-4" style={{ animation: 'fadein 0.15s ease' }}>
       {wins.map(w => (
         <button
           key={w.id}
@@ -496,6 +479,23 @@ function FloatingWinDock() {
           <span className="truncate text-[12.5px] font-bold text-[#374151]">{w.label}</span>
         </button>
       ))}
+    </div>
+  )
+}
+
+// ─── LOOKUP BAR (thanh cố định ở đáy màn hình) ──────────────────────────────
+// Luôn hiện sẵn, không cần bấm vào bất kỳ menu nào trước — bấm vào nút "Tra
+// cứu giao dịch" ở đây sẽ mở 1 cửa sổ Tra cứu MoMo (LookupWindow) nổi lên.
+function LookupBar({ onOpen }) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-[450] flex justify-center border-t border-[rgba(174,0,112,0.1)] bg-white/92 px-4 py-2.5 shadow-[0_-6px_24px_rgba(174,0,112,0.08)] backdrop-blur-[20px]">
+      <button
+        onClick={onOpen}
+        className="flex items-center gap-2 rounded-full bg-[#ae0070] px-6 py-2.5 text-[13.5px] font-bold text-white shadow-[0_6px_20px_rgba(174,0,112,0.28)] transition-all hover:-translate-y-0.5 hover:bg-[#91005d] hover:shadow-[0_8px_24px_rgba(174,0,112,0.32)] active:scale-95"
+      >
+        <IconSearch className="h-4 w-4 flex-shrink-0" />
+        Tra cứu giao dịch
+      </button>
     </div>
   )
 }
@@ -687,7 +687,7 @@ function DetailModal({ order: o, checking, onClose, onDelete, onQuery, onConfirm
   return (
     <FloatingWindow
       width={600}
-      cascade={false}
+      cascade={true}
       onClose={onClose}
       taskbarLabel={`Chi tiết · ${o.orderId}`}
       title={
@@ -1559,8 +1559,11 @@ export default function AdminDashboardPage() {
   const [sortKey,         setSortKey]         = useState('createdAt')
   const [sortDir,         setSortDir]         = useState('desc')
   const [selected,        setSelected]        = useState(new Set())
-  const [detail,          setDetail]          = useState(null)
-  const [detailChecking,  setDetailChecking]  = useState(false)
+  // Mỗi lần bấm vào 1 dòng giao dịch sẽ MỞ THÊM 1 cửa sổ Chi tiết MỚI, độc lập
+  // với các cửa sổ Chi tiết đã mở trước đó — không còn dùng chung/ghi đè lên
+  // 1 cửa sổ duy nhất như trước. detailWindows là danh sách các cửa sổ đang mở.
+  const [detailWindows,   setDetailWindows]   = useState([]) // [{ id, orderId, checking }]
+  const detailWinSeq = useRef(0)
   // colFilters gộp cả bộ lọc theo cột (payType/source/resultCode) và bộ lọc
   // theo GIỜ (hour) — hour chỉ liệt kê các khung giờ THỰC SỰ có giao dịch
   // (xem colFilterOptions bên dưới), giờ nào không có đơn thì không hiện lựa chọn đó.
@@ -1592,12 +1595,11 @@ export default function AdminDashboardPage() {
   const fetchingRef = useRef(false)
   const reconcilingAllRef = useRef(false)
   const selectedRef = useRef(new Set())
-  const detailRef   = useRef(null)
+
   const filteredRef = useRef([])
 
   useEffect(() => { ordersRef.current   = orders   }, [orders])
   useEffect(() => { selectedRef.current = selected }, [selected])
-  useEffect(() => { detailRef.current   = detail   }, [detail])
 
   useEffect(() => {
     fetch('/api/admin/session')
@@ -1617,10 +1619,6 @@ export default function AdminDashboardPage() {
       const data = await res.json()
       const raw  = data.orders || []
       setOrders(raw); setLastSync(new Date())
-      if (detailRef.current) {
-        const fresh = raw.find(o => o.orderId === detailRef.current)
-        if (fresh) setDetail(fresh.orderId)
-      }
       if (selectedRef.current.size > 0) {
         const ids     = new Set(raw.map(o => o.orderId))
         const cleaned = new Set([...selectedRef.current].filter(id => ids.has(id)))
@@ -1709,7 +1707,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     const fn = e => {
-      if (e.key === 'Escape') { setDetail(null); setConfirmModal(false); setSidebarOpen(false); setDeleteRequest(null) }
+      if (e.key === 'Escape') { setDetailWindows([]); setConfirmModal(false); setSidebarOpen(false); setDeleteRequest(null) }
     }
     window.addEventListener('keydown', fn)
     return () => window.removeEventListener('keydown', fn)
@@ -1743,14 +1741,16 @@ export default function AdminDashboardPage() {
     }
   }, [fetchOrders, updateQueryWindow])
 
-  // Mở Chi tiết cho 1 đơn khi bấm vào dòng/thẻ trong bảng: hiện ngay dữ liệu
-  // đang có trong cache (không phải chờ), đồng thời âm thầm gọi /api/momo/query
-  // để đối chiếu với MoMo — nếu trạng thái đang lưu bị lệch so với thực tế,
-  // backend tự sửa lại (Redis) và ta refresh danh sách ngay để khung Chi tiết
-  // hiện đúng trạng thái mới nhất, không phải đợi tới lượt tự làm mới kế tiếp.
+  // Mở Chi tiết cho 1 đơn khi bấm vào dòng/thẻ trong bảng: LUÔN mở 1 cửa sổ
+  // MỚI (không tái sử dụng cửa sổ đã mở trước đó), nên bấm vào nhiều dòng khác
+  // nhau sẽ cho ra nhiều cửa sổ Chi tiết cùng tồn tại song song, xếp lệch nhau.
+  // Hiện ngay dữ liệu đang có trong cache (không phải chờ), đồng thời âm thầm
+  // gọi /api/momo/query để đối chiếu với MoMo — nếu trạng thái đang lưu bị lệch
+  // so với thực tế, backend tự sửa lại (Redis) và ta refresh danh sách ngay để
+  // khung Chi tiết hiện đúng trạng thái mới nhất.
   const openDetail = useCallback(async orderId => {
-    setDetail(orderId)
-    setDetailChecking(true)
+    const id = `dw-${++detailWinSeq.current}`
+    setDetailWindows(ws => [...ws, { id, orderId, checking: true }])
     try {
       const res  = await fetch('/api/momo/query', {
         method: 'POST',
@@ -1762,9 +1762,13 @@ export default function AdminDashboardPage() {
     } catch (err) {
       console.error('[AdminDashboard] openDetail query lỗi:', err)
     } finally {
-      setDetailChecking(false)
+      setDetailWindows(ws => ws.map(w => w.id === id ? { ...w, checking: false } : w))
     }
   }, [fetchOrders])
+
+  const closeDetailWindow = useCallback(id => {
+    setDetailWindows(ws => ws.filter(w => w.id !== id))
+  }, [])
 
   // Mở cửa sổ tra cứu cho 1 đơn ĐÃ BIẾT orderId (từ bảng / OrderCard / Chi tiết) —
   // CHỈ 1 CỬA SỔ tại 1 thời điểm: nếu đang có cửa sổ mở sẵn thì tái sử dụng luôn
@@ -1781,13 +1785,6 @@ export default function AdminDashboardPage() {
     const id = `qw-${++queryWinSeq.current}`
     setQueryWindow({ id, orderId: '', loading: false, result: null, error: null })
   }, [])
-
-  // "Tra cứu giao dịch" ở sidebar mở cửa sổ tra cứu (duy nhất) thay vì chuyển
-  // activeSection.
-  const goToSection = useCallback(key => {
-    if (key === 'lookup') { openLookupWindow(); setSidebarOpen(false); return }
-    setActiveSection(key); setSidebarOpen(false)
-  }, [openLookupWindow])
 
   const openConfirmForOrder = useCallback((orderId, amount) => {
     setConfirmOrderId(orderId); setConfirmAmount(amount)
@@ -1901,7 +1898,9 @@ export default function AdminDashboardPage() {
     store:   [...new Set(scoped.map(o => o.storeName).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'vi')),
   }), [scoped])
 
-  const detailOrder = detail ? displayed.find(o => o.orderId === detail) : null
+  // Với mỗi cửa sổ Chi tiết đang mở, tìm dữ liệu đơn hàng mới nhất theo orderId
+  // (tự cập nhật mỗi khi `displayed` đổi, không cần setDetail lại thủ công).
+  const detailOrders = detailWindows.map(w => ({ win: w, order: displayed.find(o => o.orderId === w.orderId) }))
 
   useEffect(() => { filteredRef.current = filtered }, [filtered])
 
@@ -1927,7 +1926,7 @@ export default function AdminDashboardPage() {
   const performDelete = useCallback(async (ids) => {
     try {
       await Promise.all(ids.map(id => fetch('/api/momo/delete', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ orderId:id }) })))
-      setDetail(d => (d && ids.includes(d)) ? null : d)
+      setDetailWindows(ws => ws.filter(w => !ids.includes(w.orderId)))
       setSelected(s => { const n = new Set(s); ids.forEach(id => n.delete(id)); return n })
       await fetchOrders({ force: true })
     } catch (err) {
@@ -2023,30 +2022,31 @@ export default function AdminDashboardPage() {
     </>
   )
 
-  const currentNav = NAV_ITEMS.find(n => n.key === activeSection)
-
   // ─── MAIN DASHBOARD ─────────────────────────────────────────────────────
   return (
     <>
       <Head>
-        <title>ADMIN · {currentNav?.label || 'Dashboard'}</title>
+        <title>ADMIN · {PAGE_TITLE}</title>
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
       </Head>
       <div className="relative min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f5edf2] font-[Inter,sans-serif] text-[#111827]">
         <Orbs />
 
-        {/* Detail Modal */}
-        {detailOrder && (
+        {/* Cửa sổ Chi tiết — mỗi lần bấm vào 1 giao dịch trong danh sách sẽ mở
+            1 cửa sổ MỚI hoàn toàn (xem openDetail), nên ở đây render TOÀN BỘ
+            các cửa sổ đang mở cùng lúc, mỗi cửa sổ độc lập với nhau. */}
+        {detailOrders.map(({ win, order }) => order && (
           <DetailModal
-            order={detailOrder}
-            checking={detailChecking}
-            onClose={() => setDetail(null)}
+            key={win.id}
+            order={order}
+            checking={win.checking}
+            onClose={() => closeDetailWindow(win.id)}
             onDelete={id => doDelete([id])}
             onQuery={id => openQueryForOrder(id)}
-            onConfirm={(id, amount) => { setDetail(null); openConfirmForOrder(id, amount) }}
+            onConfirm={(id, amount) => { closeDetailWindow(win.id); openConfirmForOrder(id, amount) }}
           />
-        )}
+        ))}
 
         {/* Confirm Modal */}
         {confirmModal && (
@@ -2084,12 +2084,15 @@ export default function AdminDashboardPage() {
         {/* Dock hiển thị các cửa sổ đang thu nhỏ — hệ đa cửa sổ thật */}
         <FloatingWinDock />
 
+        {/* Thanh cố định ở đáy màn hình — nút "Tra cứu giao dịch" luôn hiện sẵn,
+            bấm vào bất kỳ lúc nào (không cần vào menu nào trước) để mở cửa sổ
+            tra cứu MoMo. */}
+        <LookupBar onOpen={openLookupWindow} />
+
         <div className="relative z-[1] flex min-h-screen">
         <Sidebar
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
-          activeSection={activeSection}
-          goToSection={goToSection}
           pendingCount={counts.PENDING}
           fetching={fetching}
           lastSync={lastSync}
@@ -2105,11 +2108,11 @@ export default function AdminDashboardPage() {
               <button className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-[#ae0070] transition-all hover:bg-[#fff0f7]" onClick={() => setSidebarOpen(true)}>
                 <IconMenu className="h-5 w-5" />
               </button>
-              <span className="truncate text-[15px] font-extrabold text-[#111827]">{currentNav?.label}</span>
+              <span className="truncate text-[15px] font-extrabold text-[#111827]">{PAGE_TITLE}</span>
               <span className={`ml-auto h-2 w-2 flex-shrink-0 rounded-full transition-colors duration-300 ${fetching ? 'bg-[#f59e0b]' : 'bg-[#22c55e]'}`} style={fetching ? { animation:'pulse-dot 0.8s infinite' } : undefined} />
             </header>
 
-            <main className="mx-auto w-full max-w-[1500px] flex-1 p-6 max-md:p-3.5">
+            <main className="mx-auto w-full max-w-[1500px] flex-1 p-6 pb-20 max-md:p-3.5 max-md:pb-20">
               {activeSection === 'history' && (
                 <HistorySection
                   counts={counts} totalRevenue={totalRevenue}
