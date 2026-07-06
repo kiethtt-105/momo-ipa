@@ -960,7 +960,7 @@ function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered, s
 
         {open && (
           <>
-            <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+            <div className="fixed inset-0 z-20 bg-[rgba(23,7,20,0.06)]" style={{ animation:'fadein 0.12s ease' }} onClick={() => setOpen(false)} />
             <div className="absolute left-0 top-[calc(100%+6px)] z-30 flex w-[280px] flex-col gap-2.5 rounded-[14px] border border-[rgba(174,0,112,0.12)] bg-white p-3.5 shadow-[0_16px_40px_rgba(23,7,20,0.16)]" style={{ animation:'fadein 0.12s ease' }}>
               {/* Hình thức thanh toán */}
               <label className="flex flex-col gap-1">
@@ -1431,7 +1431,7 @@ export default function AdminDashboardPage() {
 
   const [activeSection,   setActiveSection]   = useState('history')
   const [sidebarOpen,     setSidebarOpen]     = useState(false)
-  const [sidebarCollapsed,setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed,setSidebarCollapsed] = useState(true)
 
   const [orders,          setOrders]          = useState([])
   const [fetching,        setFetching]        = useState(false)
