@@ -94,78 +94,36 @@ const RESULT_CODE_MAP = {
 }
 const getResultDesc = code => RESULT_CODE_MAP[code] !== undefined ? RESULT_CODE_MAP[code] : 'Mã lỗi không xác định'
 
-// ─── SIDEBAR (tách riêng + memo để không re-render theo `orders`/polling) ──
-// Chỉ re-render khi 1 trong các props dưới đây thực sự đổi giá trị.
-// Quan trọng: goToSection/logout truyền vào PHẢI được useCallback ở component
-// cha, nếu không React.memo vô nghĩa vì function reference đổi mỗi render.
-const Sidebar = memo(function Sidebar({
-  sidebarOpen, setSidebarOpen,
-  pendingCount, fetching, lastSync, logout,
-  collapsed, setCollapsed,
-}) {
+// ─── TOP BAR (thay cho sidebar đã bỏ) ──────────────────────────────────────
+// Trang chỉ còn 1 khu vực nội dung duy nhất (Lịch sử giao dịch) nên không cần
+// sidebar/menu điều hướng nữa — mọi thứ (logo, trạng thái đồng bộ, số đơn
+// đang chờ, nút đăng xuất) gộp vào 1 thanh ngang cố định trên cùng.
+const TopBar = memo(function TopBar({ pendingCount, fetching, lastSync, logout }) {
   return (
-    <>
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-[250] bg-[rgba(17,7,13,0.45)] backdrop-blur-[2px] lg:hidden" style={{ animation:'fadein 0.15s ease' }} onClick={() => setSidebarOpen(false)} />
+    <header className="sticky inset-x-0 top-0 z-[200] flex flex-shrink-0 items-center gap-3 border-b border-[rgba(174,0,112,0.08)] bg-white/90 px-4 py-3 shadow-[0_1px_16px_rgba(174,0,112,0.06)] backdrop-blur-[20px]">
+      <img src="/Main.png" alt="" className="h-[30px] w-[30px] flex-shrink-0 rounded-lg object-contain" />
+      <div className="flex min-w-0 flex-col leading-tight">
+        <span className="whitespace-nowrap text-[14px] font-extrabold tracking-[-0.3px] text-[#ae0070]">MoMo Admin</span>
+        <span className="flex items-center gap-1 whitespace-nowrap text-[10px] font-semibold text-[#6b7280]">
+          <span className={`h-[6px] w-[6px] flex-shrink-0 rounded-full transition-colors duration-300 ${fetching ? 'bg-[#f59e0b]' : 'bg-[#22c55e]'}`} style={fetching ? { animation:'pulse-dot 0.8s infinite' } : undefined} />
+          {lastSync ? `Sync ${lastSync.toLocaleTimeString('vi-VN')}` : 'Đang kết nối…'}
+        </span>
+      </div>
+      {pendingCount > 0 && (
+        <span className="ml-1 flex flex-shrink-0 items-center gap-1.5 rounded-full bg-[#fef3c7] px-2.5 py-1 text-[11px] font-bold text-[#d97706]">
+          <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#f59e0b]" />
+          {pendingCount} đang chờ
+        </span>
       )}
-
-      {/* Nút thu nhỏ/mở rộng thanh bên — chỉ hiện ở desktop (lg+), nằm ngay mép phải
-          thanh bên để dễ bấm, đảo chiều mũi tên theo trạng thái collapsed. */}
+      <span className="ml-auto truncate text-[15px] font-extrabold text-[#111827] max-sm:hidden">{PAGE_TITLE}</span>
       <button
-        onClick={() => setCollapsed(c => !c)}
-        title={collapsed ? 'Mở rộng thanh bên' : 'Thu nhỏ thanh bên'}
-        className={`fixed top-[22px] z-[270] hidden h-6 w-6 items-center justify-center rounded-full border border-[rgba(174,0,112,0.15)] bg-white text-[#ae0070] shadow-[0_4px_12px_rgba(174,0,112,0.15)] transition-all duration-300 ease-out hover:bg-[#fff0f7] lg:flex ${
-          collapsed ? 'left-[60px]' : 'left-[236px]'
-        }`}
+        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]"
+        onClick={logout}
+        title="Đăng xuất"
       >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" className={`transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}><path d="m15 18-6-6 6-6"/></svg>
+        <IconLogout className="h-[18px] w-[18px]" />
       </button>
-
-      <aside className={`fixed inset-y-0 left-0 z-[260] flex w-[252px] max-w-[80vw] flex-shrink-0 flex-col overflow-hidden border-r border-[rgba(174,0,112,0.1)] bg-white/95 shadow-[4px_0_24px_rgba(174,0,112,0.06)] backdrop-blur-[20px] transition-[transform,width] duration-300 ease-out lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'lg:w-[76px]' : 'lg:w-[252px]'}`}>
-        {/* Logo */}
-        <div className={`flex flex-shrink-0 items-center gap-2 border-b border-[rgba(174,0,112,0.1)] px-5 py-4 ${collapsed ? 'lg:justify-center lg:px-0' : 'justify-between'}`}>
-          <div className={`flex items-center gap-[9px] ${collapsed ? 'lg:gap-0' : ''}`}>
-            <img src="/Main.png" alt="" className="h-[30px] w-[30px] flex-shrink-0 rounded-lg object-contain" />
-            <div className={`flex flex-col leading-tight ${collapsed ? 'lg:hidden' : ''}`}>
-              <span className="whitespace-nowrap text-[15px] font-extrabold tracking-[-0.3px] text-[#ae0070]">MoMo Admin</span>
-              <span className="flex items-center gap-1 whitespace-nowrap text-[10px] font-semibold text-[#6b7280]">
-                <span className={`h-[6px] w-[6px] flex-shrink-0 rounded-full transition-colors duration-300 ${fetching ? 'bg-[#f59e0b]' : 'bg-[#22c55e]'}`} style={fetching ? { animation:'pulse-dot 0.8s infinite' } : undefined} />
-                {lastSync ? `Sync ${lastSync.toLocaleTimeString('vi-VN')}` : 'Đang kết nối…'}
-              </span>
-            </div>
-          </div>
-          <button className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-[#6b7280] transition-all hover:bg-[#f3f4f6] lg:hidden ${collapsed ? 'lg:hidden' : ''}`} onClick={() => setSidebarOpen(false)}>
-            <IconX className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Đã bỏ menu điều hướng: trang chỉ còn 1 khu vực nội dung duy nhất là
-            "Lịch sử giao dịch" nên không cần bấm chọn mục nữa — nó luôn hiển thị.
-            Vẫn giữ chỗ trống để đẩy nút Đăng xuất xuống đáy sidebar, và hiện số
-            đơn đang chờ xử lý (nếu có) ngay dưới trạng thái đồng bộ. */}
-        <div className="flex flex-1 flex-col justify-start overflow-y-auto px-3 py-4">
-          {pendingCount > 0 && (
-            <div className={`flex items-center gap-2 rounded-[12px] bg-[#fef3c7] px-3 py-2.5 text-[#d97706] ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}>
-              <span className="flex h-2 w-2 flex-shrink-0 rounded-full bg-[#f59e0b]" />
-              <span className={`text-[12.5px] font-bold ${collapsed ? 'lg:hidden' : ''}`}>{pendingCount} đơn đang chờ xử lý</span>
-            </div>
-          )}
-        </div>
-
-        {/* Logout */}
-        <div className="flex-shrink-0 border-t border-[rgba(174,0,112,0.1)] px-3 py-4">
-          <button
-            title={collapsed ? 'Đăng xuất' : undefined}
-            className={`flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626] ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
-            onClick={logout}
-          >
-            <IconLogout className="h-[18px] w-[18px] flex-shrink-0" />
-            <span className={`text-[13.5px] font-bold ${collapsed ? 'lg:hidden' : ''}`}>Đăng xuất</span>
-          </button>
-        </div>
-      </aside>
-    </>
+    </header>
   )
 })
 
@@ -1543,8 +1501,6 @@ export default function AdminDashboardPage() {
   const [pwError,         setPwError]         = useState(false)
 
   const [activeSection,   setActiveSection]   = useState('history')
-  const [sidebarOpen,     setSidebarOpen]     = useState(false)
-  const [sidebarCollapsed,setSidebarCollapsed] = useState(true)
 
   const [orders,          setOrders]          = useState([])
   const [fetching,        setFetching]        = useState(false)
@@ -1707,7 +1663,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     const fn = e => {
-      if (e.key === 'Escape') { setDetailWindows([]); setConfirmModal(false); setSidebarOpen(false); setDeleteRequest(null) }
+      if (e.key === 'Escape') { setDetailWindows([]); setConfirmModal(false); setDeleteRequest(null) }
     }
     window.addEventListener('keydown', fn)
     return () => window.removeEventListener('keydown', fn)
@@ -2089,57 +2045,42 @@ export default function AdminDashboardPage() {
             tra cứu MoMo. */}
         <LookupBar onOpen={openLookupWindow} />
 
-        <div className="relative z-[1] flex min-h-screen">
-        <Sidebar
-          sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
-          pendingCount={counts.PENDING}
-          fetching={fetching}
-          lastSync={lastSync}
-          logout={logout}
-          collapsed={sidebarCollapsed}
-          setCollapsed={setSidebarCollapsed}
-        />
+        <div className="relative z-[1] flex min-h-screen w-full flex-col">
+          <TopBar
+            pendingCount={counts.PENDING}
+            fetching={fetching}
+            lastSync={lastSync}
+            logout={logout}
+          />
 
-          {/* Main content */}
-          <div className={`flex min-h-screen w-full flex-1 flex-col transition-[padding] duration-300 ease-out ${sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[252px]'}`}>
-            {/* Mobile top bar */}
-            <header className="sticky inset-x-0 top-0 z-[200] flex flex-shrink-0 items-center gap-3 border-b border-[rgba(174,0,112,0.08)] bg-white/88 px-4 py-3 shadow-[0_1px_16px_rgba(174,0,112,0.06)] backdrop-blur-[20px] lg:hidden">
-              <button className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-[#ae0070] transition-all hover:bg-[#fff0f7]" onClick={() => setSidebarOpen(true)}>
-                <IconMenu className="h-5 w-5" />
-              </button>
-              <span className="truncate text-[15px] font-extrabold text-[#111827]">{PAGE_TITLE}</span>
-              <span className={`ml-auto h-2 w-2 flex-shrink-0 rounded-full transition-colors duration-300 ${fetching ? 'bg-[#f59e0b]' : 'bg-[#22c55e]'}`} style={fetching ? { animation:'pulse-dot 0.8s infinite' } : undefined} />
-            </header>
-
-            <main className="mx-auto w-full max-w-[1500px] flex-1 p-6 pb-20 max-md:p-3.5 max-md:pb-20">
-              {activeSection === 'history' && (
-                <HistorySection
-                  counts={counts} totalRevenue={totalRevenue}
-                  filter={filter} setFilter={setFilter}
-                  search={search} setSearch={setSearch}
-                  dateFrom={dateFrom} setDateFrom={setDateFrom}
-                  dateTo={dateTo} setDateTo={setDateTo}
-                  activePresetKey={activePresetKey} setActivePresetKey={setActivePresetKey}
-                  filtered={filtered}
-                  colFilters={colFilters} setColFilters={setColFilters} colFilterOptions={colFilterOptions}
-                  selected={selected} toggleOne={toggleOne} toggleAll={toggleAll}
-                  sortKey={sortKey} sortDir={sortDir} toggleSort={toggleSort}
-                  setDetail={openDetail}
-                  openQueryForOrder={openQueryForOrder}
-                  openConfirmForOrder={openConfirmForOrder}
-                  doDelete={doDelete}
-                  reconcilingAll={reconcilingAll}
-                  pausePolling={pausePolling}
-                  pollPaused={pollPaused}
-                />
-              )}
-              {activeSection === 'create' && <CreateSection />}
-              {/* 'lookup' không còn là 1 trang riêng — bấm mục "Tra cứu giao dịch" ở
-                  sidebar giờ mở 1 cửa sổ nổi mới (xem goToSection + LookupWindow),
-                  nên activeSection vẫn giữ nguyên giá trị trước đó, không có gì render ở đây. */}
-            </main>
-          </div>
+          <main className="mx-auto w-full max-w-[1500px] flex-1 p-6 pb-20 max-md:p-3.5 max-md:pb-20">
+            {activeSection === 'history' && (
+              <HistorySection
+                counts={counts} totalRevenue={totalRevenue}
+                filter={filter} setFilter={setFilter}
+                search={search} setSearch={setSearch}
+                dateFrom={dateFrom} setDateFrom={setDateFrom}
+                dateTo={dateTo} setDateTo={setDateTo}
+                activePresetKey={activePresetKey} setActivePresetKey={setActivePresetKey}
+                filtered={filtered}
+                colFilters={colFilters} setColFilters={setColFilters} colFilterOptions={colFilterOptions}
+                selected={selected} toggleOne={toggleOne} toggleAll={toggleAll}
+                sortKey={sortKey} sortDir={sortDir} toggleSort={toggleSort}
+                setDetail={openDetail}
+                openQueryForOrder={openQueryForOrder}
+                openConfirmForOrder={openConfirmForOrder}
+                doDelete={doDelete}
+                reconcilingAll={reconcilingAll}
+                pausePolling={pausePolling}
+                pollPaused={pollPaused}
+              />
+            )}
+            {activeSection === 'create' && <CreateSection />}
+            {/* 'lookup' không còn là 1 trang riêng — bấm nút "Tra cứu giao dịch" ở
+                thanh cố định dưới màn hình giờ mở 1 cửa sổ nổi mới (xem LookupBar +
+                openLookupWindow + LookupWindow), nên activeSection vẫn giữ nguyên
+                giá trị trước đó, không có gì render ở đây. */}
+          </main>
         </div>
       </div>
     </>
