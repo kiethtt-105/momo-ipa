@@ -100,28 +100,32 @@ const getResultDesc = code => RESULT_CODE_MAP[code] !== undefined ? RESULT_CODE_
 // đang chờ, nút đăng xuất) gộp vào 1 thanh ngang cố định trên cùng.
 const TopBar = memo(function TopBar({ pendingCount, fetching, lastSync, logout }) {
   return (
-    <header className="sticky inset-x-0 top-0 z-[200] flex flex-shrink-0 items-center gap-3 border-b border-[rgba(174,0,112,0.08)] bg-white/90 px-4 py-3 shadow-[0_1px_16px_rgba(174,0,112,0.06)] backdrop-blur-[20px]">
-      <img src="/Main.png" alt="" className="h-[30px] w-[30px] flex-shrink-0 rounded-lg object-contain" />
-      <div className="flex min-w-0 flex-col leading-tight">
-        <span className="whitespace-nowrap text-[14px] font-extrabold tracking-[-0.3px] text-[#ae0070]">MoMo Admin</span>
-        <span className="flex items-center gap-1 whitespace-nowrap text-[10px] font-semibold text-[#6b7280]">
-          <span className={`h-[6px] w-[6px] flex-shrink-0 rounded-full transition-colors duration-300 ${fetching ? 'bg-[#f59e0b]' : 'bg-[#22c55e]'}`} style={fetching ? { animation:'pulse-dot 0.8s infinite' } : undefined} />
-          {lastSync ? `Sync ${lastSync.toLocaleTimeString('vi-VN')}` : 'Đang kết nối…'}
-        </span>
+    <header className="sticky inset-x-0 top-0 z-[200] flex flex-shrink-0 items-center gap-4 border-b border-[rgba(174,0,112,0.08)] bg-white/90 px-6 py-3.5 shadow-[0_1px_16px_rgba(174,0,112,0.05)] backdrop-blur-[20px] max-md:px-4 max-md:py-3">
+      <div className="flex items-center gap-2.5">
+        <img src="/Main.png" alt="" className="h-9 w-9 flex-shrink-0 rounded-[10px] object-contain shadow-[0_2px_8px_rgba(174,0,112,0.15)]" />
+        <div className="flex flex-col leading-tight">
+          <span className="whitespace-nowrap text-[14.5px] font-extrabold tracking-[-0.3px] text-[#ae0070]">MoMo Admin</span>
+          <span className="flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-[#9ca3af]">
+            <span className={`h-[6px] w-[6px] flex-shrink-0 rounded-full transition-colors duration-300 ${fetching ? 'bg-[#f59e0b]' : 'bg-[#22c55e]'}`} style={fetching ? { animation:'pulse-dot 0.8s infinite' } : undefined} />
+            {lastSync ? `Đồng bộ ${lastSync.toLocaleTimeString('vi-VN')}` : 'Đang kết nối…'}
+          </span>
+        </div>
       </div>
+
       {pendingCount > 0 && (
-        <span className="ml-1 flex flex-shrink-0 items-center gap-1.5 rounded-full bg-[#fef3c7] px-2.5 py-1 text-[11px] font-bold text-[#d97706]">
-          <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#f59e0b]" />
-          {pendingCount} đang chờ
+        <span className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-[rgba(217,119,6,0.15)] bg-[#fef3c7] px-3 py-[7px] text-[12px] font-bold text-[#d97706] max-sm:hidden">
+          <span className="h-[6px] w-[6px] flex-shrink-0 rounded-full bg-[#f59e0b]" />
+          {pendingCount} đơn đang chờ xử lý
         </span>
       )}
-      <span className="ml-auto truncate text-[15px] font-extrabold text-[#111827] max-sm:hidden">{PAGE_TITLE}</span>
+
       <button
-        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]"
+        className="ml-auto flex flex-shrink-0 items-center gap-2 rounded-[10px] border border-[rgba(174,0,112,0.1)] bg-white px-3.5 py-2 text-[13px] font-bold text-[#6b7280] shadow-[0_1px_4px_rgba(174,0,112,0.04)] transition-all hover:border-[rgba(220,38,38,0.25)] hover:bg-[#fee2e2] hover:text-[#dc2626]"
         onClick={logout}
         title="Đăng xuất"
       >
-        <IconLogout className="h-[18px] w-[18px]" />
+        <IconLogout className="h-4 w-4 flex-shrink-0" />
+        <span className="max-sm:hidden">Đăng xuất</span>
       </button>
     </header>
   )
@@ -836,6 +840,41 @@ function ConfirmModal({ orderId, amount, loading, result, error, onConfirm, onCa
   )
 }
 
+
+// ─── LOGOUT CONFIRM MODAL ───────────────────────────────────────────────────
+// Thay cho window.confirm() gốc của trình duyệt (xấu, không đồng bộ giao diện) —
+// giờ dùng đúng kiểu cửa sổ nổi (FloatingWindow) như các popup xác nhận khác
+// trong trang (Xác nhận xoá, Xác nhận 9000...).
+function LogoutConfirmModal({ onConfirm, onClose }) {
+  return (
+    <FloatingWindow
+      width={400}
+      onClose={onClose}
+      taskbarLabel="Đăng xuất"
+      iconBg="#fee2e2"
+      iconColor="#dc2626"
+      icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>}
+      title={<div className="text-[15px] font-extrabold tracking-[-0.2px] text-[#111827]">Đăng xuất</div>}
+      footer={
+        <div className="ml-auto flex gap-2">
+          <button className="rounded-[9px] border border-[rgba(174,0,112,0.1)] bg-[#f9fafb] px-5 py-2 text-[13px] font-semibold text-[#374151] transition-all hover:bg-white" onClick={onClose}>
+            Huỷ
+          </button>
+          <button
+            className="rounded-[9px] bg-[#dc2626] px-5 py-2 text-[13px] font-bold text-white transition-all hover:bg-[#b91c1c]"
+            onClick={onConfirm}
+          >
+            Đăng xuất
+          </button>
+        </div>
+      }
+    >
+      <div className="px-[22px] py-4">
+        <p className="text-[13px] text-[#374151]">Bạn có chắc muốn đăng xuất khỏi trang quản trị không?</p>
+      </div>
+    </FloatingWindow>
+  )
+}
 
 // ─── DELETE CONFIRM MODAL (xác nhận mật khẩu trước khi xoá) ────────────────
 // Thay cho window.confirm() cũ — giờ xoá đơn (dù 1 đơn hay xoá hàng loạt) đều
@@ -1925,8 +1964,10 @@ export default function AdminDashboardPage() {
     } catch { setPwError(true) }
   }
 
-  const logout = useCallback(() => {
-    if (!confirm('Đăng xuất khỏi trang quản trị?')) return
+  const [logoutConfirm, setLogoutConfirm] = useState(false)
+  const requestLogout = useCallback(() => setLogoutConfirm(true), [])
+  const confirmLogout = useCallback(() => {
+    setLogoutConfirm(false)
     fetch('/api/admin/session', { method:'DELETE' }).finally(() => setAuthed(false))
   }, [])
 
@@ -2037,6 +2078,14 @@ export default function AdminDashboardPage() {
           />
         )}
 
+        {/* Xác nhận đăng xuất — dạng cửa sổ nổi, thay cho window.confirm() gốc */}
+        {logoutConfirm && (
+          <LogoutConfirmModal
+            onConfirm={confirmLogout}
+            onClose={() => setLogoutConfirm(false)}
+          />
+        )}
+
         {/* Dock hiển thị các cửa sổ đang thu nhỏ — hệ đa cửa sổ thật */}
         <FloatingWinDock />
 
@@ -2050,7 +2099,7 @@ export default function AdminDashboardPage() {
             pendingCount={counts.PENDING}
             fetching={fetching}
             lastSync={lastSync}
-            logout={logout}
+            logout={requestLogout}
           />
 
           <main className="mx-auto w-full max-w-[1500px] flex-1 p-6 pb-20 max-md:p-3.5 max-md:pb-20">
