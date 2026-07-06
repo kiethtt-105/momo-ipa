@@ -929,8 +929,12 @@ function DeleteConfirmModal({ count, password, setPassword, checking, error, onC
 }
 
 // ─── COL FILTER BAR ────────────────────────────────────────────────────────
-function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered, scoped }) {
-  const [open, setOpen] = useState(false)
+// Trước đây đây là 1 nút "Bộ lọc" mở popover nổi lên trên — dù đã sửa z-index,
+// nhìn vẫn rối vì nó che mất nội dung phía dưới mỗi lần mở. Đổi hẳn cách làm:
+// bỏ popover, đưa thẳng các select (Hình thức / Loại đơn / Result / Giờ) ra
+// thành 1 hàng gọn, luôn hiển thị — dùng dropdown gốc của trình duyệt nên
+// không bao giờ đè lên phần tử khác của trang, không cần bấm mở/đóng gì cả.
+function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered }) {
   const hasActive = Object.values(colFilters).some(v => v !== '')
   const set = (key, val) => setColFilters(f => ({ ...f, [key]: val }))
   const clear = () => setColFilters({ payType: '', source: '', resultCode: '', hour: '' })
@@ -942,95 +946,56 @@ function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered, s
         : 'border-[rgba(174,0,112,0.1)] bg-white/70 text-[#6b7280] hover:border-[rgba(174,0,112,0.25)]'
     }`
 
+  const Sel = ({ value, onChange, active, placeholder, children }) => (
+    <div className="relative">
+      <select value={value} onChange={onChange} className={`${selClass(active)} max-w-[150px]`}>
+        <option value="">{placeholder}</option>
+        {children}
+      </select>
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+  )
+
   return (
     <div className={`flex flex-wrap items-center gap-2 rounded-b-2xl border-t px-4 py-2 text-[12px] transition-all ${hasActive ? 'border-[rgba(174,0,112,0.15)] bg-[#fff8fc]' : 'border-[rgba(174,0,112,0.06)] bg-[#fbf7fa]/60'}`}>
-      <div className="relative">
+      <span className="flex flex-shrink-0 items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[#9ca3af]">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3"><path d="M4 5h16l-6 8v5l-4 2v-7z"/></svg>
+        Lọc
+      </span>
+
+      <Sel value={colFilters.payType} active={!!colFilters.payType} placeholder="Hình thức: Tất cả" onChange={e => set('payType', e.target.value)}>
+        {colFilterOptions.payType.map(v => <option key={v} value={v}>{v}</option>)}
+      </Sel>
+
+      {colFilterOptions.source.length > 0 && (
+        <Sel value={colFilters.source} active={!!colFilters.source} placeholder="Loại đơn: Tất cả" onChange={e => set('source', e.target.value)}>
+          {colFilterOptions.source.map(v => <option key={v} value={v}>{v === 'pos' ? 'POS / Scan' : v === 'create-p2p' ? 'P2P / QR' : v}</option>)}
+        </Sel>
+      )}
+
+      <Sel value={colFilters.resultCode} active={colFilters.resultCode !== ''} placeholder="Result: Tất cả" onChange={e => set('resultCode', e.target.value)}>
+        <option value="ok">✓ Thành công (0)</option>
+        <option value="fail">✗ Thất bại (≠0)</option>
+        <option value="pending">Chưa có result</option>
+      </Sel>
+
+      {colFilterOptions.hour.length > 0 && (
+        <Sel value={colFilters.hour} active={colFilters.hour !== ''} placeholder="Giờ: Tất cả" onChange={e => set('hour', e.target.value)}>
+          {colFilterOptions.hour.map(h => <option key={h} value={h}>{String(h).padStart(2,'0')}:00 – {String(h).padStart(2,'0')}:59</option>)}
+        </Sel>
+      )}
+
+      {hasActive && (
         <button
-          type="button"
-          onClick={() => setOpen(o => !o)}
-          className={`flex h-[30px] items-center gap-1.5 rounded-[8px] border px-3 text-[12px] font-bold transition-all ${
-            hasActive ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]' : 'border-[rgba(174,0,112,0.12)] bg-white/80 text-[#6b7280] hover:border-[rgba(174,0,112,0.3)] hover:text-[#ae0070]'
-          }`}
+          onClick={clear}
+          className="flex flex-shrink-0 items-center gap-1 rounded-[7px] border border-[rgba(220,38,38,0.2)] bg-[#fff5f5] px-2 py-[5px] text-[11px] font-bold text-[#dc2626] transition-all hover:bg-[#fee2e2]"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3"><path d="M4 5h16l-6 8v5l-4 2v-7z"/></svg>
-          Bộ lọc
-          {hasActive && <span className="rounded-full bg-[#ae0070] px-[6px] py-[1px] text-[10px] font-bold text-white">{Object.values(colFilters).filter(v => v !== '').length}</span>}
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`transition-transform ${open ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          Xóa lọc
         </button>
+      )}
 
-        {open && (
-          <>
-            <div className="fixed inset-0 z-20 bg-[rgba(23,7,20,0.06)]" style={{ animation:'fadein 0.12s ease' }} onClick={() => setOpen(false)} />
-            <div className="absolute left-0 top-[calc(100%+6px)] z-30 flex w-[280px] flex-col gap-2.5 rounded-[14px] border border-[rgba(174,0,112,0.12)] bg-white p-3.5 shadow-[0_16px_40px_rgba(23,7,20,0.16)]" style={{ animation:'fadein 0.12s ease' }}>
-              {/* Hình thức thanh toán */}
-              <label className="flex flex-col gap-1">
-                <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#9ca3af]">Hình thức</span>
-                <div className="relative">
-                  <select value={colFilters.payType} onChange={e => set('payType', e.target.value)} className={`${selClass(!!colFilters.payType)} w-full`}>
-                    <option value="">Tất cả</option>
-                    {colFilterOptions.payType.map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
-                </div>
-              </label>
-
-              {/* Nguồn đơn (pos / create-p2p) */}
-              {colFilterOptions.source.length > 0 && (
-                <label className="flex flex-col gap-1">
-                  <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#9ca3af]">Loại đơn</span>
-                  <div className="relative">
-                    <select value={colFilters.source} onChange={e => set('source', e.target.value)} className={`${selClass(!!colFilters.source)} w-full`}>
-                      <option value="">Tất cả</option>
-                      {colFilterOptions.source.map(v => <option key={v} value={v}>{v === 'pos' ? 'POS / Scan' : v === 'create-p2p' ? 'P2P / QR' : v}</option>)}
-                    </select>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
-                  </div>
-                </label>
-              )}
-
-              {/* Result code */}
-              <label className="flex flex-col gap-1">
-                <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#9ca3af]">Result</span>
-                <div className="relative">
-                  <select value={colFilters.resultCode} onChange={e => set('resultCode', e.target.value)} className={`${selClass(!!colFilters.resultCode)} w-full`}>
-                    <option value="">Tất cả</option>
-                    <option value="ok">✓ Thành công (0)</option>
-                    <option value="fail">✗ Thất bại (≠0)</option>
-                    <option value="pending">Chưa có result</option>
-                  </select>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
-                </div>
-              </label>
-
-              {/* Giờ tạo đơn — chỉ hiện danh sách giờ THỰC SỰ có giao dịch */}
-              {colFilterOptions.hour.length > 0 && (
-                <label className="flex flex-col gap-1">
-                  <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#9ca3af]">Giờ</span>
-                  <div className="relative">
-                    <select value={colFilters.hour} onChange={e => set('hour', e.target.value)} className={`${selClass(colFilters.hour !== '')} w-full`}>
-                      <option value="">Tất cả</option>
-                      {colFilterOptions.hour.map(h => <option key={h} value={h}>{String(h).padStart(2,'0')}:00 – {String(h).padStart(2,'0')}:59</option>)}
-                    </select>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
-                  </div>
-                </label>
-              )}
-
-              {hasActive && (
-                <button
-                  onClick={() => { clear(); setOpen(false) }}
-                  className="flex items-center justify-center gap-1 rounded-[7px] border border-[rgba(220,38,38,0.2)] bg-[#fff5f5] px-2 py-[6px] text-[11px] font-bold text-[#dc2626] transition-all hover:bg-[#fee2e2]"
-                >
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                  Xóa tất cả bộ lọc
-                </button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-
-      <span className="ml-auto text-[11px] font-semibold text-[#6b7280]">
+      <span className="ml-auto flex-shrink-0 text-[11px] font-semibold text-[#6b7280]">
         {filtered.length} kết quả
       </span>
     </div>
