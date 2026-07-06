@@ -260,6 +260,7 @@ const OrderCard = memo(function OrderCard({ o, selected, onToggle, onOpenDetail,
       <div className="flex items-start justify-between gap-2 pl-6">
         <div className="min-w-0">
           <div className="truncate text-[12.5px] font-semibold text-[#374151]">{o.orderInfo || '—'}</div>
+          {o.storeName && <div className="mt-0.5 truncate text-[11px] font-medium text-[#9ca3af]">🏪 {o.storeName}</div>}
           <div className="mt-0.5 font-mono text-[11px] text-[#9ca3af]">{o.orderId}</div>
           <div className="mt-0.5 text-[11px] text-[#9ca3af]">{fmtDate(o.createdAt)}</div>
         </div>
@@ -742,6 +743,7 @@ function DetailModal({ order: o, checking, onClose, onDelete, onQuery, onConfirm
       <Section title="Thông tin giao dịch">
         <Row label="Mã đơn hàng"   value={o.orderId}   mono copy={() => copy(o.orderId)} />
         <Row label="Nội dung"       value={o.orderInfo || '—'} />
+        <Row label="Cửa hàng"       value={o.storeName || '—'} />
         <Row label="Số tiền"        value={`${fmt(o.amount)} ₫`} />
         <Row label="Hình thức"      value={o.payType || (o.orderId?.startsWith('POS')||o.orderId?.startsWith('iPOS')?'POS':'P2P')} />
         <Row label="Mã GD MoMo"     value={o.transId || '—'} mono copy={() => copy(o.transId)} />
@@ -934,27 +936,90 @@ function DeleteConfirmModal({ count, password, setPassword, checking, error, onC
 // bỏ popover, đưa thẳng các select (Hình thức / Loại đơn / Result / Giờ) ra
 // thành 1 hàng gọn, luôn hiển thị — dùng dropdown gốc của trình duyệt nên
 // không bao giờ đè lên phần tử khác của trang, không cần bấm mở/đóng gì cả.
+// Nhãn hiển thị cho các giá trị "source" thô lưu trong DB (tên route tạo đơn) —
+// trước đây hiện thẳng ra chuỗi kỹ thuật như "admin-cancelled", "manual-lookup-
+// reconciled" trong dropdown, rất khó đọc. Có map sẵn cho các nguồn đã biết,
+// nguồn nào chưa có trong map (phòng khi thêm route mới sau này) sẽ tự viết
+// hoa từng chữ + thay gạch ngang bằng khoảng trắng thay vì hiện thô.
+const SOURCE_LABELS = {
+  'pos':                      'POS / Scan',
+  'create-p2p':                'P2P / QR',
+  'create-p2p-shortcut':       'P2P / QR (Shortcut)',
+  'shortcut-pos':               'POS (Shortcut)',
+  'admin-cancelled':            'Admin huỷ',
+  'manual-lookup-reconciled':   'Đối soát thủ công',
+  'redirect-verified':          'Xác thực qua redirect',
+  'status-verified':            'Xác thực trạng thái',
+}
+const sourceLabel = v => SOURCE_LABELS[v] || String(v).split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+
+// ─── FILTER DROPDOWN (custom, thay cho <select> gốc của trình duyệt) ───────
+// <select> native không thể style đồng bộ giữa các trình duyệt (bo góc, màu
+// item được chọn, font...) — nhìn lệch tông hẳn so với phần còn lại của giao
+// diện (bo tròn hết mọi nơi). Dựng lại 1 dropdown riêng, cùng ngôn ngữ thiết
+// kế với lịch chọn ngày (DateRangePicker) bên trên: nút bo góc [10px], panel
+// nổi bo góc lớn hơn kèm đổ bóng mềm, tự đóng khi click ra ngoài / nhấn Esc.
+function FilterDropdown({ value, onChange, options, active }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDocDown = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onKey     = e => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDocDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDocDown); document.removeEventListener('keydown', onKey) }
+  }, [open])
+
+  const current = options.find(o => o.value === value)
+
+  return (
+    <div className="relative flex-shrink-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`flex h-[30px] max-w-[170px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border pl-[10px] pr-[8px] text-[12px] font-semibold transition-all ${
+          active
+            ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]'
+            : 'border-[rgba(174,0,112,0.1)] bg-white/70 text-[#6b7280] hover:border-[rgba(174,0,112,0.25)]'
+        }`}
+      >
+        <span className="truncate">{current?.label}</span>
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" className={`flex-shrink-0 text-[#9ca3af] transition-transform duration-150 ${open ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+
+      {open && (
+        <div
+          className="absolute left-0 top-[calc(100%+6px)] z-[210] max-h-[260px] w-max min-w-[180px] max-w-[260px] overflow-y-auto rounded-[14px] border border-white/70 bg-white p-1.5 shadow-[0_20px_50px_rgba(174,0,112,0.16),0_0_0_1px_rgba(174,0,112,0.06)]"
+          style={{ animation: 'fadein 0.12s ease' }}
+        >
+          {options.map(opt => {
+            const isSel = opt.value === value
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => { onChange(opt.value); setOpen(false) }}
+                className={`flex w-full items-center justify-between gap-2 rounded-[9px] px-3 py-[7px] text-left text-[12.5px] font-semibold transition-colors ${
+                  isSel ? 'bg-[#fff0f7] text-[#ae0070]' : 'text-[#374151] hover:bg-[#f9fafb]'
+                }`}
+              >
+                <span className="truncate">{opt.label}</span>
+                {isSel && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="flex-shrink-0"><polyline points="20 6 9 17 4 12"/></svg>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered }) {
   const hasActive = Object.values(colFilters).some(v => v !== '')
   const set = (key, val) => setColFilters(f => ({ ...f, [key]: val }))
-  const clear = () => setColFilters({ payType: '', source: '', resultCode: '', hour: '' })
-
-  const selClass = (active) =>
-    `h-[30px] cursor-pointer appearance-none rounded-[8px] border py-0 pl-[9px] pr-[22px] text-[12px] font-semibold transition-all focus:outline-none ${
-      active
-        ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]'
-        : 'border-[rgba(174,0,112,0.1)] bg-white/70 text-[#6b7280] hover:border-[rgba(174,0,112,0.25)]'
-    }`
-
-  const Sel = ({ value, onChange, active, placeholder, children }) => (
-    <div className="relative">
-      <select value={value} onChange={onChange} className={`${selClass(active)} max-w-[150px]`}>
-        <option value="">{placeholder}</option>
-        {children}
-      </select>
-      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
-    </div>
-  )
+  const clear = () => setColFilters({ payType: '', source: '', resultCode: '', hour: '', store: '' })
 
   return (
     <div className={`flex flex-wrap items-center gap-2 rounded-b-2xl border-t px-4 py-2 text-[12px] transition-all ${hasActive ? 'border-[rgba(174,0,112,0.15)] bg-[#fff8fc]' : 'border-[rgba(174,0,112,0.06)] bg-[#fbf7fa]/60'}`}>
@@ -963,26 +1028,55 @@ function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered })
         Lọc
       </span>
 
-      <Sel value={colFilters.payType} active={!!colFilters.payType} placeholder="Hình thức: Tất cả" onChange={e => set('payType', e.target.value)}>
-        {colFilterOptions.payType.map(v => <option key={v} value={v}>{v}</option>)}
-      </Sel>
+      <FilterDropdown
+        active={!!colFilters.payType}
+        value={colFilters.payType}
+        onChange={v => set('payType', v)}
+        options={[{ value: '', label: 'Hình thức: Tất cả' }, ...colFilterOptions.payType.map(v => ({ value: v, label: v }))]}
+      />
 
       {colFilterOptions.source.length > 0 && (
-        <Sel value={colFilters.source} active={!!colFilters.source} placeholder="Loại đơn: Tất cả" onChange={e => set('source', e.target.value)}>
-          {colFilterOptions.source.map(v => <option key={v} value={v}>{v === 'pos' ? 'POS / Scan' : v === 'create-p2p' ? 'P2P / QR' : v}</option>)}
-        </Sel>
+        <FilterDropdown
+          active={!!colFilters.source}
+          value={colFilters.source}
+          onChange={v => set('source', v)}
+          options={[{ value: '', label: 'Loại đơn: Tất cả' }, ...colFilterOptions.source.map(v => ({ value: v, label: sourceLabel(v) }))]}
+        />
       )}
 
-      <Sel value={colFilters.resultCode} active={colFilters.resultCode !== ''} placeholder="Result: Tất cả" onChange={e => set('resultCode', e.target.value)}>
-        <option value="ok">✓ Thành công (0)</option>
-        <option value="fail">✗ Thất bại (≠0)</option>
-        <option value="pending">Chưa có result</option>
-      </Sel>
+      {/* Cửa hàng — trang này tạo giao dịch được cho nhiều shop khác nhau,
+          nên cần lọc lại theo tên cửa hàng khi cần xem riêng 1 shop.
+          Chỉ hiện khi có ít nhất 1 đơn đã có storeName trong khoảng đang xem
+          (những đơn cũ / tạo qua POS-scan hiện chưa lưu storeName sẽ dần có
+          khi phần lưu DB được bổ sung sau). */}
+      {colFilterOptions.store.length > 0 && (
+        <FilterDropdown
+          active={!!colFilters.store}
+          value={colFilters.store}
+          onChange={v => set('store', v)}
+          options={[{ value: '', label: 'Cửa hàng: Tất cả' }, ...colFilterOptions.store.map(v => ({ value: v, label: v }))]}
+        />
+      )}
+
+      <FilterDropdown
+        active={colFilters.resultCode !== ''}
+        value={colFilters.resultCode}
+        onChange={v => set('resultCode', v)}
+        options={[
+          { value: '',        label: 'Result: Tất cả' },
+          { value: 'ok',      label: '✓ Thành công (0)' },
+          { value: 'fail',    label: '✗ Thất bại (≠0)' },
+          { value: 'pending', label: 'Chưa có result' },
+        ]}
+      />
 
       {colFilterOptions.hour.length > 0 && (
-        <Sel value={colFilters.hour} active={colFilters.hour !== ''} placeholder="Giờ: Tất cả" onChange={e => set('hour', e.target.value)}>
-          {colFilterOptions.hour.map(h => <option key={h} value={h}>{String(h).padStart(2,'0')}:00 – {String(h).padStart(2,'0')}:59</option>)}
-        </Sel>
+        <FilterDropdown
+          active={colFilters.hour !== ''}
+          value={colFilters.hour}
+          onChange={v => set('hour', v)}
+          options={[{ value: '', label: 'Giờ: Tất cả' }, ...colFilterOptions.hour.map(h => ({ value: String(h), label: `${String(h).padStart(2,'0')}:00 – ${String(h).padStart(2,'0')}:59` }))]}
+        />
       )}
 
       {hasActive && (
@@ -1001,6 +1095,7 @@ function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered })
     </div>
   )
 }
+
 
 // ─── HISTORY SECTION ───────────────────────────────────────────────────────
 function HistorySection({
@@ -1221,7 +1316,14 @@ function HistorySection({
                           <div>{fmtDate(o.createdAt)}</div>
                           {o.paidAt && <div className="mt-0.5 text-[#16a34a]">✓ {fmtDate(o.paidAt)}</div>}
                         </td>
-                        <td className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle text-[#374151]" title={o.orderInfo}>{o.orderInfo || '—'}</td>
+                        <td className="max-w-0 px-4 py-3.5 align-middle text-[#374151]">
+                          <div className="truncate" title={o.orderInfo}>{o.orderInfo || '—'}</div>
+                          {o.storeName && (
+                            <div className="mt-0.5 truncate text-[11px] font-medium text-[#9ca3af]" title={o.storeName}>
+                              🏪 {o.storeName}
+                            </div>
+                          )}
+                        </td>
                         <td className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle font-mono text-xs text-[#4b5563]">{o.orderId}</td>
                         <td className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle font-mono text-xs text-[#4b5563]">{o.transId || '—'}</td>
                         <td className="px-4 py-3.5 align-middle">
@@ -1462,7 +1564,7 @@ export default function AdminDashboardPage() {
   // colFilters gộp cả bộ lọc theo cột (payType/source/resultCode) và bộ lọc
   // theo GIỜ (hour) — hour chỉ liệt kê các khung giờ THỰC SỰ có giao dịch
   // (xem colFilterOptions bên dưới), giờ nào không có đơn thì không hiện lựa chọn đó.
-  const [colFilters,      setColFilters]      = useState({ payType: '', source: '', resultCode: '', hour: '' })
+  const [colFilters,      setColFilters]      = useState({ payType: '', source: '', resultCode: '', hour: '', store: '' })
 
   // ─── CỬA SỔ TRA CỨU (chỉ 1 cửa sổ) ─────────────────────────────────────
   // Theo yêu cầu: "Tra cứu giao dịch" chỉ cần 1 cửa sổ tại 1 thời điểm — mở
@@ -1720,7 +1822,8 @@ export default function AdminDashboardPage() {
         o.orderId?.toLowerCase().includes(q) ||
         o.orderInfo?.toLowerCase().includes(q) ||
         o.transId?.toString().includes(q) ||
-        o.message?.toLowerCase().includes(q)
+        o.message?.toLowerCase().includes(q) ||
+        o.storeName?.toLowerCase().includes(q)
       )
     })
     .filter(o => {
@@ -1753,6 +1856,7 @@ export default function AdminDashboardPage() {
     .filter(o => {
       if (colFilters.payType && (o.payType || '') !== colFilters.payType) return false
       if (colFilters.source && (o.source || '') !== colFilters.source) return false
+      if (colFilters.store && (o.storeName || '') !== colFilters.store) return false
       if (colFilters.resultCode !== '') {
         if (colFilters.resultCode === 'ok'   && o.resultCode !== 0)  return false
         if (colFilters.resultCode === 'fail' && o.resultCode === 0)  return false
@@ -1791,6 +1895,10 @@ export default function AdminDashboardPage() {
     payType: [...new Set(scoped.map(o => o.payType).filter(Boolean))].sort(),
     source:  [...new Set(scoped.map(o => o.source).filter(Boolean))].sort(),
     hour:    [...new Set(scoped.filter(o => o.createdAt).map(o => new Date(o.createdAt).getHours()))].sort((a,b) => a-b),
+    // Danh sách cửa hàng thực sự xuất hiện trong khoảng đang xem — trang này
+    // tạo giao dịch được cho nhiều shop, nên list này sẽ dài dần khi nhiều
+    // route (POS-scan, shortcut...) được bổ sung lưu storeName vào DB.
+    store:   [...new Set(scoped.map(o => o.storeName).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'vi')),
   }), [scoped])
 
   const detailOrder = detail ? displayed.find(o => o.orderId === detail) : null
