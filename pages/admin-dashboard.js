@@ -100,6 +100,7 @@ const getResultDesc = code => RESULT_CODE_MAP[code] !== undefined ? RESULT_CODE_
 const Sidebar = memo(function Sidebar({
   sidebarOpen, setSidebarOpen, activeSection, goToSection,
   pendingCount, fetching, lastSync, logout,
+  collapsed, setCollapsed,
 }) {
   return (
     <>
@@ -108,45 +109,58 @@ const Sidebar = memo(function Sidebar({
         <div className="fixed inset-0 z-[250] bg-[rgba(17,7,13,0.45)] backdrop-blur-[2px] lg:hidden" style={{ animation:'fadein 0.15s ease' }} onClick={() => setSidebarOpen(false)} />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-[260] flex w-[252px] max-w-[80vw] flex-shrink-0 flex-col border-r border-[rgba(174,0,112,0.1)] bg-white/95 shadow-[4px_0_24px_rgba(174,0,112,0.06)] backdrop-blur-[20px] transition-transform duration-300 ease-out lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {/* Nút thu nhỏ/mở rộng thanh bên — chỉ hiện ở desktop (lg+), nằm ngay mép phải
+          thanh bên để dễ bấm, đảo chiều mũi tên theo trạng thái collapsed. */}
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        title={collapsed ? 'Mở rộng thanh bên' : 'Thu nhỏ thanh bên'}
+        className={`fixed top-[22px] z-[270] hidden h-6 w-6 items-center justify-center rounded-full border border-[rgba(174,0,112,0.15)] bg-white text-[#ae0070] shadow-[0_4px_12px_rgba(174,0,112,0.15)] transition-all duration-300 ease-out hover:bg-[#fff0f7] lg:flex ${
+          collapsed ? 'left-[60px]' : 'left-[236px]'
+        }`}
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" className={`transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+
+      <aside className={`fixed inset-y-0 left-0 z-[260] flex w-[252px] max-w-[80vw] flex-shrink-0 flex-col overflow-hidden border-r border-[rgba(174,0,112,0.1)] bg-white/95 shadow-[4px_0_24px_rgba(174,0,112,0.06)] backdrop-blur-[20px] transition-[transform,width] duration-300 ease-out lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'lg:w-[76px]' : 'lg:w-[252px]'}`}>
         {/* Logo */}
-        <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-[rgba(174,0,112,0.1)] px-5 py-4">
-          <div className="flex items-center gap-[9px]">
-            <img src="/Main.png" alt="" className="h-[30px] w-[30px] rounded-lg object-contain" />
-            <div className="flex flex-col leading-tight">
-              <span className="text-[15px] font-extrabold tracking-[-0.3px] text-[#ae0070]">MoMo Admin</span>
-              <span className="flex items-center gap-1 text-[10px] font-semibold text-[#6b7280]">
+        <div className={`flex flex-shrink-0 items-center gap-2 border-b border-[rgba(174,0,112,0.1)] px-5 py-4 ${collapsed ? 'lg:justify-center lg:px-0' : 'justify-between'}`}>
+          <div className={`flex items-center gap-[9px] ${collapsed ? 'lg:gap-0' : ''}`}>
+            <img src="/Main.png" alt="" className="h-[30px] w-[30px] flex-shrink-0 rounded-lg object-contain" />
+            <div className={`flex flex-col leading-tight ${collapsed ? 'lg:hidden' : ''}`}>
+              <span className="whitespace-nowrap text-[15px] font-extrabold tracking-[-0.3px] text-[#ae0070]">MoMo Admin</span>
+              <span className="flex items-center gap-1 whitespace-nowrap text-[10px] font-semibold text-[#6b7280]">
                 <span className={`h-[6px] w-[6px] flex-shrink-0 rounded-full transition-colors duration-300 ${fetching ? 'bg-[#f59e0b]' : 'bg-[#22c55e]'}`} style={fetching ? { animation:'pulse-dot 0.8s infinite' } : undefined} />
                 {lastSync ? `Sync ${lastSync.toLocaleTimeString('vi-VN')}` : 'Đang kết nối…'}
               </span>
             </div>
           </div>
-          <button className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-[#6b7280] transition-all hover:bg-[#f3f4f6] lg:hidden" onClick={() => setSidebarOpen(false)}>
+          <button className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-[#6b7280] transition-all hover:bg-[#f3f4f6] lg:hidden ${collapsed ? 'lg:hidden' : ''}`} onClick={() => setSidebarOpen(false)}>
             <IconX className="h-4 w-4" />
           </button>
         </div>
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-wider text-[#6b7280]">Quản lý giao dịch</div>
+          <div className={`mb-2 px-2 text-[10px] font-bold uppercase tracking-wider text-[#6b7280] ${collapsed ? 'lg:hidden' : ''}`}>Quản lý giao dịch</div>
           <div className="flex flex-col gap-1">
             {NAV_ITEMS.map(item => {
               const Icon   = item.icon
               const active = activeSection === item.key
               return (
                 <button key={item.key}
-                  className={`flex items-center gap-3 rounded-[12px] px-3 py-2.5 text-left transition-all ${
+                  title={collapsed ? item.label : undefined}
+                  className={`flex items-center gap-3 rounded-[12px] px-3 py-2.5 text-left transition-all ${collapsed ? 'lg:justify-center lg:px-0' : ''} ${
                     active ? 'bg-[#ae0070] text-white shadow-[0_4px_14px_rgba(174,0,112,0.25)]' : 'text-[#111827] hover:bg-[#fff0f7] hover:text-[#ae0070]'
                   }`}
                   onClick={() => goToSection(item.key)}
                 >
                   <Icon className={`h-[18px] w-[18px] flex-shrink-0 ${active ? 'text-white' : 'text-[#ae0070]'}`} />
-                  <span className="flex flex-col leading-tight">
+                  <span className={`flex flex-col leading-tight ${collapsed ? 'lg:hidden' : ''}`}>
                     <span className="text-[13.5px] font-bold">{item.label}</span>
                     <span className={`text-[11px] font-medium ${active ? 'text-white/75' : 'text-[#6b7280]'}`}>{item.sub}</span>
                   </span>
                   {item.key === 'history' && pendingCount > 0 && (
-                    <span className={`ml-auto flex-shrink-0 rounded-full px-[7px] py-[1px] text-[10px] font-bold ${active ? 'bg-white/25 text-white' : 'bg-[#fef3c7] text-[#d97706]'}`}>
+                    <span className={`ml-auto flex-shrink-0 rounded-full px-[7px] py-[1px] text-[10px] font-bold ${collapsed ? 'lg:hidden' : ''} ${active ? 'bg-white/25 text-white' : 'bg-[#fef3c7] text-[#d97706]'}`}>
                       {pendingCount}
                     </span>
                   )}
@@ -159,11 +173,12 @@ const Sidebar = memo(function Sidebar({
         {/* Logout */}
         <div className="flex-shrink-0 border-t border-[rgba(174,0,112,0.1)] px-3 py-4">
           <button
-            className="flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626]"
+            title={collapsed ? 'Đăng xuất' : undefined}
+            className={`flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[#6b7280] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626] ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
             onClick={logout}
           >
             <IconLogout className="h-[18px] w-[18px] flex-shrink-0" />
-            <span className="text-[13.5px] font-bold">Đăng xuất</span>
+            <span className={`text-[13.5px] font-bold ${collapsed ? 'lg:hidden' : ''}`}>Đăng xuất</span>
           </button>
         </div>
       </aside>
@@ -953,6 +968,7 @@ function DeleteConfirmModal({ count, password, setPassword, checking, error, onC
 
 // ─── COL FILTER BAR ────────────────────────────────────────────────────────
 function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered, scoped }) {
+  const [open, setOpen] = useState(false)
   const hasActive = Object.values(colFilters).some(v => v !== '')
   const set = (key, val) => setColFilters(f => ({ ...f, [key]: val }))
   const clear = () => setColFilters({ payType: '', source: '', resultCode: '', hour: '' })
@@ -966,63 +982,95 @@ function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered, s
 
   return (
     <div className={`flex flex-wrap items-center gap-2 rounded-b-2xl border-t px-4 py-2 text-[12px] transition-all ${hasActive ? 'border-[rgba(174,0,112,0.15)] bg-[#fff8fc]' : 'border-[rgba(174,0,112,0.06)] bg-[#fbf7fa]/60'}`}>
-      <span className="flex-shrink-0 text-[11px] font-bold uppercase tracking-wide text-[#9b4470]">Lọc cột</span>
-
-      {/* Hình thức thanh toán */}
       <div className="relative">
-        <select value={colFilters.payType} onChange={e => set('payType', e.target.value)} className={selClass(!!colFilters.payType)}>
-          <option value="">Hình thức</option>
-          {colFilterOptions.payType.map(v => <option key={v} value={v}>{v}</option>)}
-        </select>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          className={`flex h-[30px] items-center gap-1.5 rounded-[8px] border px-3 text-[12px] font-bold transition-all ${
+            hasActive ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]' : 'border-[rgba(174,0,112,0.12)] bg-white/80 text-[#6b7280] hover:border-[rgba(174,0,112,0.3)] hover:text-[#ae0070]'
+          }`}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3"><path d="M4 5h16l-6 8v5l-4 2v-7z"/></svg>
+          Bộ lọc
+          {hasActive && <span className="rounded-full bg-[#ae0070] px-[6px] py-[1px] text-[10px] font-bold text-white">{Object.values(colFilters).filter(v => v !== '').length}</span>}
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`transition-transform ${open ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+
+        {open && (
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+            <div className="absolute left-0 top-[calc(100%+6px)] z-30 flex w-[280px] flex-col gap-2.5 rounded-[14px] border border-[rgba(174,0,112,0.12)] bg-white p-3.5 shadow-[0_16px_40px_rgba(23,7,20,0.16)]" style={{ animation:'fadein 0.12s ease' }}>
+              {/* Hình thức thanh toán */}
+              <label className="flex flex-col gap-1">
+                <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#9ca3af]">Hình thức</span>
+                <div className="relative">
+                  <select value={colFilters.payType} onChange={e => set('payType', e.target.value)} className={`${selClass(!!colFilters.payType)} w-full`}>
+                    <option value="">Tất cả</option>
+                    {colFilterOptions.payType.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+              </label>
+
+              {/* Nguồn đơn (pos / create-p2p) */}
+              {colFilterOptions.source.length > 0 && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#9ca3af]">Loại đơn</span>
+                  <div className="relative">
+                    <select value={colFilters.source} onChange={e => set('source', e.target.value)} className={`${selClass(!!colFilters.source)} w-full`}>
+                      <option value="">Tất cả</option>
+                      {colFilterOptions.source.map(v => <option key={v} value={v}>{v === 'pos' ? 'POS / Scan' : v === 'create-p2p' ? 'P2P / QR' : v}</option>)}
+                    </select>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+                  </div>
+                </label>
+              )}
+
+              {/* Result code */}
+              <label className="flex flex-col gap-1">
+                <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#9ca3af]">Result</span>
+                <div className="relative">
+                  <select value={colFilters.resultCode} onChange={e => set('resultCode', e.target.value)} className={`${selClass(!!colFilters.resultCode)} w-full`}>
+                    <option value="">Tất cả</option>
+                    <option value="ok">✓ Thành công (0)</option>
+                    <option value="fail">✗ Thất bại (≠0)</option>
+                    <option value="pending">Chưa có result</option>
+                  </select>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+              </label>
+
+              {/* Giờ tạo đơn — chỉ hiện danh sách giờ THỰC SỰ có giao dịch */}
+              {colFilterOptions.hour.length > 0 && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#9ca3af]">Giờ</span>
+                  <div className="relative">
+                    <select value={colFilters.hour} onChange={e => set('hour', e.target.value)} className={`${selClass(colFilters.hour !== '')} w-full`}>
+                      <option value="">Tất cả</option>
+                      {colFilterOptions.hour.map(h => <option key={h} value={h}>{String(h).padStart(2,'0')}:00 – {String(h).padStart(2,'0')}:59</option>)}
+                    </select>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
+                  </div>
+                </label>
+              )}
+
+              {hasActive && (
+                <button
+                  onClick={() => { clear(); setOpen(false) }}
+                  className="flex items-center justify-center gap-1 rounded-[7px] border border-[rgba(220,38,38,0.2)] bg-[#fff5f5] px-2 py-[6px] text-[11px] font-bold text-[#dc2626] transition-all hover:bg-[#fee2e2]"
+                >
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  Xóa tất cả bộ lọc
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
-
-      {/* Nguồn đơn (pos / create-p2p) */}
-      {colFilterOptions.source.length > 0 && (
-        <div className="relative">
-          <select value={colFilters.source} onChange={e => set('source', e.target.value)} className={selClass(!!colFilters.source)}>
-            <option value="">Loại đơn</option>
-            {colFilterOptions.source.map(v => <option key={v} value={v}>{v === 'pos' ? 'POS / Scan' : v === 'create-p2p' ? 'P2P / QR' : v}</option>)}
-          </select>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
-        </div>
-      )}
-
-      {/* Result code */}
-      <div className="relative">
-        <select value={colFilters.resultCode} onChange={e => set('resultCode', e.target.value)} className={selClass(!!colFilters.resultCode)}>
-          <option value="">Result</option>
-          <option value="ok">✓ Thành công (0)</option>
-          <option value="fail">✗ Thất bại (≠0)</option>
-          <option value="pending">Chưa có result</option>
-        </select>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
-      </div>
-
-      {/* Giờ tạo đơn — chỉ hiện danh sách giờ THỰC SỰ có giao dịch, không có thì ẩn cả select */}
-      {colFilterOptions.hour.length > 0 && (
-        <div className="relative">
-          <select value={colFilters.hour} onChange={e => set('hour', e.target.value)} className={selClass(colFilters.hour !== '')}>
-            <option value="">Giờ</option>
-            {colFilterOptions.hour.map(h => <option key={h} value={h}>{String(h).padStart(2,'0')}:00 – {String(h).padStart(2,'0')}:59</option>)}
-          </select>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="pointer-events-none absolute right-[7px] top-1/2 -translate-y-1/2 text-[#9ca3af]"><path d="m6 9 6 6 6-6"/></svg>
-        </div>
-      )}
 
       <span className="ml-auto text-[11px] font-semibold text-[#6b7280]">
         {filtered.length} kết quả
       </span>
-
-      {hasActive && (
-        <button
-          onClick={clear}
-          className="flex items-center gap-1 rounded-[7px] border border-[rgba(220,38,38,0.2)] bg-[#fff5f5] px-2 py-[3px] text-[11px] font-bold text-[#dc2626] transition-all hover:bg-[#fee2e2]"
-        >
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          Xóa lọc
-        </button>
-      )}
     </div>
   )
 }
@@ -1166,8 +1214,8 @@ function HistorySection({
               <table className="w-full min-w-[980px] table-auto border-collapse text-[13.5px]">
                 <colgroup>
                   <col className="w-[36px]" /><col className="w-[110px]" /><col className="w-[90px]" />
-                  <col className="w-[24%]"  /><col className="w-[110px]" /><col className="w-[110px]" />
-                  <col className="w-[70px]" /><col className="w-[70px]" /><col className="w-[130px]" /><col className="w-[90px]" />
+                  <col className="w-[130px]" /><col className="w-[22%]"  /><col className="w-[110px]" />
+                  <col className="w-[110px]" /><col className="w-[70px]" /><col className="w-[70px]" /><col className="w-[80px]" />
                 </colgroup>
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-[#f5edf2]">
@@ -1179,15 +1227,15 @@ function HistorySection({
                     </th>
                     <SortableTh label="Trạng thái" sortKey="status"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <SortableTh label="Số tiền"    sortKey="amount"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                    <FilterableTh label="Thời gian" sortKey="createdAt" currentKey={sortKey} dir={sortDir} onSort={toggleSort}
+                      filterKey="hour" colFilters={colFilters} setColFilters={setColFilters} options={colFilterOptions.hour}
+                      renderOptionLabel={h => `${String(h).padStart(2,'0')}:00 – ${String(h).padStart(2,'0')}:59`} />
                     <SortableTh label="Nội dung"   sortKey="orderInfo"  currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <SortableTh label="Mã đơn"     sortKey="orderId"    currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <SortableTh label="Mã GD MoMo" sortKey="transId"    currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <FilterableTh label="Hình thức" sortKey="payType" currentKey={sortKey} dir={sortDir} onSort={toggleSort}
                       filterKey="payType" colFilters={colFilters} setColFilters={setColFilters} options={colFilterOptions.payType} />
                     <SortableTh label="Result"     sortKey="resultCode" currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                    <FilterableTh label="Thời gian" sortKey="createdAt" currentKey={sortKey} dir={sortDir} onSort={toggleSort}
-                      filterKey="hour" colFilters={colFilters} setColFilters={setColFilters} options={colFilterOptions.hour}
-                      renderOptionLabel={h => `${String(h).padStart(2,'0')}:00 – ${String(h).padStart(2,'0')}:59`} />
                     <th className="whitespace-nowrap border-b border-[rgba(174,0,112,0.08)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[#6b7280]">Thao tác</th>
                   </tr>
                 </thead>
@@ -1210,6 +1258,10 @@ function HistorySection({
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3.5 align-middle text-sm font-extrabold text-[#ae0070]">{fmt(o.amount)} ₫</td>
+                        <td className="whitespace-nowrap px-4 py-3.5 align-middle text-xs text-[#6b7280]">
+                          <div>{fmtDate(o.createdAt)}</div>
+                          {o.paidAt && <div className="mt-0.5 text-[#16a34a]">✓ {fmtDate(o.paidAt)}</div>}
+                        </td>
                         <td className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle text-[#374151]" title={o.orderInfo}>{o.orderInfo || '—'}</td>
                         <td className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle font-mono text-xs text-[#4b5563]">{o.orderId}</td>
                         <td className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle font-mono text-xs text-[#4b5563]">{o.transId || '—'}</td>
@@ -1221,19 +1273,11 @@ function HistorySection({
                             ? <span className="font-mono text-[13px] font-bold" style={{ color: o.resultCode===0?'#16a34a':'#dc2626' }}>{o.resultCode===0?'✓ 0':`✗ ${o.resultCode}`}</span>
                             : <span className="text-[#9ca3af]">—</span>}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3.5 align-middle text-xs text-[#6b7280]">
-                          <div>{fmtDate(o.createdAt)}</div>
-                          {o.paidAt && <div className="mt-0.5 text-[#16a34a]">✓ {fmtDate(o.paidAt)}</div>}
-                        </td>
+                        {/* Đã bỏ nút "Tra cứu" ở đây — bấm vào cả dòng đã mở Chi tiết, mà
+                            trong Chi tiết đã có sẵn hành động tra cứu MoMo rồi, nên nút
+                            riêng ở cột này là thừa. Chỉ còn Xóa và Xác nhận (nếu 9000). */}
                         <td className="px-4 py-3.5 text-center align-middle" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-center gap-1">
-                            <button
-                              className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[8px] text-[#6366f1] transition-all hover:bg-[#eef2ff] hover:text-[#4f46e5] active:scale-90"
-                              onClick={() => openQueryForOrder(o.orderId)}
-                              title="Tra cứu MoMo API"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/></svg>
-                            </button>
                             <button
                               className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[8px] text-[#9ca3af] transition-all hover:bg-[#fee2e2] hover:text-[#dc2626] active:scale-90"
                               onClick={() => doDelete([o.orderId])}
@@ -1439,6 +1483,7 @@ export default function AdminDashboardPage() {
 
   const [activeSection,   setActiveSection]   = useState('history')
   const [sidebarOpen,     setSidebarOpen]     = useState(false)
+  const [sidebarCollapsed,setSidebarCollapsed] = useState(false)
 
   const [orders,          setOrders]          = useState([])
   const [fetching,        setFetching]        = useState(false)
@@ -1460,13 +1505,11 @@ export default function AdminDashboardPage() {
   // (xem colFilterOptions bên dưới), giờ nào không có đơn thì không hiện lựa chọn đó.
   const [colFilters,      setColFilters]      = useState({ payType: '', source: '', resultCode: '', hour: '' })
 
-  // ─── CỬA SỔ TRA CỨU (đa cửa sổ thật) ───────────────────────────────────
-  // Trước đây chỉ có 1 bộ state dùng chung (queryOrderId/queryModal/...) nên
-  // dù bấm "Tra cứu" ở nhiều đơn khác nhau vẫn chỉ có ĐÚNG 1 cửa sổ hiện ra,
-  // mở cái sau sẽ ghi đè cái trước. Nay đổi thành 1 MẢNG các cửa sổ độc lập
-  // (queryWindows), mỗi phần tử là 1 lượt tra cứu riêng, có thể mở song song
-  // nhiều cửa sổ cùng lúc (mỗi cửa sổ tự kéo/thu nhỏ/đóng độc lập qua FloatingWindow).
-  const [queryWindows,    setQueryWindows]    = useState([]) // { id, orderId, loading, result, error }[]
+  // ─── CỬA SỔ TRA CỨU (chỉ 1 cửa sổ) ─────────────────────────────────────
+  // Theo yêu cầu: "Tra cứu giao dịch" chỉ cần 1 cửa sổ tại 1 thời điểm — mở
+  // tra cứu mới (dù từ menu hay từ 1 dòng trong bảng) sẽ TÁI SỬ DỤNG / GHI ĐÈ
+  // cửa sổ đang mở thay vì tạo thêm cửa sổ mới chồng lên nhau.
+  const [queryWindow,    setQueryWindow]    = useState(null) // { orderId, loading, result, error } | null
   const queryWinSeq = useRef(0)
 
   const [confirmModal,    setConfirmModal]    = useState(false)
@@ -1600,15 +1643,15 @@ export default function AdminDashboardPage() {
   }, [])
 
   const updateQueryWindow = useCallback((id, patch) => {
-    setQueryWindows(ws => ws.map(w => w.id === id ? { ...w, ...patch } : w))
+    setQueryWindow(w => (w && w.id === id) ? { ...w, ...patch } : w)
   }, [])
 
-  const closeQueryWindow = useCallback(id => {
-    setQueryWindows(ws => ws.filter(w => w.id !== id))
+  const closeQueryWindow = useCallback(() => {
+    setQueryWindow(null)
   }, [])
 
-  // Thực hiện tra cứu cho ĐÚNG 1 cửa sổ (theo id) — không còn phụ thuộc vào 1 biến
-  // state dùng chung, nên nhiều cửa sổ chạy song song không dẫm lên nhau.
+  // Thực hiện tra cứu cho cửa sổ đang mở (theo id, để tránh cập nhật nhầm nếu
+  // cửa sổ đã bị đóng/thay thế trong lúc request đang chạy).
   const runQuery = useCallback(async (id, orderIdArg) => {
     const orderId = orderIdArg.trim()
     if (!orderId) return
@@ -1628,24 +1671,23 @@ export default function AdminDashboardPage() {
   }, [fetchOrders, updateQueryWindow])
 
   // Mở cửa sổ tra cứu cho 1 đơn ĐÃ BIẾT orderId (từ bảng / OrderCard / Chi tiết) —
-  // tự chạy tra cứu ngay khi mở.
+  // CHỈ 1 CỬA SỔ tại 1 thời điểm: nếu đang có cửa sổ mở sẵn thì tái sử dụng luôn
+  // (ghi đè nội dung), không mở thêm cửa sổ mới chồng lên nhau.
   const openQueryForOrder = useCallback(orderId => {
     const id = `qw-${++queryWinSeq.current}`
-    setQueryWindows(ws => [...ws, { id, orderId, loading: true, result: null, error: null }])
+    setQueryWindow({ id, orderId, loading: true, result: null, error: null })
     runQuery(id, orderId)
   }, [runQuery])
 
-  // Mở cửa sổ tra cứu TRỐNG (từ menu "Tra cứu giao dịch") — người dùng tự nhập
-  // orderId trong cửa sổ rồi bấm tra cứu.
+  // Mở cửa sổ tra cứu TRỐNG (từ menu "Tra cứu giao dịch") — cũng dùng lại đúng
+  // 1 cửa sổ duy nhất; người dùng tự nhập orderId trong cửa sổ rồi bấm tra cứu.
   const openLookupWindow = useCallback(() => {
     const id = `qw-${++queryWinSeq.current}`
-    setQueryWindows(ws => [...ws, { id, orderId: '', loading: false, result: null, error: null }])
+    setQueryWindow({ id, orderId: '', loading: false, result: null, error: null })
   }, [])
 
-  // "Tra cứu giao dịch" ở sidebar giờ luôn MỞ THÊM 1 cửa sổ nổi mới (không còn
-  // chuyển activeSection nữa) — đúng tinh thần đa cửa sổ: bấm nhiều lần sẽ có
-  // nhiều cửa sổ tra cứu độc lập cùng tồn tại, xếp chồng cascade như các cửa
-  // sổ Chi tiết / Xác nhận khác.
+  // "Tra cứu giao dịch" ở sidebar mở cửa sổ tra cứu (duy nhất) thay vì chuyển
+  // activeSection.
   const goToSection = useCallback(key => {
     if (key === 'lookup') { openLookupWindow(); setSidebarOpen(false); return }
     setActiveSection(key); setSidebarOpen(false)
@@ -1914,17 +1956,16 @@ export default function AdminDashboardPage() {
           />
         )}
 
-        {/* Cửa sổ Tra cứu MoMo — ĐA CỬA SỔ THẬT: mỗi lượt tra cứu (từ bảng, từ Chi
-            tiết, hoặc mở trống từ menu "Tra cứu giao dịch") là 1 cửa sổ độc lập,
-            có thể mở nhiều cái cùng lúc, mỗi cái tự kéo/thu nhỏ/đóng riêng. */}
-        {queryWindows.map(w => (
+        {/* Cửa sổ Tra cứu MoMo — chỉ 1 cửa sổ tại 1 thời điểm (mở lại sẽ tái sử
+            dụng đúng cửa sổ này, dù mở từ bảng, từ Chi tiết, hay từ menu). */}
+        {queryWindow && (
           <LookupWindow
-            key={w.id}
-            win={w}
-            onQuery={orderId => runQuery(w.id, orderId)}
-            onClose={() => closeQueryWindow(w.id)}
+            key={queryWindow.id}
+            win={queryWindow}
+            onQuery={orderId => runQuery(queryWindow.id, orderId)}
+            onClose={closeQueryWindow}
           />
-        ))}
+        )}
 
         {/* Delete Confirm Modal (xác nhận mật khẩu trước khi xoá) */}
         {deleteRequest && (
@@ -1950,10 +1991,12 @@ export default function AdminDashboardPage() {
           fetching={fetching}
           lastSync={lastSync}
           logout={logout}
+          collapsed={sidebarCollapsed}
+          setCollapsed={setSidebarCollapsed}
         />
 
           {/* Main content */}
-          <div className="flex min-h-screen w-full flex-1 flex-col lg:pl-[252px]">
+          <div className={`flex min-h-screen w-full flex-1 flex-col transition-[padding] duration-300 ease-out ${sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[252px]'}`}>
             {/* Mobile top bar */}
             <header className="sticky inset-x-0 top-0 z-[200] flex flex-shrink-0 items-center gap-3 border-b border-[rgba(174,0,112,0.08)] bg-white/88 px-4 py-3 shadow-[0_1px_16px_rgba(174,0,112,0.06)] backdrop-blur-[20px] lg:hidden">
               <button className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-[#ae0070] transition-all hover:bg-[#fff0f7]" onClick={() => setSidebarOpen(true)}>
