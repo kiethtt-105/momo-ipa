@@ -239,54 +239,6 @@ const SortableTh = memo(function SortableTh({ label, sortKey: sk, currentKey, di
   )
 })
 
-// ─── SORTABLE + FILTERABLE TH ───────────────────────────────────────────────
-// Thêm "phễu lọc" ngay tại cột: bấm icon phễu mở 1 popover nhỏ chứa đúng select
-// đang có trong ColFilterBar (dùng chung state colFilters) — cho phép lọc ngay
-// tại cột thay vì phải kéo lên thanh lọc phía trên. Nhãn cột vẫn bấm để sort.
-const FilterableTh = memo(function FilterableTh({ label, sortKey: sk, currentKey, dir, onSort, filterKey, colFilters, setColFilters, options, renderOptionLabel }) {
-  const [open, setOpen] = useState(false)
-  const active = currentKey === sk
-  const hasFilter = filterKey && colFilters[filterKey] !== ''
-  return (
-    <th className="relative select-none whitespace-nowrap border-b border-[rgba(174,0,112,0.08)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[#6b7280]">
-      <span className="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-[#ae0070]" onClick={() => onSort(sk)}>
-        {label}
-        {active
-          ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ae0070" strokeWidth="3">{dir==='asc'?<path d="m18 15-6-6-6 6"/>:<path d="m6 9 6 6 6-6"/>}</svg>
-          : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-30"><path d="M12 5v14M5 12l7-7 7 7"/></svg>}
-      </span>
-      {filterKey && options && (
-        <button
-          type="button"
-          onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
-          title="Lọc theo cột này"
-          className={`ml-1 inline-flex h-4 w-4 items-center justify-center rounded-[4px] align-middle transition-all ${hasFilter ? 'bg-[#ae0070] text-white' : 'text-[#9ca3af] hover:bg-[rgba(174,0,112,0.1)] hover:text-[#ae0070]'}`}
-        >
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 5h16l-6 8v5l-4 2v-7z"/></svg>
-        </button>
-      )}
-      {open && (
-        <>
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute left-2 top-full z-30 mt-1 min-w-[150px] rounded-[10px] border border-[rgba(174,0,112,0.12)] bg-white p-1.5 normal-case shadow-[0_14px_34px_rgba(23,7,20,0.16)]" style={{ animation:'fadein 0.12s ease' }}>
-            <button
-              className={`block w-full rounded-[7px] px-2.5 py-[5px] text-left text-[12px] font-semibold ${!colFilters[filterKey] ? 'bg-[#fff0f7] text-[#ae0070]' : 'text-[#374151] hover:bg-[#f9fafb]'}`}
-              onClick={() => { setColFilters(f => ({ ...f, [filterKey]: '' })); setOpen(false) }}
-            >Tất cả</button>
-            {options.map(opt => (
-              <button
-                key={opt}
-                className={`block w-full rounded-[7px] px-2.5 py-[5px] text-left text-[12px] font-semibold ${colFilters[filterKey] === String(opt) ? 'bg-[#fff0f7] text-[#ae0070]' : 'text-[#374151] hover:bg-[#f9fafb]'}`}
-                onClick={() => { setColFilters(f => ({ ...f, [filterKey]: String(opt) })); setOpen(false) }}
-              >{renderOptionLabel ? renderOptionLabel(opt) : opt}</button>
-            ))}
-          </div>
-        </>
-      )}
-    </th>
-  )
-})
-
 // ─── ORDER CARD (mobile) ────────────────────────────────────────────────────
 const OrderCard = memo(function OrderCard({ o, selected, onToggle, onOpenDetail, onQuery, onDelete, onConfirm }) {
   const sm = STATUS_META[o.status] || STATUS_META.PENDING
@@ -547,7 +499,7 @@ function FloatingWinDock() {
   )
 }
 
-function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor = '#ae0070', onClose, children, footer, width = 560, taskbarLabel }) {
+function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor = '#ae0070', onClose, children, footer, width = 560, taskbarLabel, cascade = true }) {
   const [pos,       setPos]       = useState(null)
   const [z,         setZ]         = useState(0)
   const [dragging,  setDragging]  = useState(false)
@@ -557,7 +509,10 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
   const cascadeRef = useRef(null)
   const prevGeom   = useRef(null) // { pos } trước khi phóng to, để khôi phục lại
   const winId      = useRef(null)
-  if (cascadeRef.current === null) cascadeRef.current = nextCascadeOffset()
+  // cascade=false (dùng cho cửa sổ Chi tiết) → luôn canh đúng giữa màn hình,
+  // không lệch theo hiệu ứng xếp chồng, để cửa sổ không trôi dần xuống dưới/
+  // phải qua mỗi lần mở (gây cảm giác "mất chữ" dù phía trên còn thừa chỗ trống).
+  if (cascadeRef.current === null) cascadeRef.current = cascade ? nextCascadeOffset() : { x: 0, y: 0 }
   if (winId.current === null) winId.current = `fw-${++__floatWinIdSeq}`
 
   // Canh giữa màn hình lúc mount (1 lần), cộng thêm lệch cascade để nhiều
@@ -566,7 +521,7 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
     const w = typeof window !== 'undefined' ? window.innerWidth  : 1200
     const h = typeof window !== 'undefined' ? window.innerHeight : 800
     const winW = Math.min(width, w - 32)
-    const estH = Math.min(h * 0.7, 560)
+    const estH = Math.min(h * 0.85, 640)
     const baseX = Math.max(16, (w - winW) / 2)
     const baseY = Math.max(16, (h - estH) / 2)
     setPos({ x: baseX + cascadeRef.current.x, y: baseY + cascadeRef.current.y })
@@ -723,7 +678,7 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
 }
 
 // ─── DETAIL MODAL ──────────────────────────────────────────────────────────
-function DetailModal({ order: o, onClose, onDelete, onQuery, onConfirm }) {
+function DetailModal({ order: o, checking, onClose, onDelete, onQuery, onConfirm }) {
   const sm    = STATUS_META[o.status] || STATUS_META.PENDING
   const copy  = t => navigator.clipboard?.writeText(String(t))
   const extra = decodeExtra(o.extraData)
@@ -731,6 +686,7 @@ function DetailModal({ order: o, onClose, onDelete, onQuery, onConfirm }) {
   return (
     <FloatingWindow
       width={600}
+      cascade={false}
       onClose={onClose}
       taskbarLabel={`Chi tiết · ${o.orderId}`}
       title={
@@ -739,6 +695,12 @@ function DetailModal({ order: o, onClose, onDelete, onQuery, onConfirm }) {
             <span className="h-1.5 w-1.5 rounded-full" style={{ background:sm.dot }} />{sm.label}
           </span>
           <span className="text-[20px] font-extrabold tracking-tight text-[#ae0070]">{fmt(o.amount)} ₫</span>
+          {checking && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#9ca3af]">
+              <IconRefresh className="h-[11px] w-[11px] animate-spin" />
+              Đang đối chiếu MoMo...
+            </span>
+          )}
         </div>
       }
       footer={
@@ -1083,7 +1045,7 @@ function HistorySection({
   colFilters, setColFilters, colFilterOptions,
   selected, toggleOne, toggleAll, sortKey, sortDir, toggleSort,
   setDetail, openQueryForOrder, openConfirmForOrder, doDelete,
-  onReconcileAll, reconcilingAll, reconcileMsg,
+  reconcilingAll,
 }) {
   const successRate = counts.ALL ? Math.round(counts.PAID / counts.ALL * 100) : 0
 
@@ -1154,27 +1116,16 @@ function HistorySection({
               className="w-[160px] rounded-[10px] border border-[rgba(174,0,112,0.1)] bg-white/70 py-[7px] pl-[34px] pr-8 text-[13px] text-[#111827] transition-all focus:border-[#ae0070] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.08)] focus:w-[220px]" />
             {search && <button className="absolute right-[10px] text-xs leading-none text-[#6b7280]" onClick={() => setSearch('')}>✕</button>}
           </div>
-          <div className="relative">
-            <button
-              type="button"
-              title="Cập nhật lại trạng thái tất cả giao dịch đang chờ"
-              disabled={reconcilingAll}
-              onClick={onReconcileAll}
-              className={`relative z-10 flex h-[33px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-3 text-[12.5px] font-semibold transition-all active:scale-95 disabled:cursor-not-allowed ${
-                reconcilingAll
-                  ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]'
-                  : 'cursor-pointer border-[rgba(174,0,112,0.15)] bg-white/70 text-[#ae0070] hover:border-[#ae0070] hover:bg-[#fff0f7] hover:shadow-[0_0_0_3px_rgba(174,0,112,0.08)]'
-              }`}
-            >
-              <IconRefresh className={`h-[14px] w-[14px] flex-shrink-0 ${reconcilingAll ? 'animate-spin' : ''}`} />
-              {reconcilingAll ? 'Đang quét...' : 'Cập nhật'}
-            </button>
-            {reconcileMsg && (
-              <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-max max-w-[260px] rounded-lg bg-[#111827] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)]" style={{ animation:'fadein 0.15s ease' }}>
-                {reconcileMsg}
-              </div>
-            )}
-          </div>
+          {/* Không còn nút "Cập nhật" thủ công — trạng thái các giao dịch đang
+              chờ xử lý được tự động đối chiếu lại với MoMo mỗi 1 giây (cùng
+              nhịp với việc tự tải lại danh sách), chỉ hiện 1 chấm nhỏ báo đang
+              quét để người dùng yên tâm là hệ thống vẫn đang tự cập nhật. */}
+          {reconcilingAll && (
+            <span className="flex h-[33px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border border-[rgba(174,0,112,0.15)] bg-[#fff0f7] px-3 text-[12.5px] font-semibold text-[#ae0070]">
+              <IconRefresh className="h-[14px] w-[14px] flex-shrink-0 animate-spin" />
+              Đang cập nhật...
+            </span>
+          )}
           {selected.size > 0 && (
             <button
               className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[9px] bg-[#dc2626] px-3.5 py-[7px] text-[13px] font-bold text-white transition-all hover:bg-[#b91c1c] active:scale-95"
@@ -1227,14 +1178,11 @@ function HistorySection({
                     </th>
                     <SortableTh label="Trạng thái" sortKey="status"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <SortableTh label="Số tiền"    sortKey="amount"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                    <FilterableTh label="Thời gian" sortKey="createdAt" currentKey={sortKey} dir={sortDir} onSort={toggleSort}
-                      filterKey="hour" colFilters={colFilters} setColFilters={setColFilters} options={colFilterOptions.hour}
-                      renderOptionLabel={h => `${String(h).padStart(2,'0')}:00 – ${String(h).padStart(2,'0')}:59`} />
+                    <SortableTh label="Thời gian" sortKey="createdAt" currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <SortableTh label="Nội dung"   sortKey="orderInfo"  currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <SortableTh label="Mã đơn"     sortKey="orderId"    currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <SortableTh label="Mã GD MoMo" sortKey="transId"    currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                    <FilterableTh label="Hình thức" sortKey="payType" currentKey={sortKey} dir={sortDir} onSort={toggleSort}
-                      filterKey="payType" colFilters={colFilters} setColFilters={setColFilters} options={colFilterOptions.payType} />
+                    <SortableTh label="Hình thức" sortKey="payType" currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <SortableTh label="Result"     sortKey="resultCode" currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <th className="whitespace-nowrap border-b border-[rgba(174,0,112,0.08)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[#6b7280]">Thao tác</th>
                   </tr>
@@ -1488,7 +1436,6 @@ export default function AdminDashboardPage() {
   const [orders,          setOrders]          = useState([])
   const [fetching,        setFetching]        = useState(false)
   const [reconcilingAll,  setReconcilingAll]  = useState(false)
-  const [reconcileMsg,    setReconcileMsg]    = useState(null)
   const [lastSync,        setLastSync]        = useState(null)
   const [filter,          setFilter]          = useState('ALL')
   const [search,          setSearch]          = useState('')
@@ -1500,6 +1447,7 @@ export default function AdminDashboardPage() {
   const [sortDir,         setSortDir]         = useState('desc')
   const [selected,        setSelected]        = useState(new Set())
   const [detail,          setDetail]          = useState(null)
+  const [detailChecking,  setDetailChecking]  = useState(false)
   // colFilters gộp cả bộ lọc theo cột (payType/source/resultCode) và bộ lọc
   // theo GIỜ (hour) — hour chỉ liệt kê các khung giờ THỰC SỰ có giao dịch
   // (xem colFilterOptions bên dưới), giờ nào không có đơn thì không hiện lựa chọn đó.
@@ -1530,7 +1478,6 @@ export default function AdminDashboardPage() {
   const ordersRef   = useRef([])
   const fetchingRef = useRef(false)
   const reconcilingAllRef = useRef(false)
-  const reconcileMsgTimerRef = useRef(null)
   const selectedRef = useRef(new Set())
   const detailRef   = useRef(null)
   const filteredRef = useRef([])
@@ -1573,27 +1520,26 @@ export default function AdminDashboardPage() {
     }
   }, [])
 
-  // Quét lại tất cả giao dịch đang PENDING bằng cách gọi /api/momo/query cho từng
-  // đơn — backend sẽ tự đối chiếu (reconcile) với MoMo và sửa Redis nếu IPN bị rớt.
-  // Giới hạn chạy đồng thời (CONCURRENCY) để không spam API MoMo cùng lúc.
-  // Luôn xoay icon ngay khi bấm (kể cả khi không có đơn PENDING nào) và giữ xoay
-  // tối thiểu MIN_SPIN_MS để người dùng thấy rõ là đã bấm trúng / đang chạy.
+  // Tự động quét lại tất cả giao dịch đang PENDING bằng cách gọi /api/momo/query
+  // cho từng đơn — backend sẽ tự đối chiếu (reconcile) với MoMo và sửa Redis nếu
+  // IPN bị rớt. Không còn nút bấm thủ công: hàm này được gọi lại mỗi 1 giây cùng
+  // nhịp với fetchOrders (xem effect polling bên dưới), nên nếu 1 lượt quét chưa
+  // xong trong 1s thì lượt sau sẽ tự bỏ qua (guard reconcilingAllRef) thay vì
+  // chồng request lên nhau. Giới hạn chạy đồng thời (CONCURRENCY) để không spam
+  // API MoMo cùng lúc khi có nhiều đơn đang chờ.
   const reconcileAllPending = useCallback(async () => {
     if (reconcilingAllRef.current) return
-    reconcilingAllRef.current = true; setReconcilingAll(true)
-    setReconcileMsg(null); clearTimeout(reconcileMsgTimerRef.current)
-    const MIN_SPIN_MS = 600
-    const startedAt = Date.now()
-
     const targets = ordersRef.current
       .map(normalizeStatus)
       .filter(o => o.status === 'PENDING')
       .map(o => o.orderId)
+    if (targets.length === 0) return
 
-    let checked = 0, reconciled = 0
-    if (targets.length > 0) {
+    reconcilingAllRef.current = true; setReconcilingAll(true)
+    try {
       const CONCURRENCY = 4
       let idx = 0
+      let reconciled = 0
       const worker = async () => {
         while (idx < targets.length) {
           const orderId = targets[idx++]
@@ -1604,35 +1550,25 @@ export default function AdminDashboardPage() {
               body: JSON.stringify({ orderId }),
             })
             const data = await res.json().catch(() => null)
-            checked += 1
             if (data?._reconciled) reconciled += 1
           } catch (err) {
             console.error('[AdminDashboard] reconcileAllPending lỗi với', orderId, err)
-            checked += 1
           }
         }
       }
       await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker))
+      if (reconciled > 0) await fetchOrders({ force: true })
+    } finally {
+      reconcilingAllRef.current = false; setReconcilingAll(false)
     }
-
-    await fetchOrders({ force: true })
-
-    const elapsed = Date.now() - startedAt
-    if (elapsed < MIN_SPIN_MS) await new Promise(r => setTimeout(r, MIN_SPIN_MS - elapsed))
-
-    reconcilingAllRef.current = false; setReconcilingAll(false)
-    setReconcileMsg(targets.length === 0
-      ? 'Không có giao dịch nào đang chờ xử lý'
-      : reconciled > 0
-        ? `Đã quét ${checked} đơn · cập nhật lại ${reconciled} đơn bị lệch`
-        : `Đã quét ${checked} đơn · không có đơn nào bị lệch`)
-    reconcileMsgTimerRef.current = setTimeout(() => setReconcileMsg(null), 4000)
   }, [fetchOrders])
 
+  // Vòng lặp tự làm mới duy nhất: mỗi 1 giây vừa tải lại danh sách đơn hàng vừa
+  // đối chiếu lại các đơn đang chờ xử lý với MoMo — không cần người dùng bấm gì.
   useEffect(() => {
-    const iv = setInterval(() => fetchOrders(), REFRESH_INTERVAL)
+    const iv = setInterval(() => { fetchOrders(); reconcileAllPending() }, REFRESH_INTERVAL)
     return () => clearInterval(iv)
-  }, [authed, fetchOrders])
+  }, [authed, fetchOrders, reconcileAllPending])
 
   useEffect(() => {
     const fn = e => {
@@ -1669,6 +1605,29 @@ export default function AdminDashboardPage() {
       updateQueryWindow(id, { loading: false, error: err.message || 'Lỗi không xác định' })
     }
   }, [fetchOrders, updateQueryWindow])
+
+  // Mở Chi tiết cho 1 đơn khi bấm vào dòng/thẻ trong bảng: hiện ngay dữ liệu
+  // đang có trong cache (không phải chờ), đồng thời âm thầm gọi /api/momo/query
+  // để đối chiếu với MoMo — nếu trạng thái đang lưu bị lệch so với thực tế,
+  // backend tự sửa lại (Redis) và ta refresh danh sách ngay để khung Chi tiết
+  // hiện đúng trạng thái mới nhất, không phải đợi tới lượt tự làm mới kế tiếp.
+  const openDetail = useCallback(async orderId => {
+    setDetail(orderId)
+    setDetailChecking(true)
+    try {
+      const res  = await fetch('/api/momo/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      })
+      const data = await res.json().catch(() => null)
+      if (data?._reconciled) await fetchOrders({ force: true })
+    } catch (err) {
+      console.error('[AdminDashboard] openDetail query lỗi:', err)
+    } finally {
+      setDetailChecking(false)
+    }
+  }, [fetchOrders])
 
   // Mở cửa sổ tra cứu cho 1 đơn ĐÃ BIẾT orderId (từ bảng / OrderCard / Chi tiết) —
   // CHỈ 1 CỬA SỔ tại 1 thời điểm: nếu đang có cửa sổ mở sẵn thì tái sử dụng luôn
@@ -1938,6 +1897,7 @@ export default function AdminDashboardPage() {
         {detailOrder && (
           <DetailModal
             order={detailOrder}
+            checking={detailChecking}
             onClose={() => setDetail(null)}
             onDelete={id => doDelete([id])}
             onQuery={id => openQueryForOrder(id)}
@@ -2019,13 +1979,11 @@ export default function AdminDashboardPage() {
                   colFilters={colFilters} setColFilters={setColFilters} colFilterOptions={colFilterOptions}
                   selected={selected} toggleOne={toggleOne} toggleAll={toggleAll}
                   sortKey={sortKey} sortDir={sortDir} toggleSort={toggleSort}
-                  setDetail={setDetail}
+                  setDetail={openDetail}
                   openQueryForOrder={openQueryForOrder}
                   openConfirmForOrder={openConfirmForOrder}
                   doDelete={doDelete}
-                  onReconcileAll={reconcileAllPending}
                   reconcilingAll={reconcilingAll}
-                  reconcileMsg={reconcileMsg}
                 />
               )}
               {activeSection === 'create' && <CreateSection />}
