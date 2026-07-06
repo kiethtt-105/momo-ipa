@@ -5,6 +5,7 @@
 import crypto from 'crypto'
 import { Redis } from '@upstash/redis'
 import { requireAdmin } from '../../../lib/requireAdmin'
+import { resolveStore } from '../../../lib/stores'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -16,9 +17,6 @@ const ACCESS_KEY   = process.env.MOMO_ACCESS_KEY
 const SECRET_KEY   = process.env.MOMO_SECRET_KEY
 const PUBLIC_KEY   = process.env.MOMO_POS_PUBLIC_KEY || ''
 const POS_ENDPOINT = 'https://payment.momo.vn/v2/gateway/api/pos'
-
-const STORE_ID   = process.env.MOMO_STORE_ID || ''
-const STORE_NAME = process.env.MOMO_STORE_NAME || ''
 
 function sign(raw) {
   return crypto.createHmac('sha256', SECRET_KEY).update(raw).digest('hex')
@@ -58,7 +56,7 @@ async function handlePosCharge(req, res) {
     return res.status(500).json({ error: 'Server thiếu cấu hình MoMo (kiểm tra biến môi trường)' })
   }
 
-  let { orderId: rawOrderId, amount, orderInfo: rawOrderInfo, paymentCode: rawPaymentCode } = req.body
+  let { orderId: rawOrderId, amount, orderInfo: rawOrderInfo, paymentCode: rawPaymentCode, storeId: rawStoreId } = req.body
 
   if (!rawOrderId || !amount || !rawPaymentCode) {
     return res.status(400).json({ error: 'Thiếu thông tin bắt buộc: orderId, amount, paymentCode' })
@@ -71,6 +69,9 @@ async function handlePosCharge(req, res) {
 
   let orderInfo = String(rawOrderInfo || '').trim()
   if (!orderInfo) {
+    // Đồng bộ với create-p2p.js / pos-charge.js: "Thanh Toán {mã đơn hàng}"
+    // thay vì gán bằng chính orderId (trước đây orderInfo === orderId trông
+    // như thiếu nội dung hiển thị cho khách).
     orderInfo = `Thanh Toán ${orderId}`
   }
 
@@ -83,6 +84,10 @@ async function handlePosCharge(req, res) {
   if (isNaN(amt) || amt < 1000 || amt > 10_000_000) {
     return res.status(400).json({ error: 'Số tiền không hợp lệ (1.000 – 10.000.000 ₫)' })
   }
+
+  // Chọn cửa hàng: dùng storeId được truyền lên, nếu không có thì tự
+  // dùng cửa hàng mặc định (giống hệt cơ chế trong create-p2p.js).
+  const store = resolveStore((rawStoreId || '').toString().trim())
 
   let encryptedCode
   try {
@@ -120,8 +125,8 @@ async function handlePosCharge(req, res) {
     signature: sign(rawSignature),
   }
 
-  if (STORE_ID)   body.storeId   = STORE_ID
-  if (STORE_NAME) body.storeName = STORE_NAME
+  if (store.id)   body.storeId   = store.id
+  if (store.name) body.storeName = store.name
 
   const now = new Date().toISOString()
 
@@ -137,7 +142,7 @@ async function handlePosCharge(req, res) {
         transId: '',
         payType: '',
         paymentOption: '',
-        source: 'pos',
+        source: 'pos', storeId: store.id, storeName: store.name,
       }),
     })
 
@@ -159,7 +164,7 @@ async function handlePosCharge(req, res) {
           status: 'FAILED', createdAt: now, paidAt: null,
           transId: '', payType: 'pos', paymentOption: '',
           resultCode: -1, message: 'MoMo trả về dữ liệu không hợp lệ',
-          source: 'pos',
+          source: 'pos', storeId: store.id, storeName: store.name,
         }),
       })
       return res.status(500).json({ error: 'MoMo trả về dữ liệu không hợp lệ' })
@@ -178,7 +183,7 @@ async function handlePosCharge(req, res) {
       resultCode: data.resultCode,
       message: data.message || 'Không có thông báo',
       responseTime: data.responseTime,
-      source: 'pos',
+      source: 'pos', storeId: store.id, storeName: store.name,
     }
 
     await redis.hset('momo:orders', { [orderId]: JSON.stringify(updated) })
@@ -202,7 +207,7 @@ async function handlePosCharge(req, res) {
           transId: '', payType: 'pos', paymentOption: '',
           resultCode: -1,
           message: isTimeout ? 'Timeout khi gọi MoMo (15s)' : (err.message || 'Lỗi server'),
-          source: 'pos',
+          source: 'pos', storeId: store.id, storeName: store.name,
         }),
       })
     } catch (redisErr) {

@@ -6,13 +6,17 @@ import Head from 'next/head'
 // ─── CONSTANTS ─────────────────────────────────────────────
 const TX_BASE_URL = 'https://kiehtt.vercel.app'
 
-function buildTxUrl(method, amount, orderInfo) {
+function buildTxUrl(method, amount, orderInfo, storeId) {
   const amt = parseInt(amount, 10)
   if (!amt || amt <= 0) return null
   // Scan QR giờ xử lý INLINE ngay trong trang (xem startScan()), không còn
   // điều hướng qua /api/momo/scan (GET) nữa → chỉ build URL cho p2p.
   if (method !== 'p2p') return null
-  return `${TX_BASE_URL}/api/momo/create-p2p?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
+  const base = `${TX_BASE_URL}/api/momo/create-p2p?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
+  // storeId là tuỳ chọn — nếu không truyền, backend (create-p2p.js) sẽ tự
+  // dùng cửa hàng mặc định (MOMO_STORES → default: true). Nhờ vậy link
+  // nhanh/shortcut không kèm storeId vẫn luôn tạo đúng đơn ở 1 cửa hàng cố định.
+  return storeId ? `${base}&storeId=${encodeURIComponent(storeId)}` : base
 }
 
 function cleanCode(raw) {
@@ -325,6 +329,15 @@ export default function CreateTransactionPage() {
   const [amount,       setAmount]       = useState('')
   const [orderInfo,    setOrderInfo]    = useState(() => genOrderId())
 
+  // ─── CHỌN CỬA HÀNG ──────────────────────────────────────────
+  // stores: danh sách cửa hàng tải từ /api/momo/stores (nguồn: MOMO_STORES).
+  // storeId: cửa hàng đang chọn. '' nghĩa là "chưa chọn" — trường hợp này
+  // backend (create-p2p.js / scan.js) sẽ tự dùng cửa hàng mặc định, nên
+  // link nhanh/shortcut không kèm storeId vẫn hoạt động bình thường.
+  const [stores,       setStores]       = useState([])
+  const [storeId,      setStoreId]      = useState('')
+  const [storesLoading, setStoresLoading] = useState(true)
+
   const [copied,       setCopied]       = useState(false)
   const [pendingOrders, setPendingOrders] = useState([])
   const [resultToast,  setResultToast]  = useState(null)
@@ -498,9 +511,10 @@ export default function CreateTransactionPage() {
     router.replace('/admin/create-transaction', undefined, { shallow: true })
   }
 
-  async function startP2P(amt, info) {
+  async function startP2P(amt, info, storeIdArg) {
     const finalOrderInfo = info || genOrderId()
-    const url = buildTxUrl('p2p', amt, finalOrderInfo)
+    const finalStoreId = storeIdArg !== undefined ? storeIdArg : storeId
+    const url = buildTxUrl('p2p', amt, finalOrderInfo, finalStoreId)
     if (!url) return
 
     try {
@@ -520,6 +534,10 @@ export default function CreateTransactionPage() {
       setP2pExpiresAt(expiresAt)
       setP2pCopied(false)
       setOrderInfo(finalOrderInfo)
+      // storeId trả về từ server = cửa hàng THỰC SỰ đã dùng để tạo đơn
+      // (kể cả khi request không kèm storeId và server tự chọn default),
+      // nên đồng bộ lại UI theo giá trị này.
+      if (data.storeId) setStoreId(data.storeId)
       setP2pActive(true)
 
       // Ghi "cứng" thông tin đơn vào URL (shallow, không reload trang) —
@@ -536,6 +554,7 @@ export default function CreateTransactionPage() {
           amount: amt,
           orderInfo: finalOrderInfo,
           expiresAt,
+          ...(data.storeId ? { storeId: data.storeId } : {}),
         },
       }, undefined, { shallow: true })
     } catch (e) {
@@ -797,9 +816,10 @@ export default function CreateTransactionPage() {
   }
 
   // Tạo đơn PENDING rồi mở khung quét QR ngay tại chỗ (không chuyển trang)
-  async function startScan(amt, info) {
+  async function startScan(amt, info, storeIdArg) {
     const generatedId = `POS${Date.now()}`
     const finalOrderInfo = info || genOrderId()
+    const finalStoreId = storeIdArg !== undefined ? storeIdArg : storeId
     submittingRef.current = true
     try {
       await fetch('/api/momo/save-pending', {
@@ -809,6 +829,7 @@ export default function CreateTransactionPage() {
           orderId: generatedId,
           amount: parseInt(amt, 10),
           orderInfo: finalOrderInfo,
+          ...(finalStoreId ? { storeId: finalStoreId } : {}),
         }),
       })
     } catch (e) {
@@ -852,7 +873,10 @@ export default function CreateTransactionPage() {
         const res = await fetch('/api/momo/scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, amount: amt, orderInfo: baseOrderInfo, paymentCode: code }),
+          body: JSON.stringify({
+            orderId, amount: amt, orderInfo: baseOrderInfo, paymentCode: code,
+            ...(storeId ? { storeId } : {}),
+          }),
         })
         data = await res.json()
 
@@ -937,6 +961,7 @@ export default function CreateTransactionPage() {
           amount: parseInt(amount, 10),
           orderInfo: orderInfo || scanOrderId,
           paymentCode: '000000000000000000',
+          ...(storeId ? { storeId } : {}),
         }),
       })
     } catch (e) {
@@ -955,8 +980,30 @@ export default function CreateTransactionPage() {
         if (d.method) setMethod(d.method)
         if (d.amount) setAmount(d.amount)
         if (d.orderInfo) setOrderInfo(d.orderInfo)
+        if (d.storeId) setStoreId(d.storeId)
       }
     } catch (e) {}
+  }, [])
+
+  // Tải danh sách cửa hàng 1 lần khi vào trang. Nếu chưa có lựa chọn nào
+  // (từ draft hoặc từ URL link nhanh) thì tự chọn cửa hàng mặc định.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/momo/stores')
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled) return
+        const list = Array.isArray(d.stores) ? d.stores : []
+        setStores(list)
+        setStoreId(prev => {
+          if (prev) return prev // đã có lựa chọn từ draft/URL → giữ nguyên
+          const def = list.find(s => s.default) || list[0]
+          return def ? def.id : ''
+        })
+      })
+      .catch(e => console.error('Không tải được danh sách cửa hàng:', e))
+      .finally(() => { if (!cancelled) setStoresLoading(false) })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -964,6 +1011,7 @@ export default function CreateTransactionPage() {
     const {
       method: qMethod, amount: qAmount, orderInfo: qOrderInfo,
       orderId: qOrderId, payUrl: qPayUrl, deeplink: qDeeplink, expiresAt: qExpiresAt,
+      storeId: qStoreId,
     } = router.query
     const validMethod = (qMethod === 'p2p' || qMethod === 'scan') ? qMethod : null
     const validAmount = qAmount ? String(parseInt(qAmount, 10) || '') : null
@@ -971,6 +1019,14 @@ export default function CreateTransactionPage() {
     if (validMethod) setMethod(validMethod)
     if (validAmount) setAmount(validAmount)
     if (qOrderInfo) setOrderInfo(String(qOrderInfo))
+    if (qStoreId) setStoreId(String(qStoreId))
+
+    // Link nhanh/shortcut có thể không kèm storeId (?storeId=...) — trường
+    // hợp đó dùng thẳng state storeId hiện tại. Không dùng setStoreId() ở
+    // trên rồi đọc lại storeId, vì cập nhật state không có hiệu lực ngay
+    // trong cùng 1 lần chạy effect này (đọc trước khi startP2P/startScan
+    // bên dưới có thể vẫn là '' dù link có kèm storeId).
+    const effectiveStoreId = qStoreId ? String(qStoreId) : storeId
 
     // ─── RESUME: URL đã có sẵn orderId + payUrl của 1 đơn P2P đang chạy
     // (do chính trang này ghi vào lúc tạo đơn) → khôi phục lại panel thay
@@ -1007,20 +1063,21 @@ export default function CreateTransactionPage() {
 
       if (validMethod !== 'p2p') {
         // scan: tạo đơn & mở khung quét QR ngay tại chỗ, không cần build URL
-        startScan(validAmount, finalOrderInfo)
+        startScan(validAmount, finalOrderInfo, effectiveStoreId)
         return
       }
 
       // p2p: tạo đơn + QR rồi hiện ngay tại chỗ (chia đôi màn hình), không
       // điều hướng sang MoMo nữa.
-      startP2P(validAmount, finalOrderInfo)
+      startP2P(validAmount, finalOrderInfo, effectiveStoreId)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.isReady])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ method, amount, orderInfo }))
-  }, [method, amount, orderInfo])
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ method, amount, orderInfo, storeId }))
+  }, [method, amount, orderInfo, storeId])
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth > 768) {
@@ -1065,7 +1122,8 @@ export default function CreateTransactionPage() {
 
   const isP2P    = method === 'p2p'
   const canSubmit = parseInt(amount || 0, 10) > 0
-  const previewUrl = buildTxUrl(method, amount, orderInfo) || ''
+  const previewUrl = buildTxUrl(method, amount, orderInfo, storeId) || ''
+  const currentStoreName = stores.find(s => s.id === storeId)?.name || ''
 
   const handleCreate = async () => {
     const finalOrderInfo = (orderInfo || '').trim() || genOrderId()
@@ -1074,7 +1132,7 @@ export default function CreateTransactionPage() {
       // SCAN: bấm Enter/Xác nhận → tạo đơn PENDING rồi hiện khung quét QR
       // ngay trong trang (không mở tab mới, không qua /admin/scan)
       setLoading(true)
-      await startScan(amount, finalOrderInfo)
+      await startScan(amount, finalOrderInfo, storeId)
       setLoading(false)
       return
     }
@@ -1082,7 +1140,7 @@ export default function CreateTransactionPage() {
     // P2P: tạo đơn + QR rồi hiện ngay trong trang (chia đôi màn hình),
     // kèm nút "Kiểm tra giao dịch" và "Hủy giao dịch".
     setLoading(true)
-    await startP2P(amount, finalOrderInfo)
+    await startP2P(amount, finalOrderInfo, storeId)
     setLoading(false)
   }
 
@@ -1306,6 +1364,31 @@ export default function CreateTransactionPage() {
         }
         .quick-btn:hover, .quick-btn:active {
           border-color: var(--mm); color: var(--mm); background: var(--mm-light);
+        }
+
+        .store-section { margin-bottom: 20px; }
+        .store-select-wrap { position: relative; }
+        .store-select {
+          width: 100%;
+          appearance: none; -webkit-appearance: none;
+          border: 1.5px solid var(--border);
+          border-radius: 12px;
+          background: var(--subtle);
+          padding: 11px 38px 11px 13px;
+          font-family: inherit;
+          font-size: 13.5px; font-weight: 700;
+          color: var(--text);
+          outline: none; cursor: pointer; transition: all 0.18s ease;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .store-select:focus { border-color: var(--mm); background: #fff; box-shadow: 0 0 0 3px var(--mm-mid); }
+        .store-select:disabled { opacity: 0.6; cursor: not-allowed; }
+        .store-select-arrow {
+          position: absolute; right: 13px; top: 50%; transform: translateY(-50%);
+          pointer-events: none; color: var(--muted);
+        }
+        .store-select-hint {
+          margin-top: 6px; font-size: 11px; font-weight: 600; color: var(--muted);
         }
 
         .order-section { margin-bottom: 20px; }
@@ -2089,6 +2172,30 @@ export default function CreateTransactionPage() {
               </div>
             )}
 
+            {stores.length > 1 && (
+              <div className="store-section">
+                <div className="field-label">Cửa hàng</div>
+                <div className="store-select-wrap">
+                  <select
+                    className="store-select"
+                    value={storeId}
+                    onChange={e => setStoreId(e.target.value)}
+                    disabled={p2pActive || scanActive || storesLoading}
+                  >
+                    {stores.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}{s.default ? ' (mặc định)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="store-select-arrow" style={{ transform: 'translateY(-50%) rotate(90deg)' }}><IconArrow /></span>
+                </div>
+                {(p2pActive || scanActive) && (
+                  <div className="store-select-hint">Hủy giao dịch hiện tại để đổi cửa hàng khác</div>
+                )}
+              </div>
+            )}
+
             <div className="field-label">Phương thức</div>
             <div className="method-tabs">
               {methodConfig.map(m => (
@@ -2193,6 +2300,15 @@ export default function CreateTransactionPage() {
               <div className="scan-pane scan-pane-info">
                 <div className="field-label">Thông tin đơn hàng</div>
                 <div className="scan-order-card">
+                  {stores.length > 1 && (
+                    <>
+                      <div className="scan-order-row">
+                        <span>Cửa hàng</span>
+                        <span className="scan-order-mono">{currentStoreName || '—'}</span>
+                      </div>
+                      <div className="scan-order-divider" />
+                    </>
+                  )}
                   <div className="scan-order-row">
                     <span>Mã đơn hàng</span>
                     <span className="scan-order-mono">{scanOrderId || '—'}</span>
@@ -2350,6 +2466,15 @@ export default function CreateTransactionPage() {
               <div className="scan-pane scan-pane-info">
                 <div className="field-label">Thông tin đơn hàng</div>
                 <div className="scan-order-card">
+                  {stores.length > 1 && (
+                    <>
+                      <div className="scan-order-row">
+                        <span>Cửa hàng</span>
+                        <span className="scan-order-mono">{currentStoreName || '—'}</span>
+                      </div>
+                      <div className="scan-order-divider" />
+                    </>
+                  )}
                   <div className="scan-order-row">
                     <span>Mã đơn hàng</span>
                     <span className="scan-order-mono">{p2pOrderId || '—'}</span>

@@ -2,15 +2,12 @@ import { createMoMoPayment } from '../../../lib/momo'
 import { Redis } from '@upstash/redis'
 import QRCode from 'qrcode'
 import { requireAdmin } from '../../../lib/requireAdmin'
+import { resolveStore } from '../../../lib/stores'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
   token: process.env.KV_REST_API_TOKEN,
 })
-
-const STORE_ID = process.env.MOMO_STORE_ID || ''
-const STORE_NAME = process.env.MOMO_STORE_NAME || ''
-const PARTNER_NAME = process.env.MOMO_PARTNER_NAME || ''
 
 const SHORTCUT_API_KEY = process.env.SHORTCUT_API_KEY || ''
 
@@ -55,9 +52,18 @@ export default async function handler(req, res) {
   if (!orderInfo) {
     orderInfo = `Thanh toan DH ${orderId}`
   }
-  const storeId = (params.storeId || STORE_ID || '').toString().trim()
-  const storeName = (params.storeName || STORE_NAME || '').toString().trim()
-  const partnerName = (params.partnerName || PARTNER_NAME || '').toString().trim()
+
+  // ─── CHỌN CỬA HÀNG ───────────────────────────────────────────
+  // - Nếu request truyền storeId (chọn thủ công trên trang tạo giao dịch)
+  //   → dùng đúng cửa hàng đó.
+  // - Nếu không truyền (ví dụ link nhanh/shortcut không kèm storeId)
+  //   → tự động dùng cửa hàng được đánh dấu "default" trong MOMO_STORES.
+  const rawStoreId = (params.storeId || '').toString().trim()
+  const store = resolveStore(rawStoreId)
+
+  const storeId = store.id
+  const storeName = store.name
+  const partnerName = store.partnerName
 
   const now = new Date().toISOString()
 
@@ -125,6 +131,8 @@ export default async function handler(req, res) {
       qrCodeImage,
       orderId: result.orderId,
       requestId: result.requestId,
+      storeId,
+      storeName,
     })
   } catch (err) {
     console.error('[MoMo] create-p2p error:', err)
