@@ -1010,9 +1010,14 @@ function HistorySection({
   colFilters, setColFilters, colFilterOptions,
   selected, toggleOne, toggleAll, sortKey, sortDir, toggleSort,
   setDetail, openQueryForOrder, openConfirmForOrder, doDelete,
-  reconcilingAll,
+  reconcilingAll, pausePolling, pollPaused,
 }) {
   const successRate = counts.ALL ? Math.round(counts.PAID / counts.ALL * 100) : 0
+
+  // Thanh lọc nâng cao (payType/source/resultCode/hour) mặc định ẨN — bấm nút
+  // "Lọc nâng cao" mới hiện ra, cho gọn mắt hơn bản cũ (luôn hiện tất cả).
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const advancedActiveCount = Object.values(colFilters).filter(v => v !== '').length
 
   return (
     <>
@@ -1052,10 +1057,20 @@ function HistorySection({
         </div>
       </div>
 
-      {/* Thanh lọc — GỘP LÀM 1 (trước đây tách 2 thanh: toolbar ngày/tìm kiếm ở trên
-          và "Lọc cột" riêng ở dưới). Nay chung 1 khối bo góc duy nhất, chia 2 hàng
-          bằng đường kẻ mảnh cho gọn mắt, thay vì 2 khối viền riêng biệt như cũ. */}
-      <div className="relative z-20 mb-5 rounded-2xl border border-white/70 bg-white/88 shadow-[0_2px_20px_rgba(174,0,112,0.04)] backdrop-blur-[12px]">
+      {/* Thanh lọc — tách rõ 2 tầng:
+          · Lọc cơ bản (khoảng ngày + tìm kiếm) — luôn hiện, dùng nhiều nhất.
+          · Lọc nâng cao (hình thức/loại đơn/result/giờ) — ẨN mặc định, chỉ
+            hiện khi bấm nút "Lọc nâng cao", cho gọn mắt hơn bản cũ (luôn hiện
+            hết mọi bộ lọc cùng lúc kể cả khi không dùng tới).
+          Toàn bộ khối này pause polling khi có tương tác (mousedown/focus),
+          để tránh việc tự tải lại giữa lúc đang mở 1 dropdown làm số lượng/
+          tuỳ chọn trong <select> đổi ngay dưới con trỏ → bấm không kịp. */}
+      <div
+        className="relative z-20 mb-5 rounded-2xl border border-white/70 bg-white/88 shadow-[0_2px_20px_rgba(174,0,112,0.04)] backdrop-blur-[12px]"
+        onMouseDownCapture={pausePolling}
+        onFocusCapture={pausePolling}
+      >
+      {/* ── Lọc cơ bản ──────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-1.5">
           {DATE_PRESETS.map(p => {
@@ -1081,11 +1096,38 @@ function HistorySection({
               className="w-[160px] rounded-[10px] border border-[rgba(174,0,112,0.1)] bg-white/70 py-[7px] pl-[34px] pr-8 text-[13px] text-[#111827] transition-all focus:border-[#ae0070] focus:bg-white focus:shadow-[0_0_0_3px_rgba(174,0,112,0.08)] focus:w-[220px]" />
             {search && <button className="absolute right-[10px] text-xs leading-none text-[#6b7280]" onClick={() => setSearch('')}>✕</button>}
           </div>
+
+          {/* Nút bật/tắt Lọc nâng cao — badge hiện số bộ lọc đang áp dụng dù đang ẩn */}
+          <button
+            onClick={() => setAdvancedOpen(o => !o)}
+            className={`flex h-[33px] flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-3 text-[12.5px] font-bold transition-all ${
+              advancedOpen || advancedActiveCount > 0
+                ? 'border-[#ae0070] bg-[#fff0f7] text-[#ae0070]'
+                : 'border-[rgba(174,0,112,0.1)] bg-white/70 text-[#6b7280] hover:border-[rgba(174,0,112,0.25)] hover:text-[#ae0070]'
+            }`}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3"><path d="M4 5h16l-6 8v5l-4 2v-7z"/></svg>
+            Lọc nâng cao
+            {advancedActiveCount > 0 && (
+              <span className="flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-[#ae0070] px-[4px] text-[10px] font-bold text-white">
+                {advancedActiveCount}
+              </span>
+            )}
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" className={`transition-transform duration-200 ${advancedOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+
           {/* Không còn nút "Cập nhật" thủ công — trạng thái các giao dịch đang
               chờ xử lý được tự động đối chiếu lại với MoMo mỗi 1 giây (cùng
               nhịp với việc tự tải lại danh sách), chỉ hiện 1 chấm nhỏ báo đang
-              quét để người dùng yên tâm là hệ thống vẫn đang tự cập nhật. */}
-          {reconcilingAll && (
+              quét để người dùng yên tâm là hệ thống vẫn đang tự cập nhật.
+              Khi polling tạm dừng do đang chỉnh bộ lọc thì thay bằng 1 nhãn
+              xám nhạt, tự biến mất và chạy lại sau khi ngừng thao tác. */}
+          {pollPaused ? (
+            <span className="flex h-[33px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border border-[rgba(107,114,128,0.15)] bg-[#f9fafb] px-3 text-[12.5px] font-semibold text-[#9ca3af]">
+              <span className="h-[6px] w-[6px] flex-shrink-0 rounded-full bg-[#d1d5db]" />
+              Đã tạm dừng tự làm mới
+            </span>
+          ) : reconcilingAll && (
             <span className="flex h-[33px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border border-[rgba(174,0,112,0.15)] bg-[#fff0f7] px-3 text-[12.5px] font-semibold text-[#ae0070]">
               <IconRefresh className="h-[14px] w-[14px] flex-shrink-0 animate-spin" />
               Đang cập nhật...
@@ -1103,8 +1145,12 @@ function HistorySection({
         </div>
       </div>
 
-      {/* Hàng lọc theo cột — cùng khối với hàng trên, chỉ ngăn bằng đường kẻ mảnh */}
-      <ColFilterBar colFilters={colFilters} setColFilters={setColFilters} colFilterOptions={colFilterOptions} filtered={filtered} />
+      {/* ── Lọc nâng cao — ẨN mặc định, chỉ hiện khi bấm nút "Lọc nâng cao" ── */}
+      {advancedOpen && (
+        <div style={{ animation: 'fadein 0.15s ease' }}>
+          <ColFilterBar colFilters={colFilters} setColFilters={setColFilters} colFilterOptions={colFilterOptions} filtered={filtered} />
+        </div>
+      )}
       </div>
 
       {/* Stat cards — based on scoped (date+search), not further filtered by status tab */}
@@ -1530,8 +1576,32 @@ export default function AdminDashboardPage() {
 
   // Vòng lặp tự làm mới duy nhất: mỗi 1 giây vừa tải lại danh sách đơn hàng vừa
   // đối chiếu lại các đơn đang chờ xử lý với MoMo — không cần người dùng bấm gì.
+  //
+  // Tạm dừng khi đang tương tác với thanh lọc: mỗi lượt tự tải lại có thể làm
+  // đổi số lượng/danh sách tuỳ chọn trong các <select> (payType/source/hour...),
+  // khiến dropdown đang mở bị đóng lại hoặc lựa chọn bị lệch vị trí ngay dưới
+  // con trỏ → người dùng "bấm không kịp". Giải pháp: bất kỳ tương tác nào với
+  // thanh lọc (mousedown/focus) sẽ tạm dừng polling trong POLL_PAUSE_MS, và
+  // mỗi tương tác mới sẽ tự gia hạn thêm — polling chỉ chạy lại sau khi người
+  // dùng thực sự dừng thao tác với bộ lọc.
+  const POLL_PAUSE_MS = 4000
+  const [pollPaused,    setPollPaused]    = useState(false)
+  const pollPausedRef   = useRef(false)
+  const pollResumeTimer = useRef(null)
+  useEffect(() => { pollPausedRef.current = pollPaused }, [pollPaused])
+
+  const pausePolling = useCallback(() => {
+    if (!pollPausedRef.current) setPollPaused(true)
+    if (pollResumeTimer.current) clearTimeout(pollResumeTimer.current)
+    pollResumeTimer.current = setTimeout(() => setPollPaused(false), POLL_PAUSE_MS)
+  }, [])
+  useEffect(() => () => { if (pollResumeTimer.current) clearTimeout(pollResumeTimer.current) }, [])
+
   useEffect(() => {
-    const iv = setInterval(() => { fetchOrders(); reconcileAllPending() }, REFRESH_INTERVAL)
+    const iv = setInterval(() => {
+      if (pollPausedRef.current) return
+      fetchOrders(); reconcileAllPending()
+    }, REFRESH_INTERVAL)
     return () => clearInterval(iv)
   }, [authed, fetchOrders, reconcileAllPending])
 
@@ -1949,6 +2019,8 @@ export default function AdminDashboardPage() {
                   openConfirmForOrder={openConfirmForOrder}
                   doDelete={doDelete}
                   reconcilingAll={reconcilingAll}
+                  pausePolling={pausePolling}
+                  pollPaused={pollPaused}
                 />
               )}
               {activeSection === 'create' && <CreateSection />}
