@@ -1122,6 +1122,7 @@ export default function CreateTransactionPage() {
           font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: var(--surface);
           outline: none; transition: border-color 0.15s;
         }
+<<<<<<< HEAD
         .info-input:disabled { opacity: 0.6; cursor: not-allowed; background: var(--subtle); }
         .info-input:focus { border-color: var(--mm); }
 
@@ -1135,18 +1136,25 @@ export default function CreateTransactionPage() {
         }
         .amount-suffix-row:focus-within { border-color: var(--mm); }
         .amount-suffix-row.locked { opacity: 0.6; background: var(--subtle); }
+=======
+>>>>>>> f0871464519d4b1ffc910df109fef3c6eb0b2022
         .amount-input {
           flex: 1 1 auto; min-width: 0; width: auto; padding: 11px 12px;
           border: none; border-radius: 0; outline: none; background: transparent;
           font-size: 26px; font-weight: 800; text-align: right; color: var(--text);
           font-family: var(--mono);
         }
+<<<<<<< HEAD
         .amount-input:disabled { cursor: not-allowed; }
         .amount-suffix {
           flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
           padding: 0 14px; font-size: 15px; font-weight: 800; color: var(--mm);
           background: var(--mm-light); border-left: 1.5px solid var(--border); pointer-events: none;
         }
+=======
+        .amount-input:disabled, .info-input:disabled { opacity: 0.6; cursor: not-allowed; background: var(--subtle); }
+        .amount-input:focus, .info-input:focus { border-color: var(--mm); }
+>>>>>>> f0871464519d4b1ffc910df109fef3c6eb0b2022
 
         /* ── STORE DROPDOWN: thay <select> mặc định của trình duyệt ── */
         .store-dd { position: relative; }
