@@ -46,6 +46,67 @@ function formatAmount(raw) {
 function unformatAmount(formatted) {
   return (formatted || '').replace(/\D/g, '')
 }
+
+// ─── GỢI Ý SỐ TIỀN THÔNG MINH (thay cho 4 ô cứng 50k/100k/200k/500k) ──
+// Thay vì hard-code sẵn 1 mảng số tiền cố định, gợi ý được TÍNH TOÁN mỗi
+// lần render dựa trên 2 nguồn: (1) lịch sử số tiền hay dùng nhất tại quầy
+// này (lưu trong localStorage, đếm tần suất), (2) nếu người dùng đang gõ
+// dở số tiền, gợi ý các mốc "làm tròn lên" gần nhất — giống cách thu ngân
+// thật thường mặc định lên số tròn tiếp theo.
+const RECENT_AMOUNTS_KEY = 'momo-pos-recent-amounts'
+const DEFAULT_AMOUNTS = [50000, 100000, 200000, 500000]
+
+function loadRecentAmounts() {
+  try {
+    const raw = localStorage.getItem(RECENT_AMOUNTS_KEY)
+    const obj = raw ? JSON.parse(raw) : {}
+    return obj && typeof obj === 'object' ? obj : {}
+  } catch { return {} }
+}
+function recordAmountUsage(amount) {
+  const amt = parseInt(amount, 10)
+  if (!amt || amt <= 0) return
+  try {
+    const map = loadRecentAmounts()
+    map[amt] = (map[amt] || 0) + 1
+    // Chỉ giữ 30 mốc gần nhất để không phình localStorage
+    const keys = Object.keys(map)
+    if (keys.length > 30) {
+      const sorted = keys.sort((a, b) => map[a] - map[b])
+      delete map[sorted[0]]
+    }
+    localStorage.setItem(RECENT_AMOUNTS_KEY, JSON.stringify(map))
+  } catch { /* localStorage không khả dụng — bỏ qua */ }
+}
+function roundUpTo(value, step) {
+  if (value <= 0) return step
+  return Math.ceil(value / step) * step
+}
+// Trả về đúng 4 gợi ý, không trùng nhau, không trùng số đang gõ.
+function getSuggestedAmounts(currentDigits, recentMap) {
+  const typed = parseInt(currentDigits, 10) || 0
+  const out = []
+  const add = v => { if (v > 0 && !out.includes(v) && v !== typed) out.push(v) }
+
+  if (typed > 0) {
+    // Đang gõ dở → ưu tiên gợi ý làm tròn lên gần số đang nhập nhất trước
+    add(roundUpTo(typed, 10000))
+    add(roundUpTo(typed, 50000))
+    add(roundUpTo(typed, 100000))
+    add(typed * 2)
+  }
+
+  // Bổ sung bằng các mốc hay dùng nhất trong lịch sử (sắp theo tần suất)
+  const byFreq = Object.entries(recentMap || {})
+    .sort((a, b) => b[1] - a[1])
+    .map(([k]) => parseInt(k, 10))
+  byFreq.forEach(add)
+
+  // Vẫn thiếu thì lấp bằng mốc mặc định phổ biến
+  DEFAULT_AMOUNTS.forEach(add)
+
+  return out.slice(0, 4)
+}
 function formatCountdown(totalSeconds) {
   const s = Math.max(0, totalSeconds)
   const m = Math.floor(s / 60).toString().padStart(2, '0')
@@ -61,7 +122,7 @@ function serializeTxs(list) {
     storeId: t.storeId || '', storeName: t.storeName || '', status: t.status,
     payUrl: t.payUrl || '', deeplink: t.deeplink || '', expiresAt: t.expiresAt || null,
     submittedCode: t.submittedCode || '',
-    pos: t.pos || { x: 24, y: 24 }, zIndex: t.zIndex || 10, minimized: !!t.minimized,
+    pos: t.pos || { x: 24, y: 24 }, zIndex: t.zIndex || 10, minimized: !!t.minimized, userPositioned: !!t.userPositioned,
   }))
 }
 function deserializeTxs(arr) {
@@ -70,7 +131,7 @@ function deserializeTxs(arr) {
     ...t,
     checkMsg: '', checking: false, cancelling: false, copied: false,
     manualCode: t.submittedCode || '', manualErr: '', isSubmittingCode: false, camError: '',
-    pos: t.pos || { x: 24, y: 24 }, zIndex: t.zIndex || 10, minimized: !!t.minimized,
+    pos: t.pos || { x: 24, y: 24 }, zIndex: t.zIndex || 10, minimized: !!t.minimized, userPositioned: !!t.userPositioned,
   }))
 }
 
@@ -119,6 +180,67 @@ const IconNewTab = () => (
     <path d="M15 3h6v6"/><path d="M10 14 21 3"/>
   </svg>
 )
+const IconChevronDown = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
+    <path d="m6 9 6 6 6-6"/>
+  </svg>
+)
+const IconCheck = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+    <path d="M20 6 9 17l-5-5"/>
+  </svg>
+)
+
+// ─── DROPDOWN CHỌN CỬA HÀNG (thay cho <select> mặc định xấu, viền
+// xanh, không theo được theme hồng của app — không style được list) ──
+function StoreDropdown({ stores, value, onChange, disabled }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onClickOutside(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    function onKey(e) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onClickOutside)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const current = stores.find(s => s.id === value)
+
+  return (
+    <div className={`store-dd${open ? ' open' : ''}${disabled ? ' disabled' : ''}`} ref={wrapRef}>
+      <button
+        type="button"
+        className="store-dd-trigger"
+        onClick={() => !disabled && setOpen(o => !o)}
+        disabled={disabled}
+      >
+        <span className="store-dd-value">{current?.name || 'Chọn cửa hàng'}</span>
+        <span className="store-dd-chevron"><IconChevronDown /></span>
+      </button>
+      {open && (
+        <div className="store-dd-list">
+          {stores.map(s => (
+            <div
+              key={s.id}
+              className={`store-dd-item${s.id === value ? ' active' : ''}`}
+              onClick={() => { onChange(s.id); setOpen(false) }}
+            >
+              <span>{s.name}</span>
+              {s.id === value && <span className="store-dd-check"><IconCheck /></span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── TICKET CARD (cửa sổ nổi kéo-thả tự do, kiểu vé/hóa đơn POS) ──
 function TicketCard({ tx, isFocused, onFocus, onHeaderDown, children, headerRight, headerLeft }) {
@@ -220,7 +342,7 @@ export default function CreateTransactionPage() {
   const router = useRouter()
 
   // ─── FORM (tạo giao dịch mới) ───────────────────────────
-  const [method,    setMethod]    = useState('scan')
+  const [method,    setMethod]    = useState('p2p')
   const [amount,    setAmount]    = useState('')
   const [orderInfo, setOrderInfo] = useState(() => genOrderId())
   const [stores,    setStores]    = useState([])
@@ -229,6 +351,9 @@ export default function CreateTransactionPage() {
   const [creating,  setCreating]  = useState(false)
   const [formErr,   setFormErr]   = useState('')
   const amountInputRef = useRef(null)
+  const [recentAmounts, setRecentAmounts] = useState({})
+  useEffect(() => { setRecentAmounts(loadRecentAmounts()) }, [])
+  const suggestedAmounts = getSuggestedAmounts(amount, recentAmounts)
 
   // ─── DANH SÁCH GIAO DỊCH ĐANG MỞ (mỗi cái = 1 cửa sổ nổi) ─
   const [txs, setTxs] = useState([])
@@ -240,7 +365,17 @@ export default function CreateTransactionPage() {
   const [now, setNow] = useState(Date.now())            // tick 1s cho đếm ngược P2P
   const [confirmCancel, setConfirmCancel] = useState(null) // { id } đang chờ xác nhận hủy
   const [resultToast, setResultToast] = useState(null)
+  const [toasts, setToasts] = useState([]) // thông báo trạng thái khi bấm "Kiểm tra" — nổi ngoài cửa sổ, tự đóng
   const [lastFocusedId, setLastFocusedId] = useState(null) // vé nào vừa được bấm/chọn
+
+  function pushToast(text, type = 'info', duration = 5500) {
+    const id = uid()
+    setToasts(prev => [...prev, { id, text, type }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration)
+  }
+  function dismissToast(id) {
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }
 
   // ─── CAMERA (jsQR) — DÙNG CHUNG, CHỈ GẮN VÀO 1 ĐƠN SCAN ───
   const [jsQrReady, setJsQrReady] = useState(false)
@@ -257,11 +392,15 @@ export default function CreateTransactionPage() {
     setTxs(prev => prev.filter(t => t.id !== id))
   }
 
-  // ─── CỬA SỔ NỔI: kéo-thả tự do + thu nhỏ xuống taskbar ──────
+  // ─── CỬA SỔ NỔI: mặc định tự xếp lưới lấp đầy màn hình, nhưng vé
+  // nào bị NGƯỜI DÙNG chủ động kéo (userPositioned=true) thì thoát khỏi
+  // lưới tự động, giữ nguyên vị trí đã thả cho tới khi đóng/tạo lại ──
   const zCounterRef = useRef(10)
-  const dragStateRef = useRef(null) // { id, startX, startY, origX, origY }
+  const dragStateRef = useRef(null) // { id, startX, startY, origX, origY, moved }
   const windowLayerRef = useRef(null)
-  const TICKET_W = 300, TICKET_HEAD_H = 44
+  const TICKET_W = 300, TICKET_HEAD_H = 44, GRID_GAP = 20, GRID_ROW_H = 452
+  const [layoutW, setLayoutW] = useState(0)
+  const [boardMinHeight, setBoardMinHeight] = useState(0)
 
   function bringToFront(id) {
     setLastFocusedId(id)
@@ -276,14 +415,6 @@ export default function CreateTransactionPage() {
     bringToFront(id)
   }
 
-  // Vị trí ban đầu cho vé mới: xếp chéo (cascade) để không đè hẳn lên
-  // vé trước đó, quay vòng lại sau vài vé để không chạy ra ngoài màn hình.
-  function nextCascadePos() {
-    const visibleCount = txsRef.current.filter(t => !t.minimized).length
-    const step = visibleCount % 8
-    return { x: 24 + step * 26, y: 24 + step * 22 }
-  }
-
   function clampPos(x, y) {
     const layer = windowLayerRef.current
     const maxX = layer ? Math.max(8, layer.clientWidth - TICKET_W) : x
@@ -291,13 +422,53 @@ export default function CreateTransactionPage() {
     return { x: Math.min(Math.max(0, x), maxX), y: Math.min(Math.max(0, y), maxY) }
   }
 
+  // Theo dõi bề rộng khu vực bảng để tính số cột lưới, tự chạy lại khi
+  // co giãn cửa sổ trình duyệt (resize) hoặc mở/đóng sidebar.
+  useEffect(() => {
+    const layer = windowLayerRef.current
+    if (!layer) return
+    const update = () => setLayoutW(layer.clientWidth)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(layer)
+    return () => ro.disconnect()
+  }, [])
+
+  // Tự xếp lại vị trí cho MỌI vé chưa bị kéo tay (userPositioned=false)
+  // và chưa thu nhỏ, thành lưới đều lấp đầy chiều rộng khả dụng. Các vé
+  // đã bị kéo tay được giữ nguyên, không bị "hút" lại vào lưới.
+  const autoLayoutKey = txs.filter(t => !t.minimized).map(t => `${t.id}:${t.userPositioned ? 1 : 0}`).join(',')
+  useEffect(() => {
+    if (!layoutW) return
+    const cols = Math.max(1, Math.floor((layoutW - GRID_GAP) / (TICKET_W + GRID_GAP)))
+    const autoCount = txsRef.current.filter(t => !t.minimized && !t.userPositioned).length
+    // Khi số vé ít hơn số cột tối đa, đừng dồn hết vào góc trái — canh cả
+    // khối vé vào giữa chiều rộng khả dụng, giống một bảng vé thật được
+    // bày ra giữa quầy chứ không dính sát vào một mép.
+    const effectiveCols = Math.min(cols, Math.max(1, autoCount))
+    const gridContentWidth = effectiveCols * (TICKET_W + GRID_GAP) - GRID_GAP
+    const offsetX = Math.max(GRID_GAP, (layoutW - gridContentWidth) / 2)
+    let autoIdx = 0
+    const next = txsRef.current.map(t => {
+      if (t.minimized || t.userPositioned) return t
+      const col = autoIdx % effectiveCols
+      const row = Math.floor(autoIdx / effectiveCols)
+      autoIdx++
+      return { ...t, pos: { x: offsetX + col * (TICKET_W + GRID_GAP), y: GRID_GAP + row * GRID_ROW_H } }
+    })
+    const maxBottom = next.reduce((m, t) => (t.minimized ? m : Math.max(m, (t.pos?.y || 0) + GRID_ROW_H)), 0)
+    setTxs(next)
+    setBoardMinHeight(maxBottom + GRID_GAP)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutW, autoLayoutKey])
+
   function onDragStart(e, tx) {
     if (e.target.closest('button')) return
     bringToFront(tx.id)
     const point = e.touches ? e.touches[0] : e
     dragStateRef.current = {
       id: tx.id, startX: point.clientX, startY: point.clientY,
-      origX: tx.pos?.x ?? 24, origY: tx.pos?.y ?? 24,
+      origX: tx.pos?.x ?? 24, origY: tx.pos?.y ?? 24, moved: false,
     }
     window.addEventListener('mousemove', onDragMove)
     window.addEventListener('mouseup', onDragEnd)
@@ -312,11 +483,16 @@ export default function CreateTransactionPage() {
     const point = e.touches ? e.touches[0] : e
     const dx = point.clientX - st.startX
     const dy = point.clientY - st.startY
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) st.moved = true
     const { x, y } = clampPos(st.origX + dx, st.origY + dy)
     updateTx(st.id, { pos: { x, y } })
   }
 
   function onDragEnd() {
+    const st = dragStateRef.current
+    // Chỉ "thoát lưới tự động" nếu người dùng thật sự kéo di chuyển —
+    // một cú bấm đơn thuần (để focus) không nên khiến vé bị khóa vị trí.
+    if (st?.moved) updateTx(st.id, { userPositioned: true })
     dragStateRef.current = null
     window.removeEventListener('mousemove', onDragMove)
     window.removeEventListener('mouseup', onDragEnd)
@@ -561,7 +737,7 @@ export default function CreateTransactionPage() {
           status: 'PENDING', checkMsg: '', checking: false, cancelling: false,
           payUrl: data.payUrl, deeplink: data.deeplink || '',
           expiresAt: Date.now() + P2P_DURATION_MS, copied: false,
-          pos: nextCascadePos(), zIndex: zCounterRef.current, minimized: false,
+          pos: { x: 24, y: 24 }, zIndex: zCounterRef.current, minimized: false, userPositioned: false,
         }])
       } catch (e) {
         setFormErr('Lỗi server, thử lại sau.')
@@ -584,11 +760,13 @@ export default function CreateTransactionPage() {
         storeId, storeName: stores.find(s => s.id === storeId)?.name || '',
         status: 'PENDING', checkMsg: '', checking: false, cancelling: false,
         manualCode: '', manualErr: '', submittedCode: '', isSubmittingCode: false, camError: '',
-        pos: nextCascadePos(), zIndex: zCounterRef.current, minimized: false,
+        pos: { x: 24, y: 24 }, zIndex: zCounterRef.current, minimized: false, userPositioned: false,
       }])
       setActiveCamId(id) // đơn mới tạo tự giữ camera
     }
 
+    recordAmountUsage(amt)
+    setRecentAmounts(loadRecentAmounts())
     setAmount('')
     setOrderInfo(genOrderId())
     setCreating(false)
@@ -677,7 +855,7 @@ export default function CreateTransactionPage() {
   async function checkP2pNow(txId) {
     const tx = txsRef.current.find(t => t.id === txId)
     if (!tx || tx.checking) return
-    updateTx(txId, { checking: true, checkMsg: '' })
+    updateTx(txId, { checking: true })
     await fetch('/api/momo/query', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId: tx.orderId }),
@@ -686,19 +864,19 @@ export default function CreateTransactionPage() {
       const res = await fetch(`/api/momo/status?orderId=${encodeURIComponent(tx.orderId)}`)
       const data = await res.json()
       const status = data.status || 'PENDING'
-      updateTx(txId, {
-        checking: false, status,
-        checkMsg: status === 'PAID' ? '✓ Thanh toán thành công!'
-          : status === 'EXPIRED' ? '⚠ Mã QR đã hết hạn, vui lòng tạo đơn mới.'
-          : status === 'FAILED' ? `✗ Giao dịch thất bại${data.message ? `: ${data.message}` : ''}`
-          : '⏳ Chưa nhận được thanh toán, khách vui lòng quét mã QR.',
-      })
+      updateTx(txId, { checking: false, status })
+      const msg = status === 'PAID' ? `✓ ${tx.orderId}: Thanh toán thành công!`
+        : status === 'EXPIRED' ? `⚠ ${tx.orderId}: Mã QR đã hết hạn, vui lòng tạo đơn mới.`
+        : status === 'FAILED' ? `✗ ${tx.orderId}: Giao dịch thất bại${data.message ? `: ${data.message}` : ''}`
+        : `⏳ ${tx.orderId}: Chưa nhận được thanh toán, khách vui lòng quét mã QR.`
+      pushToast(msg, status === 'PAID' ? 'ok' : status === 'FAILED' || status === 'EXPIRED' ? 'err' : 'info')
       if (status === 'PAID') {
         setResultToast({ orderId: tx.orderId, status: 'success', amount: data.amount || tx.amount })
         setTimeout(() => removeTx(txId), 1500)
       }
     } catch (e) {
-      updateTx(txId, { checking: false, checkMsg: '⚠ Lỗi kết nối, thử kiểm tra lại.' })
+      updateTx(txId, { checking: false })
+      pushToast(`⚠ ${tx.orderId}: Lỗi kết nối, thử kiểm tra lại.`, 'err')
     }
   }
 
@@ -818,27 +996,65 @@ export default function CreateTransactionPage() {
         }
         .method-tab:hover { border-color: rgba(174,0,112,0.3); background: var(--mm-light); }
         .method-tab.active { border-color: var(--mm); background: var(--mm-light); }
+        .method-tab.locked { opacity: 0.6; cursor: not-allowed; pointer-events: none; }
         .method-tab-icon { color: var(--muted); line-height: 0; }
         .method-tab.active .method-tab-icon { color: var(--mm); }
         .method-tab-label { font-size: 11.5px; font-weight: 700; color: var(--muted); }
         .method-tab.active .method-tab-label { color: var(--mm); }
         .method-tab-desc { font-size: 9px; font-weight: 500; color: var(--muted); text-align: center; }
 
-        .amount-input, .info-input, .store-select {
+        .amount-input, .info-input {
           width: 100%; padding: 11px 12px; border: 1.5px solid var(--border); border-radius: 10px;
           font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: var(--surface);
           outline: none; transition: border-color 0.15s;
         }
-        .amount-input { font-size: 20px; font-weight: 800; text-align: right; }
-        .amount-input:focus, .info-input:focus, .store-select:focus { border-color: var(--mm); }
+        .amount-input {
+          font-size: 26px; font-weight: 800; text-align: right;
+          padding-right: 40px; /* chừa chỗ cho ký hiệu ₫ để không đè lên số */
+          font-family: var(--mono);
+        }
+        .amount-input:disabled, .info-input:disabled { opacity: 0.6; cursor: not-allowed; background: var(--subtle); }
+        .amount-input:focus, .info-input:focus { border-color: var(--mm); }
+
+        /* ── STORE DROPDOWN: thay <select> mặc định của trình duyệt ── */
+        .store-dd { position: relative; }
+        .store-dd-trigger {
+          width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+          padding: 11px 12px; border: 1.5px solid var(--border); border-radius: 10px;
+          font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: var(--surface);
+          cursor: pointer; transition: border-color 0.15s; text-align: left;
+        }
+        .store-dd-trigger:hover { border-color: rgba(174,0,112,0.35); }
+        .store-dd.open .store-dd-trigger { border-color: var(--mm); }
+        .store-dd.disabled .store-dd-trigger { opacity: 0.6; cursor: not-allowed; }
+        .store-dd-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .store-dd-chevron { color: var(--muted); flex-shrink: 0; display: flex; transition: transform 0.15s; }
+        .store-dd.open .store-dd-chevron { transform: rotate(180deg); color: var(--mm); }
+        .store-dd-list {
+          position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40;
+          background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px;
+          box-shadow: 0 14px 34px rgba(26,15,22,0.16); padding: 6px; max-height: 240px; overflow-y: auto;
+        }
+        .store-dd-item {
+          display: flex; align-items: center; justify-content: space-between; gap: 8px;
+          padding: 9px 10px; border-radius: 8px; font-size: 13.5px; font-weight: 600; color: var(--text);
+          cursor: pointer;
+        }
+        .store-dd-item:hover { background: var(--mm-light); }
+        .store-dd-item.active { background: var(--mm-light); color: var(--mm); font-weight: 800; }
+        .store-dd-check { color: var(--mm); display: flex; flex-shrink: 0; }
         .amount-suffix-row { position: relative; }
-        .amount-suffix { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--muted); pointer-events: none; }
+        .amount-suffix {
+          position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+          font-size: 14px; font-weight: 700; color: var(--mm); pointer-events: none;
+        }
         .quick-amounts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
         .quick-amt-chip {
           padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--subtle);
-          font-size: 11.5px; font-weight: 700; color: var(--muted); cursor: pointer;
+          font-size: 11.5px; font-weight: 700; color: var(--muted); cursor: pointer; transition: all 0.15s;
         }
         .quick-amt-chip:hover { border-color: var(--mm); color: var(--mm); }
+        .quick-amt-chip:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--border); color: var(--muted); }
 
         .count-badge { font-size: 10.5px; font-weight: 700; color: var(--muted); margin-top: 6px; }
         .count-badge.full { color: #c0392b; }
@@ -873,14 +1089,33 @@ export default function CreateTransactionPage() {
         .board {
           flex: 1; position: relative; overflow: auto; padding: 24px 28px 40px;
         }
-        .board.is-empty { display: flex; align-items: center; justify-content: center; }
+        .board.is-empty {
+          display: flex; align-items: center; justify-content: center;
+          background: linear-gradient(120deg, var(--bg) 0%, var(--mm-light) 35%, #fdf2f8 55%, var(--mm-light) 75%, var(--bg) 100%);
+          background-size: 300% 300%;
+          animation: driftGradient 10s ease-in-out infinite;
+        }
+        @keyframes driftGradient {
+          0%   { background-position: 0% 50%; }
+          50%  { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
         .ticket-float { position: absolute; }
         .board-empty {
           display: flex; flex-direction: column; align-items: center; justify-content: center;
-          gap: 6px; color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: center;
+          gap: 8px; color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: center;
           padding: 60px 20px;
         }
-        .board-empty-icon { color: var(--border); margin-bottom: 6px; }
+        .board-empty-icon {
+          width: 56px; height: 56px; display: flex; align-items: center; justify-content: center;
+          color: var(--mm); margin-bottom: 10px; border-radius: 50%;
+          background: radial-gradient(circle, rgba(174,0,112,0.14) 0%, rgba(174,0,112,0.03) 70%);
+          animation: pulseGlow 2.4s ease-in-out infinite;
+        }
+        @keyframes pulseGlow {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(174,0,112,0.12); }
+          50% { transform: scale(1.06); box-shadow: 0 0 0 10px rgba(174,0,112,0); }
+        }
 
         /* ── TICKET (vé giao dịch, kiểu hóa đơn POS) ── */
         .ticket {
@@ -957,6 +1192,7 @@ export default function CreateTransactionPage() {
         .info-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 5px 0; }
         .info-row span:first-child { color: var(--muted); font-weight: 600; }
         .info-row span:last-child { font-family: var(--mono); color: var(--text); font-weight: 700; text-align: right; word-break: break-all; }
+        .info-row span.store-name-val { font-family: inherit; color: var(--mm); font-weight: 800; letter-spacing: -0.01em; }
         .info-divider { height: 0; border-top: 2px dashed var(--border); margin: 8px 0; }
 
         .qr-wrap { display: flex; justify-content: center; padding: 10px 0; }
@@ -1002,10 +1238,20 @@ export default function CreateTransactionPage() {
 
         /* ── TOAST ── */
         .toast {
-          position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-          background: var(--text); color: #fff; padding: 12px 20px; border-radius: 12px;
-          font-size: 13px; font-weight: 700; z-index: 999; box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+          padding: 12px 20px; border-radius: 12px; color: #fff; font-size: 13px; font-weight: 700;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.25); max-width: 340px; animation: toast-in 0.2s ease-out; cursor: pointer;
         }
+        .toast.toast-ok { background: #1e8449; }
+        .toast.toast-err { background: #c0392b; }
+        .toast.toast-info { background: var(--text); }
+        .toast-center { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 999; cursor: default; }
+        .toast-stack {
+          position: fixed; bottom: 20px; right: 20px; z-index: 998;
+          display: flex; flex-direction: column-reverse; gap: 10px; align-items: flex-end;
+          pointer-events: none;
+        }
+        .toast-stack .toast { pointer-events: auto; }
+        @keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         /* ── CONFIRM CANCEL MODAL ── */
         .cancel-modal-backdrop { position: fixed; inset: 0; background: rgba(26,15,22,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
@@ -1037,14 +1283,11 @@ export default function CreateTransactionPage() {
         <div className="dock">
           <div className="dock-eyebrow">Quầy thu ngân</div>
           <div className="dock-title">Tạo giao dịch</div>
-          <div className="dock-sub">Tối đa {MAX_PER_TYPE} P2P + {MAX_PER_TYPE} Scan đang chờ cùng lúc</div>
 
           {stores.length > 1 && (
             <div className="field-block">
               <div className="field-label"><IconStore /> Cửa hàng</div>
-              <select className="store-select" value={storeId} onChange={e => setStoreId(e.target.value)} disabled={storesLoading}>
-                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <StoreDropdown stores={stores} value={storeId} onChange={setStoreId} disabled={storesLoading} />
             </div>
           )}
 
@@ -1052,15 +1295,16 @@ export default function CreateTransactionPage() {
             <div className="field-label">Phương thức</div>
             <div className="method-tabs">
               {methodConfig.map(m => (
-                <div key={m.key} className={`method-tab${method === m.key ? ' active' : ''}`} onClick={() => setMethod(m.key)}>
+                <div
+                  key={m.key}
+                  className={`method-tab${method === m.key ? ' active' : ''}${creating ? ' locked' : ''}`}
+                  onClick={() => !creating && setMethod(m.key)}
+                >
                   <span className="method-tab-icon">{m.icon}</span>
                   <span className="method-tab-label">{m.label}</span>
                   <span className="method-tab-desc">{m.desc}</span>
                 </div>
               ))}
-            </div>
-            <div className={`count-badge${txs.filter(t => t.type === method).length >= MAX_PER_TYPE ? ' full' : ''}`}>
-              Đang mở: {txs.filter(t => t.type === method).length}/{MAX_PER_TYPE}
             </div>
           </div>
 
@@ -1075,14 +1319,20 @@ export default function CreateTransactionPage() {
                 placeholder="0"
                 value={formatAmount(amount)}
                 onChange={e => setAmount(unformatAmount(e.target.value))}
-                onKeyDown={e => { if (e.key === 'Enter' && canSubmit) createTransaction() }}
+                onKeyDown={e => { if (e.key === 'Enter' && canSubmit && !creating) createTransaction() }}
+                disabled={creating}
               />
               <span className="amount-suffix">₫</span>
             </div>
             <div className="quick-amounts">
-              {[50000, 100000, 200000, 500000].map(a => (
-                <button key={a} className="quick-amt-chip" onClick={() => setAmount(String(a))}>
-                  {a >= 1000000 ? `${a / 1000000}tr` : `${a / 1000}k`}
+              {suggestedAmounts.map(a => (
+                <button
+                  key={a}
+                  className="quick-amt-chip"
+                  disabled={creating}
+                  onClick={() => setAmount(String(a))}
+                >
+                  {a >= 1000000 ? `${(a / 1000000).toLocaleString('en-US')}tr` : `${a / 1000}k`}
                 </button>
               ))}
             </div>
@@ -1095,6 +1345,7 @@ export default function CreateTransactionPage() {
               type="text"
               value={orderInfo}
               onChange={e => setOrderInfo(e.target.value)}
+              disabled={creating}
             />
           </div>
 
@@ -1124,7 +1375,11 @@ export default function CreateTransactionPage() {
               </button>
             </div>
           </div>
-          <div className={`board${txs.length === 0 ? ' is-empty' : ''}`} ref={windowLayerRef}>
+          <div
+            className={`board${txs.length === 0 ? ' is-empty' : ''}`}
+            ref={windowLayerRef}
+            style={boardMinHeight ? { minHeight: boardMinHeight } : undefined}
+          >
             {txs.length === 0 && (
               <div className="board-empty">
                 <span className="board-empty-icon"><IconScan /></span>
@@ -1163,7 +1418,7 @@ export default function CreateTransactionPage() {
               >
                 <div className="info-row"><span>Mã đơn hàng</span><span>{tx.orderId}</span></div>
                 <div className="info-row"><span>Nội dung</span><span>{tx.orderInfo}</span></div>
-                {tx.storeName && <div className="info-row"><span>Cửa hàng</span><span>{tx.storeName}</span></div>}
+                {tx.storeName && <div className="info-row"><span>Cửa hàng</span><span className="store-name-val">{tx.storeName}</span></div>}
                 <div className="info-divider" />
 
                 {tx.type === 'p2p' ? (
@@ -1305,10 +1560,19 @@ export default function CreateTransactionPage() {
 
       {/* ── TOAST KẾT QUẢ ── */}
       {resultToast && (
-        <div className="toast">
+        <div className="toast toast-ok toast-center">
           ✓ Giao dịch {resultToast.orderId} thành công{resultToast.amount ? ` — ${formatAmount(String(resultToast.amount))}₫` : ''}
         </div>
       )}
+
+      {/* ── TOAST TRẠNG THÁI KHI BẤM "KIỂM TRA" — nổi ngoài cửa sổ, tự đóng sau ~5.5s ── */}
+      <div className="toast-stack">
+        {toasts.map(t => (
+          <div key={t.id} className={`toast toast-${t.type}`} onClick={() => dismissToast(t.id)}>
+            {t.text}
+          </div>
+        ))}
+      </div>
     </>
   )
 }
