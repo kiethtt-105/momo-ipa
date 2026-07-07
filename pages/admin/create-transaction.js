@@ -91,41 +91,22 @@ const IconCam = () => (
   </svg>
 )
 
-// ─── GENERIC DRAGGABLE FLOATING MODAL SHELL ─────────────────
-function FloatingModal({ tx, isTop, onFocus, children, headerRight, headerLeft, onDrag }) {
-  const dragInfo = useRef(null)
-
-  function onPointerDown(e) {
-    onFocus()
-    const startX = e.clientX, startY = e.clientY
-    dragInfo.current = { startX, startY, ox: tx.x, oy: tx.y }
-    e.currentTarget.setPointerCapture?.(e.pointerId)
-  }
-  function onPointerMove(e) {
-    if (!dragInfo.current) return
-    const { startX, startY, ox, oy } = dragInfo.current
-    onDrag(ox + (e.clientX - startX), oy + (e.clientY - startY))
-  }
-  function onPointerUp() {
-    dragInfo.current = null
-  }
-
+// ─── TICKET CARD (kiểu vé/hóa đơn POS, xếp lưới — không kéo thả) ──
+function TicketCard({ tx, isFocused, onFocus, children, headerRight, headerLeft }) {
   return (
     <div
-      className={`float-modal${isTop ? ' top' : ''}`}
-      style={{ left: tx.x, top: tx.y, zIndex: tx.z }}
+      className={`ticket${isFocused ? ' focused' : ''}${tx.status === 'PAID' ? ' is-paid' : ''}`}
       onMouseDown={onFocus}
     >
-      <div
-        className="float-modal-head"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-      >
-        <div className="float-modal-head-left">{headerLeft}</div>
-        <div className="float-modal-head-right">{headerRight}</div>
+      {tx.status === 'PAID' && <div className="ticket-stamp">Đã TT</div>}
+      <div className="ticket-notch left" />
+      <div className="ticket-notch right" />
+      <div className="ticket-head">
+        <div className="ticket-head-left">{headerLeft}</div>
+        <div className="ticket-head-right">{headerRight}</div>
       </div>
-      <div className="float-modal-body">{children}</div>
+      <div className="ticket-perf" />
+      <div className="ticket-body">{children}</div>
     </div>
   )
 }
@@ -163,7 +144,7 @@ export default function CreateTransactionPage() {
   const [now, setNow] = useState(Date.now())            // tick 1s cho đếm ngược P2P
   const [confirmCancel, setConfirmCancel] = useState(null) // { id } đang chờ xác nhận hủy
   const [resultToast, setResultToast] = useState(null)
-  const zCounter = useRef(10)
+  const [lastFocusedId, setLastFocusedId] = useState(null) // vé nào vừa được bấm/chọn
 
   // ─── CAMERA (jsQR) — DÙNG CHUNG, CHỈ GẮN VÀO 1 ĐƠN SCAN ───
   const [jsQrReady, setJsQrReady] = useState(false)
@@ -180,9 +161,7 @@ export default function CreateTransactionPage() {
     setTxs(prev => prev.filter(t => t.id !== id))
   }
   function bringToFront(id) {
-    zCounter.current += 1
-    const z = zCounter.current
-    updateTx(id, { z })
+    setLastFocusedId(id)
     const tx = txsRef.current.find(t => t.id === id)
     if (tx && tx.type === 'scan') setActiveCamId(id)
   }
@@ -355,12 +334,6 @@ export default function CreateTransactionPage() {
   }, [txs.map(t => t.id).join(',')])
 
   // ─── TẠO GIAO DỊCH MỚI ───────────────────────────────────
-  function nextPosition() {
-    const n = txs.length
-    const col = n % 4, row = Math.floor(n / 4)
-    return { x: 40 + col * 60, y: 30 + row * 40 }
-  }
-
   async function createTransaction() {
     const amt = parseInt(amount, 10)
     if (!amt || amt <= 0) { setFormErr('Nhập số tiền hợp lệ.'); return }
@@ -373,8 +346,6 @@ export default function CreateTransactionPage() {
     setCreating(true)
     const finalOrderInfo = (orderInfo || '').trim() || genOrderId()
     const id = uid()
-    const pos = nextPosition()
-    zCounter.current += 1
 
     if (method === 'p2p') {
       const url = buildP2pUrl(amt, finalOrderInfo, storeId)
@@ -394,7 +365,6 @@ export default function CreateTransactionPage() {
           storeId: finalStoreId,
           storeName: stores.find(s => s.id === finalStoreId)?.name || '',
           status: 'PENDING', checkMsg: '', checking: false, cancelling: false,
-          x: pos.x, y: pos.y, z: zCounter.current,
           payUrl: data.payUrl, deeplink: data.deeplink || '',
           expiresAt: Date.now() + P2P_DURATION_MS, copied: false,
         }])
@@ -417,7 +387,6 @@ export default function CreateTransactionPage() {
         amount: amt, orderInfo: finalOrderInfo,
         storeId, storeName: stores.find(s => s.id === storeId)?.name || '',
         status: 'PENDING', checkMsg: '', checking: false, cancelling: false,
-        x: pos.x, y: pos.y, z: zCounter.current,
         manualCode: '', manualErr: '', submittedCode: '', isSubmittingCode: false, camError: '',
       }])
       setActiveCamId(id) // đơn mới tạo tự giữ camera
@@ -597,7 +566,7 @@ export default function CreateTransactionPage() {
         <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
         <link rel="icon" type="image/png" href="/Main.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" />
       </Head>
 
       <style jsx global>{`
@@ -605,19 +574,28 @@ export default function CreateTransactionPage() {
         html, body, #__next { margin: 0; padding: 0; height: 100%; width: 100%; font-family: 'Outfit', -apple-system, sans-serif; }
         :root {
           --mm: #ae0070; --mm-light: rgba(174,0,112,0.08); --mm-mid: rgba(174,0,112,0.15);
-          --surface: #ffffff; --bg: #f7eff5; --border: #ede0e9; --text: #1a0f16;
+          --surface: #ffffff; --paper: #fffaf6; --bg: #f4ede9; --border: #ece1e6; --text: #1a0f16;
           --muted: #9c8094; --subtle: #f2eaf0;
+          --mono: 'JetBrains Mono', ui-monospace, monospace;
         }
-        .desk { position: relative; width: 100%; height: 100vh; background: var(--bg); overflow: hidden; }
+        html, body, #__next { background: var(--bg); }
+        .pos-shell { display: flex; width: 100%; min-height: 100dvh; background: var(--bg); }
 
-        /* ── LEFT DOCK: form tạo giao dịch ── */
+        /* ── REGISTER PANEL: form tạo giao dịch (quầy thu ngân) ── */
         .dock {
-          position: absolute; top: 0; left: 0; bottom: 0; width: 300px;
+          flex: 0 0 296px; width: 296px;
           background: var(--surface); border-right: 1px solid var(--border);
-          padding: 22px 18px; overflow-y: auto; z-index: 1;
+          padding: 24px 20px; overflow-y: auto;
+          display: flex; flex-direction: column;
         }
-        .dock-title { font-size: 18px; font-weight: 800; color: var(--text); margin-bottom: 2px; }
-        .dock-sub { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+        .dock-eyebrow {
+          display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono);
+          font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+          color: var(--mm); margin-bottom: 8px;
+        }
+        .dock-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--mm); display: inline-block; }
+        .dock-title { font-size: 21px; font-weight: 800; color: var(--text); margin-bottom: 2px; letter-spacing: -0.01em; }
+        .dock-sub { font-size: 12px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
         .field-label { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 8px; }
         .field-block { margin-bottom: 18px; }
 
@@ -665,25 +643,59 @@ export default function CreateTransactionPage() {
         .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ── FLOATING DESK AREA ── */
-        .desk-area { position: absolute; top: 0; left: 300px; right: 0; bottom: 0; overflow: auto; }
-        .desk-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: center; padding: 20px; }
+        /* ── BOARD: bảng vé giao dịch, lấp đầy toàn bộ phần còn lại ── */
+        .board-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+        .board-bar {
+          flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+          padding: 16px 28px; border-bottom: 1px solid var(--border); background: var(--surface);
+        }
+        .board-bar-title { font-size: 14px; font-weight: 800; color: var(--text); }
+        .board-bar-count { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--muted); }
+        .board-bar-count b { color: var(--mm); }
+        .board {
+          flex: 1; overflow-y: auto; padding: 24px 28px 40px;
+          display: grid; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+          align-content: start; gap: 18px;
+        }
+        .board-empty {
+          grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+          gap: 6px; color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: center;
+          padding: 60px 20px; min-height: 40vh;
+        }
+        .board-empty-icon { color: var(--border); margin-bottom: 6px; }
 
-        /* ── FLOATING MODAL ── */
-        .float-modal {
-          position: absolute; width: 320px; background: var(--surface); border-radius: 16px;
-          box-shadow: 0 12px 34px rgba(26,15,22,0.18); border: 1px solid var(--border); overflow: hidden;
+        /* ── TICKET (vé giao dịch, kiểu hóa đơn POS) ── */
+        .ticket {
+          position: relative; background: var(--paper); border-radius: 14px;
+          box-shadow: 0 2px 10px rgba(26,15,22,0.06); border: 1px solid var(--border);
+          overflow: hidden; transition: box-shadow 0.15s, border-color 0.15s; align-self: start;
         }
-        .float-modal.top { box-shadow: 0 16px 44px rgba(174,0,112,0.28); }
-        .float-modal-head {
+        .ticket.focused { border-color: var(--mm); box-shadow: 0 10px 28px rgba(174,0,112,0.16); }
+        .ticket.is-paid { opacity: 0.88; }
+        .ticket-notch {
+          position: absolute; top: 44px; width: 16px; height: 16px; border-radius: 50%;
+          background: var(--bg); border: 1px solid var(--border); z-index: 1;
+        }
+        .ticket-notch.left { left: -9px; }
+        .ticket-notch.right { right: -9px; }
+        .ticket-stamp {
+          position: absolute; top: 54px; right: 22px; z-index: 2; pointer-events: none;
+          font-family: var(--mono); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+          color: #1e8449; border: 2px solid #1e8449; border-radius: 6px; padding: 3px 8px;
+          transform: rotate(-9deg); opacity: 0.75;
+        }
+        .ticket-head {
           display: flex; align-items: center; justify-content: space-between; gap: 8px;
-          padding: 10px 12px; background: var(--mm-light); border-bottom: 1px solid var(--border); cursor: grab; touch-action: none;
+          padding: 12px 16px; background: var(--mm-light);
         }
-        .float-modal-head:active { cursor: grabbing; }
-        .float-modal-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
-        .float-modal-head-right { display: flex; align-items: center; gap: 6px; }
+        .ticket-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .ticket-head-right { display: flex; align-items: center; gap: 6px; }
+        .ticket-perf {
+          height: 0; border-top: 2px dashed var(--border); margin: 0 16px;
+        }
+        .ticket-body { padding: 14px 16px 16px; }
         .modal-type-icon { color: var(--mm); line-height: 0; flex-shrink: 0; }
-        .modal-amount { font-size: 15px; font-weight: 800; color: var(--text); white-space: nowrap; }
+        .modal-amount { font-family: var(--mono); font-size: 16px; font-weight: 800; color: var(--text); white-space: nowrap; }
         .modal-close-btn {
           width: 22px; height: 22px; border-radius: 6px; border: none; background: transparent; color: var(--muted);
           display: flex; align-items: center; justify-content: center; cursor: pointer;
@@ -693,8 +705,6 @@ export default function CreateTransactionPage() {
           display: flex; align-items: center; gap: 4px; font-size: 9.5px; font-weight: 800; color: var(--mm);
           background: rgba(174,0,112,0.12); padding: 3px 7px; border-radius: 999px;
         }
-        .float-modal-body { padding: 14px; }
-
         .status-badge { font-size: 10.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; }
         .status-pending { background: rgba(214,158,46,0.15); color: #b9770e; }
         .status-paid { background: rgba(39,174,96,0.15); color: #1e8449; }
@@ -703,8 +713,8 @@ export default function CreateTransactionPage() {
 
         .info-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 5px 0; }
         .info-row span:first-child { color: var(--muted); font-weight: 600; }
-        .info-row span:last-child { color: var(--text); font-weight: 700; text-align: right; word-break: break-all; }
-        .info-divider { height: 1px; background: var(--border); margin: 6px 0; }
+        .info-row span:last-child { font-family: var(--mono); color: var(--text); font-weight: 700; text-align: right; word-break: break-all; }
+        .info-divider { height: 0; border-top: 2px dashed var(--border); margin: 8px 0; }
 
         .qr-wrap { display: flex; justify-content: center; padding: 10px 0; }
         .qr-wrap img { width: 170px; height: 170px; border-radius: 10px; border: 1px solid var(--border); }
@@ -733,7 +743,7 @@ export default function CreateTransactionPage() {
 
         .code-input {
           width: 100%; padding: 10px; border: 1.5px solid var(--border); border-radius: 9px;
-          font-size: 13.5px; font-weight: 700; letter-spacing: 0.02em; text-align: center;
+          font-family: var(--mono); font-size: 13.5px; font-weight: 700; letter-spacing: 0.02em; text-align: center;
         }
         .code-input:focus { outline: none; border-color: var(--mm); }
         .code-err { font-size: 11px; font-weight: 600; color: #c0392b; margin-top: 6px; }
@@ -762,17 +772,19 @@ export default function CreateTransactionPage() {
         .cancel-modal-keep { background: var(--subtle); color: var(--text); }
         .cancel-modal-confirm { background: #c0392b; color: #fff; }
 
-        @media (max-width: 768px) {
-          .dock { width: 100%; height: auto; position: relative; border-right: none; border-bottom: 1px solid var(--border); }
-          .desk { height: auto; overflow: visible; }
-          .desk-area { position: relative; left: 0; height: 60vh; }
-          .float-modal { width: 92vw; max-width: 340px; }
+        @media (max-width: 860px) {
+          .pos-shell { flex-direction: column; }
+          .dock { flex: 0 0 auto; width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 46vh; }
+          .board-wrap { height: auto; }
+          .board { grid-template-columns: 1fr; padding: 18px 16px 32px; }
+          .board-bar { padding: 12px 16px; }
         }
       `}</style>
 
-      <div className="desk">
-        {/* ── DOCK: form tạo giao dịch ── */}
+      <div className="pos-shell">
+        {/* ── REGISTER PANEL: form tạo giao dịch ── */}
         <div className="dock">
+          <div className="dock-eyebrow">Quầy thu ngân</div>
           <div className="dock-title">Tạo giao dịch</div>
           <div className="dock-sub">Tối đa {MAX_PER_TYPE} P2P + {MAX_PER_TYPE} Scan đang chờ cùng lúc</div>
 
@@ -846,23 +858,29 @@ export default function CreateTransactionPage() {
           )}
         </div>
 
-        {/* ── VÙNG NỔI: các cửa sổ giao dịch ── */}
-        <div className="desk-area">
-          {txs.length === 0 && (
-            <div className="desk-empty">Chưa có giao dịch nào đang mở.<br />Tạo giao dịch mới từ bảng bên trái.</div>
-          )}
+        {/* ── BOARD: bảng vé giao dịch ── */}
+        <div className="board-wrap">
+          <div className="board-bar">
+            <span className="board-bar-title">Giao dịch đang mở</span>
+            <span className="board-bar-count"><b>{txs.length}</b> / {MAX_PER_TYPE * 2} vé</span>
+          </div>
+          <div className="board">
+            {txs.length === 0 && (
+              <div className="board-empty">
+                <span className="board-empty-icon"><IconScan /></span>
+                Chưa có giao dịch nào đang mở.<br />Tạo giao dịch mới từ quầy bên trái.
+              </div>
+            )}
 
-          {txs.map(tx => {
-            const isTop = tx.z === Math.max(...txs.map(t => t.z))
-            const isCamOwner = tx.type === 'scan' && activeCamId === tx.id
-            return (
-              <FloatingModal
-                key={tx.id}
-                tx={tx}
-                isTop={isTop}
-                onFocus={() => bringToFront(tx.id)}
-                onDrag={(x, y) => updateTx(tx.id, { x, y })}
-                headerLeft={
+            {txs.map(tx => {
+              const isCamOwner = tx.type === 'scan' && activeCamId === tx.id
+              return (
+                <TicketCard
+                  key={tx.id}
+                  tx={tx}
+                  isFocused={lastFocusedId === tx.id}
+                  onFocus={() => bringToFront(tx.id)}
+                  headerLeft={
                   <>
                     <span className="modal-type-icon">{tx.type === 'p2p' ? <IconP2P /> : <IconScan />}</span>
                     <span className="modal-amount">{formatAmount(String(tx.amount))}₫</span>
@@ -980,9 +998,10 @@ export default function CreateTransactionPage() {
                     )}
                   </>
                 )}
-              </FloatingModal>
-            )
-          })}
+                </TicketCard>
+              )
+            })}
+          </div>
         </div>
       </div>
 
