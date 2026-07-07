@@ -24,7 +24,7 @@ import Head from 'next/head'
 
 // ─── CONSTANTS ─────────────────────────────────────────────
 const TX_BASE_URL   = 'https://kiehtt.vercel.app'
-const MAX_PER_TYPE   = 5
+const MAX_PER_TYPE   = 100
 const P2P_DURATION_MS = 10 * 60 * 1000
 const POLL_MS         = 1000
 const LIVE_VERIFY_EVERY_TICKS = 10 // ~10s — gọi /api/momo/query verify thật cho P2P
