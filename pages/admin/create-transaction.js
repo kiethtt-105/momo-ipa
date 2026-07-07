@@ -47,14 +47,23 @@ function unformatAmount(formatted) {
   return (formatted || '').replace(/\D/g, '')
 }
 
-// ─── GỢI Ý SỐ TIỀN THÔNG MINH (thay cho 4 ô cứng 50k/100k/200k/500k) ──
-// Thay vì hard-code sẵn 1 mảng số tiền cố định, gợi ý được TÍNH TOÁN mỗi
-// lần render dựa trên 2 nguồn: (1) lịch sử số tiền hay dùng nhất tại quầy
-// này (lưu trong localStorage, đếm tần suất), (2) nếu người dùng đang gõ
-// dở số tiền, gợi ý các mốc "làm tròn lên" gần nhất — giống cách thu ngân
-// thật thường mặc định lên số tròn tiếp theo.
+// ─── GỢI Ý SỐ TIỀN (thay cho 4 ô cứng 50k/100k/200k/500k) ──────────────
+// THIẾT KẾ LẠI: trước đây danh sách được tính lại theo TỪNG KÝ TỰ đang gõ
+// (làm tròn lên gần số đang nhập) — gây 2 hậu quả xấu:
+//   (1) Các nút cứ đổi giá trị/nhảy vị trí liên tục trong lúc gõ → thu
+//       ngân dễ bấm nhầm nút khác với nút mình đang nhắm tới.
+//   (2) Vì code loại trừ "số trùng với số đang gõ", nên hễ gõ ĐÚNG một
+//       mốc tròn quen thuộc (vd 100.000) thì chính mốc đó lại BIẾN MẤT
+//       khỏi danh sách gợi ý — rất phản trực giác.
+// Giờ danh sách gợi ý ỔN ĐỊNH trong suốt lúc gõ: chỉ dựa vào lịch sử số
+// tiền hay dùng nhất tại quầy (localStorage, đếm tần suất) + mốc mặc định
+// phổ biến khi lịch sử chưa đủ. Danh sách chỉ đổi khi có giao dịch mới
+// được TẠO XONG (lịch sử cập nhật), không đổi theo từng ký tự đang gõ.
 const RECENT_AMOUNTS_KEY = 'momo-pos-recent-amounts'
 const DEFAULT_AMOUNTS = [50000, 100000, 200000, 500000]
+// Không gợi ý số tiền dưới 1.000đ — với giao dịch tiền mặt/chuyển khoản
+// thực tế, số quá nhỏ vô nghĩa và khi rút gọn theo nghìn sẽ ra số lẻ xấu.
+const MIN_SUGGEST = 1000
 
 function loadRecentAmounts() {
   try {
@@ -78,25 +87,14 @@ function recordAmountUsage(amount) {
     localStorage.setItem(RECENT_AMOUNTS_KEY, JSON.stringify(map))
   } catch { /* localStorage không khả dụng — bỏ qua */ }
 }
-function roundUpTo(value, step) {
-  if (value <= 0) return step
-  return Math.ceil(value / step) * step
-}
-// Trả về đúng 4 gợi ý, không trùng nhau, không trùng số đang gõ.
-function getSuggestedAmounts(currentDigits, recentMap) {
-  const typed = parseInt(currentDigits, 10) || 0
+// Trả về đúng 4 gợi ý ỔN ĐỊNH (không phụ thuộc số đang gõ):
+// - "list": 4 mốc để hiển thị, sắp tăng dần cho dễ nhìn.
+// - "top": mốc được dùng nhiều nhất (dùng cho phím tắt Tab điền nhanh).
+function getSuggestedAmounts(recentMap) {
   const out = []
-  const add = v => { if (v > 0 && !out.includes(v) && v !== typed) out.push(v) }
+  const add = v => { if (v >= MIN_SUGGEST && !out.includes(v)) out.push(v) }
 
-  if (typed > 0) {
-    // Đang gõ dở → ưu tiên gợi ý làm tròn lên gần số đang nhập nhất trước
-    add(roundUpTo(typed, 10000))
-    add(roundUpTo(typed, 50000))
-    add(roundUpTo(typed, 100000))
-    add(typed * 2)
-  }
-
-  // Bổ sung bằng các mốc hay dùng nhất trong lịch sử (sắp theo tần suất)
+  // Ưu tiên các mốc hay dùng nhất trong lịch sử thực tế tại quầy này
   const byFreq = Object.entries(recentMap || {})
     .sort((a, b) => b[1] - a[1])
     .map(([k]) => parseInt(k, 10))
@@ -105,10 +103,6 @@ function getSuggestedAmounts(currentDigits, recentMap) {
   // Vẫn thiếu thì lấp bằng mốc mặc định phổ biến
   DEFAULT_AMOUNTS.forEach(add)
 
-  // "top" là gợi ý ưu tiên cao nhất theo logic ở trên (dùng cho phím tắt
-  // Tab điền nhanh + tô nổi bật nút tương ứng). "list" là 4 gợi ý được
-  // HIỂN THỊ theo thứ tự tăng dần cho dễ nhìn — tránh lộn xộn kiểu
-  // "10k, 50k, 1k, 100k".
   const top4 = out.slice(0, 4)
   return { list: [...top4].sort((a, b) => a - b), top: top4[0] || null }
 }
@@ -117,6 +111,14 @@ function formatCountdown(totalSeconds) {
   const m = Math.floor(s / 60).toString().padStart(2, '0')
   const r = (s % 60).toString().padStart(2, '0')
   return `${m}:${r}`
+}
+// Nhãn hiển thị trên chip gợi ý — luôn gọn và không bao giờ ra số thập
+// phân xấu (vd "0.2k" hay "1.234k"): chỉ rút gọn thành k/tr khi số tiền
+// CHIA HẾT tròn cho 1.000/1.000.000, còn lại hiện nguyên số có dấu phẩy.
+function formatQuickAmountLabel(a) {
+  if (a >= 1000000 && a % 1000000 === 0) return `${(a / 1000000).toLocaleString('en-US')}tr`
+  if (a >= 1000 && a % 1000 === 0) return `${(a / 1000).toLocaleString('en-US')}k`
+  return formatAmount(String(a))
 }
 // ─── LƯU/KHÔI PHỤC DANH SÁCH GIAO DỊCH QUA URL (?txs=...) ──────────
 // Chỉ lưu các field cần thiết để hiển thị lại + tiếp tục poll đúng đơn
@@ -359,7 +361,7 @@ export default function CreateTransactionPage() {
   const amountInputRef = useRef(null)
   const [recentAmounts, setRecentAmounts] = useState({})
   useEffect(() => { setRecentAmounts(loadRecentAmounts()) }, [])
-  const { list: suggestedAmounts, top: topSuggestedAmount } = getSuggestedAmounts(amount, recentAmounts)
+  const { list: suggestedAmounts, top: topSuggestedAmount } = getSuggestedAmounts(recentAmounts)
 
   // ─── DANH SÁCH GIAO DỊCH ĐANG MỞ (mỗi cái = 1 cửa sổ nổi) ─
   const [txs, setTxs] = useState([])
@@ -1196,7 +1198,7 @@ export default function CreateTransactionPage() {
         }
         .quick-amt-chip:hover { border-color: var(--mm); color: var(--mm); }
         .quick-amt-chip:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--border); color: var(--muted); }
-        .quick-amt-chip.primary { border-color: var(--mm); background: var(--mm-light); color: var(--mm); }
+        .quick-amt-chip.selected { border-color: var(--mm); background: var(--mm-light); color: var(--mm); }
 
         .count-badge { font-size: 10.5px; font-weight: 700; color: var(--muted); margin-top: 6px; }
         .count-badge.full { color: #c0392b; }
@@ -1545,11 +1547,11 @@ export default function CreateTransactionPage() {
                     {suggestedAmounts.map((a) => (
                       <button
                         key={a}
-                        className={`quick-amt-chip${a === topSuggestedAmount ? ' primary' : ''}`}
+                        className={`quick-amt-chip${parseInt(amount || 0, 10) === a ? ' selected' : ''}`}
                         disabled={creating || justCreated}
                         onClick={() => setAmount(String(a))}
                       >
-                        {a >= 1000000 ? `${(a / 1000000).toLocaleString('en-US')}tr` : `${a / 1000}k`}
+                        {formatQuickAmountLabel(a)}
                       </button>
                     ))}
                   </div>
