@@ -58,6 +58,9 @@ function buildP2pUrl(amount, orderInfo, storeId) {
   const base = `${TX_BASE_URL}/api/momo/create-p2p?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
   return storeId ? `${base}&storeId=${encodeURIComponent(storeId)}` : base
 }
+function buildOwnPayUrl(orderId) {
+  return `${TX_BASE_URL}/pay/${encodeURIComponent(orderId)}`
+}
 
 // ─── ICONS ─────────────────────────────────────────────────
 const IconP2P = () => (
@@ -366,7 +369,7 @@ export default function CreateTransactionPage() {
           storeName: stores.find(s => s.id === finalStoreId)?.name || '',
           status: 'PENDING', checkMsg: '', checking: false, cancelling: false,
           payUrl: data.payUrl, deeplink: data.deeplink || '',
-          expiresAt: Date.now() + P2P_DURATION_MS, copied: false,
+          expiresAt: Date.now() + P2P_DURATION_MS, copied: false, copiedOwn: false,
         }])
       } catch (e) {
         setFormErr('Lỗi server, thử lại sau.')
@@ -550,6 +553,24 @@ export default function CreateTransactionPage() {
     }
     updateTx(txId, { copied: true })
     setTimeout(() => updateTx(txId, { copied: false }), 2000)
+  }
+
+  async function copyOwnPayUrl(txId) {
+    const tx = txsRef.current.find(t => t.id === txId)
+    if (!tx) return
+    const url = buildOwnPayUrl(tx.orderId)
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch (e) {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0'
+        document.body.appendChild(ta); ta.focus(); ta.select()
+        document.execCommand('copy'); document.body.removeChild(ta)
+      } catch { return }
+    }
+    updateTx(txId, { copiedOwn: true })
+    setTimeout(() => updateTx(txId, { copiedOwn: false }), 2000)
   }
 
   const currentStoreName = stores.find(s => s.id === storeId)?.name || ''
@@ -740,6 +761,8 @@ export default function CreateTransactionPage() {
           background: transparent; font-size: 11.5px; font-weight: 700; color: var(--muted); cursor: pointer;
         }
         .copy-link-btn.copied { color: #1e8449; border-color: #1e8449; }
+        .copy-link-btn-own { border-style: solid; border-color: var(--mm); color: var(--mm); background: var(--mm-light); }
+        .copy-link-btn-own.copied { color: #1e8449; border-color: #1e8449; background: rgba(39,174,96,0.08); }
 
         .code-input {
           width: 100%; padding: 10px; border: 1.5px solid var(--border); border-radius: 9px;
@@ -926,6 +949,11 @@ export default function CreateTransactionPage() {
                     {tx.payUrl && tx.status !== 'PAID' && (
                       <button className={`copy-link-btn${tx.copied ? ' copied' : ''}`} onClick={() => copyPayUrl(tx.id)}>
                         {tx.copied ? '✓ Đã copy link thanh toán' : '📋 Copy link thanh toán'}
+                      </button>
+                    )}
+                    {tx.status !== 'PAID' && (
+                      <button className={`copy-link-btn copy-link-btn-own${tx.copiedOwn ? ' copied' : ''}`} onClick={() => copyOwnPayUrl(tx.id)}>
+                        {tx.copiedOwn ? '✓ Đã copy link trang riêng' : '🔗 Copy link trang thanh toán riêng'}
                       </button>
                     )}
                     <div className="btn-row">
