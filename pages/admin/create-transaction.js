@@ -125,6 +125,19 @@ const IconChevronDown = () => (
     <path d="m6 9 6 6 6-6"/>
   </svg>
 )
+const IconSync = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <path d="M21 12a9 9 0 0 1-15.3 6.4L3 16M3 12a9 9 0 0 1 15.3-6.4L21 8"/>
+    <path d="M3 16v4h4M21 8V4h-4"/>
+  </svg>
+)
+const IconTrash = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+    <path d="M10 11v6M14 11v6"/>
+  </svg>
+)
 const IconCheck = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
     <path d="M20 6 9 17l-5-5"/>
@@ -598,19 +611,35 @@ export default function CreateTransactionPage() {
   // ở NƠI KHÁC, nó sẽ tự biến mất khỏi list-open — nhưng thiết bị đang mở
   // vé cứ giữ nguyên tới khi người dùng chủ động đóng, không có gì phá vỡ.
   const SYNC_POLL_MS = 3000
-  useEffect(() => {
-    let cancelled = false
-    async function syncOpenOrders() {
-      try {
-        const res = await fetch('/api/momo/list-open')
-        if (!res.ok || cancelled) return
-        const data = await res.json()
-        if (cancelled || !Array.isArray(data.orders) || !data.orders.length) return
+  const [manualSyncing, setManualSyncing] = useState(false)
+  const [lastSyncAt, setLastSyncAt] = useState(null)
 
-        const known = new Set(txsRef.current.map(t => t.orderId))
-        const missing = data.orders.filter(o => !known.has(o.orderId))
-        if (!missing.length) return
+  // syncOpenOrders được tách thành hàm dùng chung cho CẢ vòng poll tự
+  // động (chạy ngầm mỗi 3s, silent) LẪN nút "Đồng bộ" bấm tay (silent:
+  // false → có toast báo kết quả) — dùng khi nghi ngờ rớt mạng/bỏ lỡ
+  // vòng poll tự động và muốn ép đồng bộ lại ngay lập tức.
+  //
+  // Ngoài việc THÊM vé còn thiếu (đơn mở ở thiết bị khác), giờ còn ĐỐI
+  // CHIẾU NGƯỢC: nếu 1 vé đang PENDING cục bộ nhưng KHÔNG còn nằm trong
+  // list-open trả về (nghĩa là đã chuyển sang trạng thái cuối — thành
+  // công/thất bại/hết hạn — ở nơi khác rồi bị gỡ khỏi "đang mở" phía
+  // server), hỏi lại /api/momo/status ngay lập tức thay vì chờ vòng poll
+  // riêng của từng vé, để trạng thái final luôn được kéo về đúng lúc.
+  const syncOpenOrders = useCallback(async ({ silent = true } = {}) => {
+    try {
+      const res = await fetch('/api/momo/list-open')
+      if (!res.ok) {
+        if (!silent) pushToast('⚠ Đồng bộ thất bại — lỗi mạng hoặc server, thử lại sau', 'err')
+        return
+      }
+      const data = await res.json()
+      const orders = Array.isArray(data.orders) ? data.orders : []
+      setLastSyncAt(Date.now())
 
+      const known = new Set(txsRef.current.map(t => t.orderId))
+      const missing = orders.filter(o => !known.has(o.orderId))
+
+      if (missing.length) {
         const startZ = zCounterRef.current
         const newTxs = missing.map((o, i) => {
           // Record cũ (tạo trước khi thêm field "type") có thể chưa có
@@ -657,14 +686,65 @@ export default function CreateTransactionPage() {
           const next = newTxs.find(t => t.type === 'scan' && t.status === 'PENDING' && !t.submittedCode)
           return next ? next.id : prevCam
         })
-      } catch (e) {
-        console.error('Lỗi đồng bộ giao dịch giữa các thiết bị:', e)
       }
+
+      // Đối chiếu ngược — xem chi tiết ở comment phía trên.
+      const openIds = new Set(orders.map(o => o.orderId))
+      const staleLocal = txsRef.current.filter(t => t.status === 'PENDING' && !openIds.has(t.orderId))
+      staleLocal.forEach(t => {
+        fetch(`/api/momo/status?orderId=${encodeURIComponent(t.orderId)}`)
+          .then(r => r.json())
+          .then(d => {
+            const status = d.status || 'PENDING'
+            if (status === 'PENDING') return
+            updateTx(t.id, {
+              status,
+              checkMsg: status === 'PAID' ? '✓ Thanh toán thành công!'
+                : status === 'FAILED' ? `✗ Giao dịch thất bại${d.message ? `: ${d.message}` : ''}`
+                : '⚠ Mã QR đã hết hạn, vui lòng tạo đơn mới.',
+            })
+            if (status === 'PAID') {
+              setResultToast({ orderId: t.orderId, status: 'success', amount: d.amount || t.amount })
+              setTimeout(() => removeTx(t.id), 1500)
+            }
+          })
+          .catch(() => {})
+      })
+
+      if (!silent) {
+        if (missing.length) pushToast(`✓ Đã đồng bộ — tìm thấy ${missing.length} giao dịch mới từ thiết bị khác`, 'ok')
+        else pushToast('✓ Đã đồng bộ — không có giao dịch mới, mọi thứ đã cập nhật', 'info')
+      }
+    } catch (e) {
+      console.error('Lỗi đồng bộ giao dịch giữa các thiết bị:', e)
+      if (!silent) pushToast('⚠ Đồng bộ thất bại — kiểm tra kết nối mạng và thử lại', 'err')
     }
-    syncOpenOrders() // chạy ngay lúc mount, không đợi tick 3s đầu tiên
-    const id = setInterval(syncOpenOrders, SYNC_POLL_MS)
-    return () => { cancelled = true; clearInterval(id) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    syncOpenOrders({ silent: true }) // chạy ngay lúc mount, không đợi tick 3s đầu tiên
+    const id = setInterval(() => { if (!cancelled) syncOpenOrders({ silent: true }) }, SYNC_POLL_MS)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [syncOpenOrders])
+
+  async function handleManualSync() {
+    if (manualSyncing) return
+    setManualSyncing(true)
+    await syncOpenOrders({ silent: false })
+    setManualSyncing(false)
+  }
+
+  // ─── DỌN CÁC GIAO DỊCH ĐÃ HẾT HẠN KHỎI BẢNG (dọn dẹp hàng loạt,
+  // tránh phải bấm "Đóng vé này" từng cái một khi có nhiều vé hết hạn) ──
+  const expiredCount = txs.filter(t => t.status === 'EXPIRED').length
+  function clearExpiredTxs() {
+    const count = txsRef.current.filter(t => t.status === 'EXPIRED').length
+    if (!count) return
+    setTxs(prev => prev.filter(t => t.status !== 'EXPIRED'))
+    pushToast(`🗑 Đã dọn ${count} giao dịch hết hạn khỏi bảng`, 'info')
+  }
 
   // ─── TICK 1s: đếm ngược P2P + tự chuyển EXPIRED ─────────
   useEffect(() => {
@@ -1226,6 +1306,24 @@ export default function CreateTransactionPage() {
           font-size: 11.5px; font-weight: 700; cursor: pointer; transition: border-color 0.15s, color 0.15s;
         }
         .new-tab-btn:hover { border-color: var(--mm); color: var(--mm); }
+        .board-bar-synced { font-family: var(--mono); font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+        .sync-btn {
+          display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 9px;
+          border: 1.5px solid var(--border); background: var(--surface); color: var(--text);
+          font-size: 11.5px; font-weight: 700; cursor: pointer; transition: border-color 0.15s, color 0.15s, opacity 0.15s;
+        }
+        .sync-btn:hover:not(:disabled) { border-color: var(--mm); color: var(--mm); }
+        .sync-btn:disabled { opacity: 0.7; cursor: default; }
+        .sync-btn.syncing { border-color: var(--mm); color: var(--mm); }
+        .sync-icon { display: inline-flex; }
+        .sync-icon.spin { animation: sync-spin 0.9s linear infinite; }
+        @keyframes sync-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .clear-expired-btn {
+          display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 9px;
+          border: 1.5px solid #f3c1c1; background: #fdf0f0; color: #c0392b;
+          font-size: 11.5px; font-weight: 700; cursor: pointer; transition: background 0.15s, border-color 0.15s;
+        }
+        .clear-expired-btn:hover { background: #fbe0e0; border-color: #c0392b; }
         .board {
           flex: 1; position: relative; overflow: auto; padding: 24px 28px 40px;
           background: linear-gradient(120deg, var(--bg) 0%, var(--mm-light) 30%, #fdf2f8 50%, var(--mm-light) 70%, var(--bg) 100%);
@@ -1432,7 +1530,9 @@ export default function CreateTransactionPage() {
           .ticket { width: 100%; }
           .register-window { width: 100%; }
           .ticket-head, .register-head { cursor: default; }
-          .board-bar { padding: 12px 16px; }
+          .board-bar { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+          .board-bar-right { flex-wrap: wrap; gap: 8px; }
+          .board-bar-synced { width: 100%; order: 10; }
         }
       `}</style>
 
@@ -1447,6 +1547,29 @@ export default function CreateTransactionPage() {
           <span className="board-bar-title">Giao dịch đang mở</span>
           <div className="board-bar-right">
             {txs.length > 0 && <span className="board-bar-count"><b>{txs.length}</b> đang mở</span>}
+            {lastSyncAt && (
+              <span className="board-bar-synced" title="Lần đồng bộ gần nhất với server">
+                Đồng bộ lúc {new Date(lastSyncAt).toLocaleTimeString('vi-VN')}
+              </span>
+            )}
+            {expiredCount > 0 && (
+              <button
+                className="clear-expired-btn"
+                onClick={clearExpiredTxs}
+                title="Xoá tất cả giao dịch đã hết hạn khỏi bảng, dọn dẹp một lần thay vì đóng từng vé"
+              >
+                <IconTrash /> Dọn hết hạn ({expiredCount})
+              </button>
+            )}
+            <button
+              className={`sync-btn${manualSyncing ? ' syncing' : ''}`}
+              onClick={handleManualSync}
+              disabled={manualSyncing}
+              title="Ép đồng bộ ngay với server — dùng khi nghi ngờ mất mạng hoặc bỏ lỡ vòng tự động, sẽ lấy giao dịch từ tab/thiết bị khác và cập nhật lại trạng thái mọi vé"
+            >
+              <span className={`sync-icon${manualSyncing ? ' spin' : ''}`}><IconSync /></span>
+              {manualSyncing ? 'Đang đồng bộ…' : 'Đồng bộ'}
+            </button>
             <button
               className="new-tab-btn"
               onClick={() => window.open(window.location.pathname, '_blank')}

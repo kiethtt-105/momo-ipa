@@ -3,6 +3,7 @@ import { queryMoMoTransaction } from '../../../lib/momo'
 import { Redis } from '@upstash/redis'
 import { requireAdmin } from '../../../lib/requireAdmin'
 import { markOrderClosed } from '../../../lib/openOrders'
+import { formatResultCodeMessage } from '../../../lib/momoResultCodes'
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL,
@@ -49,6 +50,14 @@ export default async function handler(req, res) {
   const isPaid = parseInt(resultCode) === 0
   const now = new Date().toISOString()
 
+  // Trước đây "message" chỉ lưu nguyên văn MoMo trả về — nhiều khi tiếng
+  // Anh, cộc lốc, hoặc rỗng (đúng như trường hợp vé "Thất bại" không rõ
+  // lý do). Giờ dịch resultCode qua bảng tra cứu đầy đủ + phân loại rõ
+  // lỗi do ai (hệ thống MoMo / do cấu hình bên mình — admin cần kiểm tra
+  // / do khách hàng), để admin nhìn message là hiểu ngay, không phải đoán
+  // hay tra cứu tay resultCode.
+  const finalMessage = isPaid ? (message || 'Thanh toán thành công') : formatResultCodeMessage(resultCode, message)
+
   const record = {
     orderId,
     transId:      transId      || existing?.transId      || '',
@@ -56,7 +65,7 @@ export default async function handler(req, res) {
     payType:      payType      || existing?.payType      || '',
     orderInfo:    existing?.orderInfo    || '',
     resultCode:   parseInt(resultCode ?? 0),
-    message:      message      || existing?.message      || '',
+    message:      finalMessage || existing?.message      || '',
     responseTime: responseTime || existing?.responseTime || null,
     orderType:    orderType    || existing?.orderType    || '',
     extraData:    extraData    || existing?.extraData    || '',

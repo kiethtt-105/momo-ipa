@@ -4,6 +4,7 @@ import QRCode from 'qrcode'
 import { requireAdmin } from '../../../lib/requireAdmin'
 import { resolveStore } from '../../../lib/stores'
 import { markOrderOpen, markOrderClosed } from '../../../lib/openOrders'
+import { describeResultCode, formatResultCodeMessage } from '../../../lib/momoResultCodes'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -89,19 +90,28 @@ export default async function handler(req, res) {
     })
 
     if (result.resultCode !== 0) {
+      const info = describeResultCode(result.resultCode)
+      const finalMessage = formatResultCodeMessage(result.resultCode, result.message)
       await redis.hset('momo:orders', {
         [orderId]: JSON.stringify({
           orderId, amount: amt, orderInfo, status: 'FAILED',
           createdAt: now, paidAt: null, transId: '', payType: '',
           paymentOption: '', source: shortcutOk ? 'create-p2p-shortcut' : 'create-p2p',
           storeId, storeName, partnerName, error: result.message || '',
+          message: finalMessage, resultCode: result.resultCode,
           type: 'p2p',
         }),
       })
       await markOrderClosed(redis, orderId)
+      // Trả về cả message đã dịch/phân loại để admin thấy ngay lý do thật
+      // (VD: lỗi 41 "trùng orderId" là do CẤU HÌNH bên mình, cần sửa
+      // ngay, khác hẳn lỗi 1006 "khách từ chối xác nhận" — không cần
+      // admin làm gì) thay vì chỉ hiện "MoMo từ chối giao dịch" chung
+      // chung như trước.
       return res.status(400).json({
-        error: result.message || 'MoMo từ chối giao dịch',
+        error: finalMessage,
         resultCode: result.resultCode,
+        category: info.category,
       })
     }
 
@@ -157,6 +167,7 @@ export default async function handler(req, res) {
           createdAt: now, paidAt: null, transId: '', payType: '',
           paymentOption: '', source: shortcutOk ? 'create-p2p-shortcut' : 'create-p2p',
           storeId, storeName, partnerName, error: 'server_error',
+          message: `⚠ Lỗi hệ thống (server) khi gọi MoMo — ADMIN cần kiểm tra log server: ${err.message || 'không rõ nguyên nhân'}`,
           type: 'p2p',
         }),
       })

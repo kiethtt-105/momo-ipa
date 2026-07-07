@@ -7,6 +7,7 @@ import { Redis } from '@upstash/redis'
 import { requireAdmin } from '../../../lib/requireAdmin'
 import { resolveStore } from '../../../lib/stores'
 import { markOrderOpen, markOrderClosed } from '../../../lib/openOrders'
+import { formatResultCodeMessage } from '../../../lib/momoResultCodes'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -173,7 +174,7 @@ async function handlePosCharge(req, res) {
           orderId, amount: amt, orderInfo,
           status: 'FAILED', createdAt: now, paidAt: null,
           transId: '', payType: 'pos', paymentOption: '',
-          resultCode: -1, message: 'MoMo trả về dữ liệu không hợp lệ',
+          resultCode: -1, message: '⚠ Lỗi hệ thống MoMo — MoMo trả về dữ liệu không hợp lệ (không phải JSON). Thử lại sau, nếu lặp lại nhiều lần thì liên hệ MoMo.',
           source: 'pos', storeId: store.id, storeName: store.name,
           type: 'scan', submittedCode: paymentCode,
         }),
@@ -193,7 +194,11 @@ async function handlePosCharge(req, res) {
       payType: data.payType || 'pos',
       paymentOption: data.paymentOption || '',
       resultCode: data.resultCode,
-      message: data.message || 'Không có thông báo',
+      // Dịch resultCode qua bảng tra cứu đầy đủ + phân loại rõ lỗi do ai
+      // (hệ thống MoMo / do cấu hình bên mình — admin cần kiểm tra ngay /
+      // do khách hàng) thay vì chỉ lưu nguyên văn "message" MoMo trả về
+      // (nhiều khi cộc lốc hoặc không đủ rõ để admin xử lý ngay).
+      message: data.resultCode === 0 ? (data.message || 'Thanh toán thành công') : formatResultCodeMessage(data.resultCode, data.message),
       responseTime: data.responseTime,
       source: 'pos', storeId: store.id, storeName: store.name,
       type: 'scan', submittedCode: paymentCode,
@@ -220,7 +225,9 @@ async function handlePosCharge(req, res) {
           status: 'FAILED', createdAt: now, paidAt: null,
           transId: '', payType: 'pos', paymentOption: '',
           resultCode: -1,
-          message: isTimeout ? 'Timeout khi gọi MoMo (15s)' : (err.message || 'Lỗi server'),
+          message: isTimeout
+            ? '⚠ Lỗi hệ thống MoMo — Timeout khi gọi MoMo (15s), không rõ giao dịch có được xử lý phía MoMo hay không. Kiểm tra lại bằng mã đơn hàng trước khi tạo lại.'
+            : `⚠ Lỗi hệ thống (server) — ADMIN cần kiểm tra log server: ${err.message || 'Lỗi server'}`,
           source: 'pos', storeId: store.id, storeName: store.name,
           type: 'scan', submittedCode: paymentCode,
         }),
