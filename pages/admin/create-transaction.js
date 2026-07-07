@@ -105,7 +105,12 @@ function getSuggestedAmounts(currentDigits, recentMap) {
   // Vẫn thiếu thì lấp bằng mốc mặc định phổ biến
   DEFAULT_AMOUNTS.forEach(add)
 
-  return out.slice(0, 4)
+  // "top" là gợi ý ưu tiên cao nhất theo logic ở trên (dùng cho phím tắt
+  // Tab điền nhanh + tô nổi bật nút tương ứng). "list" là 4 gợi ý được
+  // HIỂN THỊ theo thứ tự tăng dần cho dễ nhìn — tránh lộn xộn kiểu
+  // "10k, 50k, 1k, 100k".
+  const top4 = out.slice(0, 4)
+  return { list: [...top4].sort((a, b) => a - b), top: top4[0] || null }
 }
 function formatCountdown(totalSeconds) {
   const s = Math.max(0, totalSeconds)
@@ -354,7 +359,7 @@ export default function CreateTransactionPage() {
   const amountInputRef = useRef(null)
   const [recentAmounts, setRecentAmounts] = useState({})
   useEffect(() => { setRecentAmounts(loadRecentAmounts()) }, [])
-  const suggestedAmounts = getSuggestedAmounts(amount, recentAmounts)
+  const { list: suggestedAmounts, top: topSuggestedAmount } = getSuggestedAmounts(amount, recentAmounts)
 
   // ─── DANH SÁCH GIAO DỊCH ĐANG MỞ (mỗi cái = 1 cửa sổ nổi) ─
   const [txs, setTxs] = useState([])
@@ -447,16 +452,25 @@ export default function CreateTransactionPage() {
     return () => ro.disconnect()
   }, [])
 
-  // Đưa cửa sổ đăng ký về CHÍNH GIỮA màn hình mỗi khi kích thước bảng
-  // thay đổi — trừ khi người dùng đã tự tay kéo nó đi chỗ khác.
+  // Đưa cửa sổ đăng ký về CHÍNH GIỮA màn hình khi CHƯA có giao dịch nào
+  // (trạng thái quầy trống, muốn nổi bật, mời tạo giao dịch đầu tiên).
+  // Nhưng NGAY KHI đã có ít nhất 1 giao dịch mở, tự động neo quầy gọn vào
+  // GÓC TRÊN-TRÁI thay vì tiếp tục chiếm giữa màn hình — trước đây quầy
+  // luôn nằm giữa khiến các vé mới bị buộc phải xếp bắt đầu từ NGAY DƯỚI
+  // quầy, tức là luôn rơi vào nửa dưới màn hình ("bị đẩy xuống dưới").
+  // Neo góc giúp bảng vé được rảnh toàn bộ phần trên để xếp lưới ngay.
   useEffect(() => {
     if (regUserPositioned || !layoutW || !layoutH) return
+    if (txs.length > 0) {
+      setRegPos({ x: GRID_GAP, y: GRID_GAP })
+      return
+    }
     const h = regElRef.current?.offsetHeight || 560
     setRegPos({
       x: Math.max(16, (layoutW - REGISTER_W) / 2),
       y: Math.max(16, (layoutH - h) / 2),
     })
-  }, [layoutW, layoutH, regUserPositioned])
+  }, [layoutW, layoutH, regUserPositioned, txs.length])
 
   // Tự xếp lại vị trí cho MỌI vé chưa bị kéo tay (userPositioned=false)
   // và chưa thu nhỏ, thành lưới đều lấp đầy chiều rộng khả dụng. Các vé
@@ -471,13 +485,13 @@ export default function CreateTransactionPage() {
     // bày ra giữa quầy chứ không dính sát vào một mép.
     const effectiveCols = Math.min(cols, Math.max(1, autoCount))
     const gridContentWidth = effectiveCols * (TICKET_W + GRID_GAP) - GRID_GAP
-    const offsetX = Math.max(GRID_GAP, (layoutW - gridContentWidth) / 2)
-    // Nếu cửa sổ đăng ký (quầy chính) chưa bị kéo tay đi chỗ khác, nó vẫn
-    // đang nằm chính giữa — chừa chỗ bên dưới nó để vé mới tự xếp không
-    // đè lên cửa sổ đặc biệt này.
-    const topOffset = regUserPositioned
-      ? GRID_GAP
-      : regPos.y + (regElRef.current?.offsetHeight || 560) + GRID_GAP
+    // Quầy đăng ký giờ neo góc trên-trái (khi đã có giao dịch mở) thay vì
+    // giữa màn hình, nên chỉ cần chừa khoảng trống NGANG đủ để không đè
+    // lên quầy — KHÔNG còn cần chừa khoảng trống DỌC bên dưới quầy nữa,
+    // vé luôn bắt đầu ngay từ đầu bảng (topOffset cố định = GRID_GAP).
+    const reserveForReg = !regUserPositioned && autoCount > 0 ? REGISTER_W + GRID_GAP * 2 : 0
+    const offsetX = Math.max(GRID_GAP + reserveForReg, (layoutW - gridContentWidth) / 2)
+    const topOffset = GRID_GAP
     let autoIdx = 0
     const next = txsRef.current.map(t => {
       if (t.minimized || t.userPositioned) return t
@@ -490,7 +504,7 @@ export default function CreateTransactionPage() {
     setTxs(next)
     setBoardMinHeight(maxBottom + GRID_GAP)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutW, autoLayoutKey, regUserPositioned, regPos.y])
+  }, [layoutW, autoLayoutKey, regUserPositioned])
 
   function onDragStart(e, tx) {
     if (e.target.closest('button')) return
@@ -1122,7 +1136,6 @@ export default function CreateTransactionPage() {
           font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: var(--surface);
           outline: none; transition: border-color 0.15s;
         }
-<<<<<<< HEAD
         .info-input:disabled { opacity: 0.6; cursor: not-allowed; background: var(--subtle); }
         .info-input:focus { border-color: var(--mm); }
 
@@ -1136,25 +1149,18 @@ export default function CreateTransactionPage() {
         }
         .amount-suffix-row:focus-within { border-color: var(--mm); }
         .amount-suffix-row.locked { opacity: 0.6; background: var(--subtle); }
-=======
->>>>>>> f0871464519d4b1ffc910df109fef3c6eb0b2022
         .amount-input {
           flex: 1 1 auto; min-width: 0; width: auto; padding: 11px 12px;
           border: none; border-radius: 0; outline: none; background: transparent;
           font-size: 26px; font-weight: 800; text-align: right; color: var(--text);
           font-family: var(--mono);
         }
-<<<<<<< HEAD
         .amount-input:disabled { cursor: not-allowed; }
         .amount-suffix {
           flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
           padding: 0 14px; font-size: 15px; font-weight: 800; color: var(--mm);
           background: var(--mm-light); border-left: 1.5px solid var(--border); pointer-events: none;
         }
-=======
-        .amount-input:disabled, .info-input:disabled { opacity: 0.6; cursor: not-allowed; background: var(--subtle); }
-        .amount-input:focus, .info-input:focus { border-color: var(--mm); }
->>>>>>> f0871464519d4b1ffc910df109fef3c6eb0b2022
 
         /* ── STORE DROPDOWN: thay <select> mặc định của trình duyệt ── */
         .store-dd { position: relative; }
@@ -1466,10 +1472,14 @@ export default function CreateTransactionPage() {
             </div>
           )}
 
-          {/* ── CỬA SỔ ĐĂNG KÝ (quầy thu ngân): giờ là 1 cửa sổ nổi kéo-thả
-              được như vé giao dịch, nhưng mặc định nằm CHÍNH GIỮA màn hình
-              và được "đóng dấu" đặc biệt hơn (viền đậm, đổ bóng hồng, dải
-              ruy-băng "Quầy chính") để phân biệt với các vé thường ── */}
+          {/* ── CỬA SỔ ĐĂNG KÝ (quầy thu ngân): là 1 cửa sổ nổi kéo-thả được
+              như vé giao dịch. Khi CHƯA có giao dịch nào mở, nằm CHÍNH GIỮA
+              màn hình cho nổi bật, mời tạo giao dịch đầu tiên. Ngay khi có
+              ≥1 giao dịch mở, tự động NEO GỌN vào góc trên-trái để nhường
+              toàn bộ phần trên của bảng cho vé mới xếp lưới (không còn bị
+              đẩy xuống dưới quầy như trước). Luôn được "đóng dấu" đặc biệt
+              hơn vé thường (viền đậm, đổ bóng hồng, dải ruy-băng "Quầy
+              chính") để dễ phân biệt ── */}
           <div
             className="ticket-float register-float"
             ref={regElRef}
@@ -1522,9 +1532,9 @@ export default function CreateTransactionPage() {
                       onKeyDown={e => {
                         if (e.key === 'Enter' && canSubmit && !creating && !justCreated) createTransaction()
                         // Tab/mũi tên phải khi ô còn trống → tự điền theo gợi ý hàng đầu
-                        if ((e.key === 'Tab' || e.key === 'ArrowRight') && !amount && suggestedAmounts[0]) {
+                        if ((e.key === 'Tab' || e.key === 'ArrowRight') && !amount && topSuggestedAmount) {
                           e.preventDefault()
-                          setAmount(String(suggestedAmounts[0]))
+                          setAmount(String(topSuggestedAmount))
                         }
                       }}
                       disabled={creating || justCreated}
@@ -1532,10 +1542,10 @@ export default function CreateTransactionPage() {
                     <span className="amount-suffix">₫</span>
                   </div>
                   <div className="quick-amounts">
-                    {suggestedAmounts.map((a, i) => (
+                    {suggestedAmounts.map((a) => (
                       <button
                         key={a}
-                        className={`quick-amt-chip${i === 0 ? ' primary' : ''}`}
+                        className={`quick-amt-chip${a === topSuggestedAmount ? ' primary' : ''}`}
                         disabled={creating || justCreated}
                         onClick={() => setAmount(String(a))}
                       >
