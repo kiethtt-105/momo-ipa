@@ -1076,6 +1076,71 @@ export default function CreateTransactionPage() {
     }
   }
 
+  // Thanh toán lại (P2P hết hạn / thất bại): PHẢI hủy đơn cũ trên server
+  // trước rồi mới tạo đơn mới — nếu tạo mới trước (hoặc không hủy), MoMo
+  // vẫn còn thấy orderId cũ đang tồn tại → báo trùng orderId, sinh ra 2
+  // giao dịch treo cùng lúc. Nội dung thanh toán (orderInfo) giữ nguyên
+  // để khách vẫn thấy đúng nội dung ban đầu; chỉ orderId đổi mới.
+  async function retryP2pOrder(txId) {
+    const tx = txsRef.current.find(t => t.id === txId)
+    if (!tx || tx.type !== 'p2p' || tx.retrying) return
+    updateTx(txId, { retrying: true, checkMsg: '⏳ Đang tạo lại đơn…' })
+
+    // 1) Xóa/hủy đơn cũ trước
+    try {
+      await fetch('/api/momo/cancel', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: tx.orderId }),
+      })
+    } catch (e) { console.error('Lỗi hủy đơn cũ khi thanh toán lại:', e) }
+
+    // 2) Tạo đơn mới — giữ nguyên orderInfo hiển thị, nhưng nếu vẫn bị báo
+    // trùng (đơn cũ chưa kịp giải phóng khỏi Redis/MoMo) thì bump nhẹ nội
+    // dung gửi lên server (không đổi orderInfo hiển thị trên vé) để đảm
+    // bảo orderId mới luôn khác đơn cũ.
+    const amt = tx.amount
+    const displayOrderInfo = tx.orderInfo
+    let sendOrderInfo = displayOrderInfo
+    const MAX_RETRY = 5
+    let attempt = 0, data = null, ok = false
+
+    try {
+      while (attempt < MAX_RETRY) {
+        const url = buildP2pUrl(amt, sendOrderInfo, tx.storeId)
+        const res = await fetch(url)
+        data = await res.json()
+        if (res.ok && data.payUrl) { ok = true; break }
+        const dup = data?.resultCode === 41 || /trùng|duplicate|exist/i.test(data?.error || '')
+        if (dup) {
+          const match = sendOrderInfo.match(/^(.+)_(\d+)$/)
+          sendOrderInfo = match ? `${match[1]}_${parseInt(match[2]) + 1}` : `${sendOrderInfo}_2`
+          attempt++
+          continue
+        }
+        break
+      }
+    } catch (e) {
+      updateTx(txId, { retrying: false, checkMsg: '⚠ Lỗi kết nối, thử lại sau.' })
+      return
+    }
+
+    if (!ok) {
+      updateTx(txId, { retrying: false, checkMsg: `✗ Tạo đơn mới thất bại${data?.error ? `: ${data.error}` : ''}` })
+      return
+    }
+
+    zCounterRef.current += 1
+    updateTx(txId, {
+      orderId: data.orderId || sendOrderInfo,
+      orderInfo: displayOrderInfo,
+      status: 'PENDING', checkMsg: '', checking: false, cancelling: false, retrying: false,
+      payUrl: data.payUrl, deeplink: data.deeplink || '',
+      expiresAt: Date.now() + P2P_DURATION_MS, copied: false,
+      zIndex: zCounterRef.current,
+    })
+    bringToFront(txId)
+  }
+
   // Đóng vé: nếu còn PENDING (đang chờ thật sự) mới cần hỏi xác nhận vì
   // hủy lúc này = gọi API hủy/đánh dấu thất bại thật trên server. Nếu vé
   // đã ở trạng thái kết thúc rồi (PAID/EXPIRED/FAILED) thì không còn gì
@@ -1724,7 +1789,13 @@ export default function CreateTransactionPage() {
                   tx.status === 'EXPIRED' ? (
                     <>
                       <div className="ticket-ended-msg">⚠ Mã QR đã hết hạn</div>
-                      <button className="btn-primary ticket-close-btn" onClick={() => removeTx(tx.id)}>Đóng vé này</button>
+                      {tx.checkMsg && <div className="check-msg err">{tx.checkMsg}</div>}
+                      <div className="btn-row">
+                        <button className="btn-primary" disabled={tx.retrying} onClick={() => retryP2pOrder(tx.id)}>
+                          {tx.retrying ? <div className="spinner" /> : '⟲ Thanh toán lại'}
+                        </button>
+                        <button className="btn-secondary ticket-close-btn" disabled={tx.retrying} onClick={() => removeTx(tx.id)}>Đóng vé này</button>
+                      </div>
                     </>
                   ) : (
                   <>
@@ -1745,10 +1816,16 @@ export default function CreateTransactionPage() {
                       </button>
                     )}
                     <div className="btn-row">
-                      <button className="btn-primary" disabled={tx.checking || tx.status !== 'PENDING'} onClick={() => checkP2pNow(tx.id)}>
-                        {tx.checking ? <div className="spinner" /> : '✓ Kiểm tra'}
-                      </button>
-                      <button className="btn-secondary" disabled={tx.cancelling} onClick={() => closeTicket(tx.id)}>
+                      {tx.status === 'FAILED' ? (
+                        <button className="btn-primary" disabled={tx.retrying} onClick={() => retryP2pOrder(tx.id)}>
+                          {tx.retrying ? <div className="spinner" /> : '⟲ Thanh toán lại'}
+                        </button>
+                      ) : (
+                        <button className="btn-primary" disabled={tx.checking || tx.status !== 'PENDING'} onClick={() => checkP2pNow(tx.id)}>
+                          {tx.checking ? <div className="spinner" /> : '✓ Kiểm tra'}
+                        </button>
+                      )}
+                      <button className="btn-secondary" disabled={tx.cancelling || tx.retrying} onClick={() => closeTicket(tx.id)}>
                         ✕ {tx.status === 'PENDING' ? 'Hủy' : 'Đóng'}
                       </button>
                     </div>
