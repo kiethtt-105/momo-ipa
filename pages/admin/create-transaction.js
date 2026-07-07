@@ -47,78 +47,11 @@ function unformatAmount(formatted) {
   return (formatted || '').replace(/\D/g, '')
 }
 
-// ─── GỢI Ý SỐ TIỀN (thay cho 4 ô cứng 50k/100k/200k/500k) ──────────────
-// THIẾT KẾ LẠI: trước đây danh sách được tính lại theo TỪNG KÝ TỰ đang gõ
-// (làm tròn lên gần số đang nhập) — gây 2 hậu quả xấu:
-//   (1) Các nút cứ đổi giá trị/nhảy vị trí liên tục trong lúc gõ → thu
-//       ngân dễ bấm nhầm nút khác với nút mình đang nhắm tới.
-//   (2) Vì code loại trừ "số trùng với số đang gõ", nên hễ gõ ĐÚNG một
-//       mốc tròn quen thuộc (vd 100.000) thì chính mốc đó lại BIẾN MẤT
-//       khỏi danh sách gợi ý — rất phản trực giác.
-// Giờ danh sách gợi ý ỔN ĐỊNH trong suốt lúc gõ: chỉ dựa vào lịch sử số
-// tiền hay dùng nhất tại quầy (localStorage, đếm tần suất) + mốc mặc định
-// phổ biến khi lịch sử chưa đủ. Danh sách chỉ đổi khi có giao dịch mới
-// được TẠO XONG (lịch sử cập nhật), không đổi theo từng ký tự đang gõ.
-const RECENT_AMOUNTS_KEY = 'momo-pos-recent-amounts'
-const DEFAULT_AMOUNTS = [50000, 100000, 200000, 500000]
-// Không gợi ý số tiền dưới 1.000đ — với giao dịch tiền mặt/chuyển khoản
-// thực tế, số quá nhỏ vô nghĩa và khi rút gọn theo nghìn sẽ ra số lẻ xấu.
-const MIN_SUGGEST = 1000
-
-function loadRecentAmounts() {
-  try {
-    const raw = localStorage.getItem(RECENT_AMOUNTS_KEY)
-    const obj = raw ? JSON.parse(raw) : {}
-    return obj && typeof obj === 'object' ? obj : {}
-  } catch { return {} }
-}
-function recordAmountUsage(amount) {
-  const amt = parseInt(amount, 10)
-  if (!amt || amt <= 0) return
-  try {
-    const map = loadRecentAmounts()
-    map[amt] = (map[amt] || 0) + 1
-    // Chỉ giữ 30 mốc gần nhất để không phình localStorage
-    const keys = Object.keys(map)
-    if (keys.length > 30) {
-      const sorted = keys.sort((a, b) => map[a] - map[b])
-      delete map[sorted[0]]
-    }
-    localStorage.setItem(RECENT_AMOUNTS_KEY, JSON.stringify(map))
-  } catch { /* localStorage không khả dụng — bỏ qua */ }
-}
-// Trả về đúng 4 gợi ý ỔN ĐỊNH (không phụ thuộc số đang gõ):
-// - "list": 4 mốc để hiển thị, sắp tăng dần cho dễ nhìn.
-// - "top": mốc được dùng nhiều nhất (dùng cho phím tắt Tab điền nhanh).
-function getSuggestedAmounts(recentMap) {
-  const out = []
-  const add = v => { if (v >= MIN_SUGGEST && !out.includes(v)) out.push(v) }
-
-  // Ưu tiên các mốc hay dùng nhất trong lịch sử thực tế tại quầy này
-  const byFreq = Object.entries(recentMap || {})
-    .sort((a, b) => b[1] - a[1])
-    .map(([k]) => parseInt(k, 10))
-  byFreq.forEach(add)
-
-  // Vẫn thiếu thì lấp bằng mốc mặc định phổ biến
-  DEFAULT_AMOUNTS.forEach(add)
-
-  const top4 = out.slice(0, 4)
-  return { list: [...top4].sort((a, b) => a - b), top: top4[0] || null }
-}
 function formatCountdown(totalSeconds) {
   const s = Math.max(0, totalSeconds)
   const m = Math.floor(s / 60).toString().padStart(2, '0')
   const r = (s % 60).toString().padStart(2, '0')
   return `${m}:${r}`
-}
-// Nhãn hiển thị trên chip gợi ý — luôn gọn và không bao giờ ra số thập
-// phân xấu (vd "0.2k" hay "1.234k"): chỉ rút gọn thành k/tr khi số tiền
-// CHIA HẾT tròn cho 1.000/1.000.000, còn lại hiện nguyên số có dấu phẩy.
-function formatQuickAmountLabel(a) {
-  if (a >= 1000000 && a % 1000000 === 0) return `${(a / 1000000).toLocaleString('en-US')}tr`
-  if (a >= 1000 && a % 1000 === 0) return `${(a / 1000).toLocaleString('en-US')}k`
-  return formatAmount(String(a))
 }
 // ─── LƯU/KHÔI PHỤC DANH SÁCH GIAO DỊCH QUA URL (?txs=...) ──────────
 // Chỉ lưu các field cần thiết để hiển thị lại + tiếp tục poll đúng đơn
@@ -359,9 +292,6 @@ export default function CreateTransactionPage() {
   const [justCreated, setJustCreated] = useState(false) // giữ ô nhập bị khóa 1 nhịp ngắn sau khi tạo xong, để người dùng thấy rõ đã khóa trước khi form tự reset cho giao dịch kế tiếp
   const [formErr,   setFormErr]   = useState('')
   const amountInputRef = useRef(null)
-  const [recentAmounts, setRecentAmounts] = useState({})
-  useEffect(() => { setRecentAmounts(loadRecentAmounts()) }, [])
-  const { list: suggestedAmounts, top: topSuggestedAmount } = getSuggestedAmounts(recentAmounts)
 
   // ─── DANH SÁCH GIAO DỊCH ĐANG MỞ (mỗi cái = 1 cửa sổ nổi) ─
   const [txs, setTxs] = useState([])
@@ -654,6 +584,88 @@ export default function CreateTransactionPage() {
     if (typeof window !== 'undefined' && window.innerWidth > 768) amountInputRef.current?.focus()
   }, [])
 
+  // ─── ĐỒNG BỘ GIAO DỊCH GIỮA CÁC TAB/THIẾT BỊ ─────────────
+  // sessionStorage chỉ sống trong 1 tab, nên trước đây tab/thiết bị khác
+  // không hề biết quầy này đang mở gì. Giờ poll /api/momo/list-open định
+  // kỳ để phát hiện đơn được TẠO Ở NƠI KHÁC (tab khác, máy khác) và tự
+  // thêm vé tương ứng vào bảng — biến bảng vé từ "việc của riêng tab này"
+  // thành 1 view chung của TẤT CẢ giao dịch đang mở trên toàn hệ thống.
+  //
+  // Cố tình chỉ THÊM vé còn thiếu, không đụng vào vé đã có sẵn cục bộ: vé
+  // đã có tự cập nhật trạng thái qua vòng poll trạng thái riêng (bên dưới)
+  // rồi, đụng vào đây dễ đè mất các state tạm thời như đang kiểm tra/đang
+  // hủy/đã copy link... Khi 1 vé đạt trạng thái cuối (PAID/FAILED/EXPIRED)
+  // ở NƠI KHÁC, nó sẽ tự biến mất khỏi list-open — nhưng thiết bị đang mở
+  // vé cứ giữ nguyên tới khi người dùng chủ động đóng, không có gì phá vỡ.
+  const SYNC_POLL_MS = 3000
+  useEffect(() => {
+    let cancelled = false
+    async function syncOpenOrders() {
+      try {
+        const res = await fetch('/api/momo/list-open')
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        if (cancelled || !Array.isArray(data.orders) || !data.orders.length) return
+
+        const known = new Set(txsRef.current.map(t => t.orderId))
+        const missing = data.orders.filter(o => !known.has(o.orderId))
+        if (!missing.length) return
+
+        const startZ = zCounterRef.current
+        const newTxs = missing.map((o, i) => {
+          // Record cũ (tạo trước khi thêm field "type") có thể chưa có
+          // type → suy luận qua payUrl/deeplink giống cách FE vẫn phân biệt.
+          const type = o.type || (o.payUrl || o.deeplink ? 'p2p' : 'scan')
+          const base = {
+            id: uid(), type, orderId: o.orderId, amount: o.amount, orderInfo: o.orderInfo,
+            storeId: o.storeId || '', storeName: o.storeName || '',
+            status: o.status || 'PENDING',
+            pos: { x: 24, y: 24 }, zIndex: startZ + i + 1,
+            minimized: false, userPositioned: false,
+          }
+          if (type === 'p2p') {
+            return {
+              ...base,
+              checkMsg: '', checking: false, cancelling: false, copied: false,
+              payUrl: o.payUrl || '', deeplink: o.deeplink || '',
+              expiresAt: o.createdAt ? new Date(o.createdAt).getTime() + P2P_DURATION_MS : Date.now() + P2P_DURATION_MS,
+            }
+          }
+          return {
+            ...base,
+            checkMsg: o.submittedCode ? '⏳ Đã gửi mã, đang xác nhận giao dịch…' : '',
+            checking: false, cancelling: false,
+            manualCode: o.submittedCode || '', manualErr: '', submittedCode: o.submittedCode || '',
+            isSubmittingCode: false, camError: '',
+          }
+        })
+        zCounterRef.current = startZ + newTxs.length
+
+        setTxs(prev => {
+          // Lọc lại lần nữa theo state MỚI NHẤT (không dùng txsRef cũ ở
+          // trên) để tránh thêm trùng nếu chính tab này vừa tạo đúng đơn
+          // đó ngay trong lúc request list-open đang bay.
+          const stillMissing = newTxs.filter(t => !prev.some(p => p.orderId === t.orderId))
+          return stillMissing.length ? [...prev, ...stillMissing] : prev
+        })
+
+        // Nếu tab này chưa giữ camera nào (VD vừa mở trang, đồng bộ về 1
+        // đơn Scan đang chờ quét từ thiết bị khác) → nhận nốt, để không bỏ
+        // sót đơn cần quét chỉ vì đơn đó được tạo từ nơi khác.
+        setActiveCamId(prevCam => {
+          if (prevCam && txsRef.current.some(t => t.id === prevCam)) return prevCam
+          const next = newTxs.find(t => t.type === 'scan' && t.status === 'PENDING' && !t.submittedCode)
+          return next ? next.id : prevCam
+        })
+      } catch (e) {
+        console.error('Lỗi đồng bộ giao dịch giữa các thiết bị:', e)
+      }
+    }
+    syncOpenOrders() // chạy ngay lúc mount, không đợi tick 3s đầu tiên
+    const id = setInterval(syncOpenOrders, SYNC_POLL_MS)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [])
+
   // ─── TICK 1s: đếm ngược P2P + tự chuyển EXPIRED ─────────
   useEffect(() => {
     const id = setInterval(() => {
@@ -858,8 +870,6 @@ export default function CreateTransactionPage() {
       scrollNewTicketIntoView(id)
     }
 
-    recordAmountUsage(amt)
-    setRecentAmounts(loadRecentAmounts())
     // Khóa các ô nhập số tiền / mã đơn 1 nhịp ngắn để xác nhận rõ ràng với
     // người thu ngân rằng giao dịch đã được ghi nhận, trước khi mở lại
     // form trống cho giao dịch kế tiếp.
@@ -1191,15 +1201,6 @@ export default function CreateTransactionPage() {
         .store-dd-item:hover { background: var(--mm-light); }
         .store-dd-item.active { background: var(--mm-light); color: var(--mm); font-weight: 800; }
         .store-dd-check { color: var(--mm); display: flex; flex-shrink: 0; }
-        .quick-amounts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-        .quick-amt-chip {
-          padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--subtle);
-          font-size: 11.5px; font-weight: 700; color: var(--muted); cursor: pointer; transition: all 0.15s;
-        }
-        .quick-amt-chip:hover { border-color: var(--mm); color: var(--mm); }
-        .quick-amt-chip:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--border); color: var(--muted); }
-        .quick-amt-chip.selected { border-color: var(--mm); background: var(--mm-light); color: var(--mm); }
-
         .count-badge { font-size: 10.5px; font-weight: 700; color: var(--muted); margin-top: 6px; }
         .count-badge.full { color: #c0392b; }
 
@@ -1533,27 +1534,10 @@ export default function CreateTransactionPage() {
                       onChange={e => setAmount(unformatAmount(e.target.value))}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && canSubmit && !creating && !justCreated) createTransaction()
-                        // Tab/mũi tên phải khi ô còn trống → tự điền theo gợi ý hàng đầu
-                        if ((e.key === 'Tab' || e.key === 'ArrowRight') && !amount && topSuggestedAmount) {
-                          e.preventDefault()
-                          setAmount(String(topSuggestedAmount))
-                        }
                       }}
                       disabled={creating || justCreated}
                     />
                     <span className="amount-suffix">₫</span>
-                  </div>
-                  <div className="quick-amounts">
-                    {suggestedAmounts.map((a) => (
-                      <button
-                        key={a}
-                        className={`quick-amt-chip${parseInt(amount || 0, 10) === a ? ' selected' : ''}`}
-                        disabled={creating || justCreated}
-                        onClick={() => setAmount(String(a))}
-                      >
-                        {formatQuickAmountLabel(a)}
-                      </button>
-                    ))}
                   </div>
                 </div>
 

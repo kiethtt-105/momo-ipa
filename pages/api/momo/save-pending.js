@@ -1,5 +1,6 @@
 import { Redis } from '@upstash/redis'
 import { requireAdmin } from '../../../lib/requireAdmin'
+import { markOrderOpen } from '../../../lib/openOrders'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -36,8 +37,16 @@ export default async function handler(req, res) {
         transId: '',
         payType: 'pos',
         source: 'pos',
+        // "type" để mọi client (kể cả đồng bộ qua list-open) biết đây là
+        // giao dịch Scan mà không cần đoán qua các field khác (payUrl...).
+        type: 'scan',
       }),
     })
+
+    // Ghi vào index "đơn đang mở" để endpoint /api/momo/list-open trả về
+    // ngay cho các tab/thiết bị khác — đây chính là bước cho phép ĐỒNG BỘ
+    // giao dịch mới tạo qua nhiều nơi.
+    await markOrderOpen(redis, orderId, Date.now())
 
     return res.status(200).json({ success: true, message: 'Đã tạo log đơn hàng nháp' })
   } catch (err) {

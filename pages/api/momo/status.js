@@ -1,6 +1,7 @@
 // pages/api/momo/status.js
 import { Redis } from '@upstash/redis'
 import { queryMoMoTransaction } from '../../../lib/momo'
+import { markOrderClosed } from '../../../lib/openOrders'
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL,
@@ -55,6 +56,9 @@ export default async function handler(req, res) {
 
   // Đã có kết luận cuối cùng (do IPN hoặc lần verify trước) → trả ngay, không cần gọi MoMo nữa.
   if (order.status === 'PAID' || order.status === 'FAILED') {
+    // Tự chữa lành: đảm bảo đơn đã có kết luận cuối không còn sót lại
+    // trong index "đang mở" (an toàn, gọi nhiều lần vô hại).
+    await markOrderClosed(redis, orderId)
     return res.status(200).json(order)
   }
 
@@ -94,6 +98,8 @@ export default async function handler(req, res) {
             lastCheckedAt: now,
           }
           await redis.hset('momo:orders', { [orderId]: JSON.stringify(order) })
+          // Kết luận cuối (PAID/EXPIRED/FAILED) → gỡ khỏi danh sách đang mở.
+          await markOrderClosed(redis, orderId)
           return res.status(200).json(order)
         }
 
@@ -114,6 +120,8 @@ export default async function handler(req, res) {
   if (age > EXPIRE_MS && order.status === 'PENDING') {
     order = { ...order, status: 'EXPIRED' }
     await redis.hset('momo:orders', { [orderId]: JSON.stringify(order) })
+    // Hết hạn cũng là kết luận cuối → gỡ khỏi danh sách đang mở.
+    await markOrderClosed(redis, orderId)
   }
 
   return res.status(200).json(order)

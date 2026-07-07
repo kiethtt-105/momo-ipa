@@ -6,6 +6,7 @@ import crypto from 'crypto'
 import { Redis } from '@upstash/redis'
 import { requireAdmin } from '../../../lib/requireAdmin'
 import { resolveStore } from '../../../lib/stores'
+import { markOrderOpen, markOrderClosed } from '../../../lib/openOrders'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -143,8 +144,17 @@ async function handlePosCharge(req, res) {
         payType: '',
         paymentOption: '',
         source: 'pos', storeId: store.id, storeName: store.name,
+        type: 'scan',
+        // Lưu lại mã vừa quét/nhập ngay từ bước này — để nếu 1 thiết bị
+        // khác đồng bộ tới NGAY LÚC MoMo đang xử lý (còn PENDING), nó vẫn
+        // hiển thị đúng trạng thái "đã gửi mã, đang xác nhận" thay vì
+        // trông như đơn còn trống, chưa ai quét.
+        submittedCode: paymentCode,
       }),
     })
+    // Đánh dấu "đang mở" — cho phép các thiết bị khác thấy đơn này qua
+    // /api/momo/list-open trong lúc chờ MoMo phản hồi (tối đa ~15s).
+    await markOrderOpen(redis, orderId, Date.now())
 
     const momoRes = await fetch(POS_ENDPOINT, {
       method: 'POST',
@@ -165,8 +175,10 @@ async function handlePosCharge(req, res) {
           transId: '', payType: 'pos', paymentOption: '',
           resultCode: -1, message: 'MoMo trả về dữ liệu không hợp lệ',
           source: 'pos', storeId: store.id, storeName: store.name,
+          type: 'scan', submittedCode: paymentCode,
         }),
       })
+      await markOrderClosed(redis, orderId)
       return res.status(500).json({ error: 'MoMo trả về dữ liệu không hợp lệ' })
     }
 
@@ -184,9 +196,11 @@ async function handlePosCharge(req, res) {
       message: data.message || 'Không có thông báo',
       responseTime: data.responseTime,
       source: 'pos', storeId: store.id, storeName: store.name,
+      type: 'scan', submittedCode: paymentCode,
     }
 
     await redis.hset('momo:orders', { [orderId]: JSON.stringify(updated) })
+    await markOrderClosed(redis, orderId)
 
     console.log(
       `[scan][POST] MoMo response: ${orderId}`,
@@ -208,8 +222,10 @@ async function handlePosCharge(req, res) {
           resultCode: -1,
           message: isTimeout ? 'Timeout khi gọi MoMo (15s)' : (err.message || 'Lỗi server'),
           source: 'pos', storeId: store.id, storeName: store.name,
+          type: 'scan', submittedCode: paymentCode,
         }),
       })
+      await markOrderClosed(redis, orderId)
     } catch (redisErr) {
       console.error('[scan][POST] Redis update FAILED error:', redisErr)
     }

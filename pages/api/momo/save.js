@@ -2,6 +2,7 @@
 import { queryMoMoTransaction } from '../../../lib/momo'
 import { Redis } from '@upstash/redis'
 import { requireAdmin } from '../../../lib/requireAdmin'
+import { markOrderClosed } from '../../../lib/openOrders'
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL,
@@ -24,6 +25,10 @@ export default async function handler(req, res) {
   if (existing) {
     existing = typeof existing === 'string' ? JSON.parse(existing) : existing
     if (existing.status === 'PAID') {
+      // Tự chữa lành: nếu vì lý do gì đó đơn đã PAID từ trước mà vẫn còn
+      // sót trong index "đang mở" (VD do lỗi tạm thời ở lần zrem trước),
+      // dọn luôn tại đây — gọi markOrderClosed nhiều lần vô hại (no-op).
+      await markOrderClosed(redis, orderId)
       return res.status(200).json({ ok: true, source: 'already_paid' })
     }
   }
@@ -64,9 +69,15 @@ export default async function handler(req, res) {
     deeplink:     existing?.deeplink     || '',
     qrCodeUrl:    existing?.qrCodeUrl    || '',
     qrCodeImage:  existing?.qrCodeImage  || '',
+    type:         existing?.type         || '',
   }
 
   await redis.hset('momo:orders', { [orderId]: JSON.stringify(record) })
+  // Đơn đã có kết luận cuối (PAID/FAILED) → gỡ khỏi danh sách "đang mở"
+  // để mọi thiết bị đang đồng bộ qua list-open không còn thấy vé này nữa
+  // (tự nó vẫn thấy vì đã có sẵn trong local state, chỉ ngừng bị coi là
+  // "đang chờ" ở các thiết bị khác chưa từng mở nó).
+  await markOrderClosed(redis, orderId)
   console.log(`[Save API] Order ${orderId} → ${isPaid ? 'PAID' : 'FAILED'} (verified via MoMo query) | ${message || ''}`)
 
   return res.status(200).json({ ok: true })

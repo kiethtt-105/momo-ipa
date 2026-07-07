@@ -3,6 +3,7 @@
 // trang create-transaction, cả luồng P2P lẫn Scan đều có thể dùng chung route này).
 import { Redis } from '@upstash/redis'
 import { requireAdmin } from '../../../lib/requireAdmin'
+import { markOrderClosed } from '../../../lib/openOrders'
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL,
@@ -36,6 +37,9 @@ export default async function handler(req, res) {
     // thanh toán xong (IPN vừa cập nhật PAID) đúng lúc admin bấm hủy, hoặc
     // đơn đã kết luận FAILED/EXPIRED từ trước.
     if (order.status !== 'PENDING') {
+      // Tự chữa lành: đơn đã ở trạng thái cuối rồi nhưng lỡ còn sót trong
+      // index "đang mở" → dọn luôn (an toàn, vô hại nếu gọi thừa).
+      await markOrderClosed(redis, orderId)
       return res.status(200).json({ ...order, alreadyFinal: true })
     }
 
@@ -50,6 +54,9 @@ export default async function handler(req, res) {
     }
 
     await redis.hset('momo:orders', { [orderId]: JSON.stringify(order) })
+    // Hủy = kết luận cuối → gỡ khỏi danh sách đang mở, để mọi thiết bị
+    // đồng bộ khác cũng ngừng thấy vé này ngay lần poll list-open kế tiếp.
+    await markOrderClosed(redis, orderId)
     return res.status(200).json(order)
   } catch (err) {
     console.error('[cancel] Lỗi:', err.message)

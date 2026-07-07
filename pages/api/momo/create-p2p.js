@@ -3,6 +3,7 @@ import { Redis } from '@upstash/redis'
 import QRCode from 'qrcode'
 import { requireAdmin } from '../../../lib/requireAdmin'
 import { resolveStore } from '../../../lib/stores'
+import { markOrderOpen, markOrderClosed } from '../../../lib/openOrders'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -74,8 +75,14 @@ export default async function handler(req, res) {
         createdAt: now, paidAt: null, transId: '', payType: '',
         paymentOption: '', source: shortcutOk ? 'create-p2p-shortcut' : 'create-p2p',
         storeId, storeName, partnerName,
+        type: 'p2p',
       }),
     })
+    // Đánh dấu "đang mở" NGAY từ bước ghi nháp đầu tiên — nếu bước gọi
+    // MoMo bên dưới bị lỗi/timeout, ticket vẫn hiện với trạng thái đúng
+    // (FAILED, xem các nhánh bên dưới) thay vì treo "PENDING ma" mãi trong
+    // danh sách đồng bộ.
+    await markOrderOpen(redis, orderId, Date.now())
 
     const result = await createMoMoPayment({
       orderId, amount: amt, orderInfo, storeId, storeName, partnerName,
@@ -88,8 +95,10 @@ export default async function handler(req, res) {
           createdAt: now, paidAt: null, transId: '', payType: '',
           paymentOption: '', source: shortcutOk ? 'create-p2p-shortcut' : 'create-p2p',
           storeId, storeName, partnerName, error: result.message || '',
+          type: 'p2p',
         }),
       })
+      await markOrderClosed(redis, orderId)
       return res.status(400).json({
         error: result.message || 'MoMo từ chối giao dịch',
         resultCode: result.resultCode,
@@ -121,6 +130,7 @@ export default async function handler(req, res) {
         qrCodeUrl: result.qrCodeUrl || '',
         qrCodeImage,
         requestId: result.requestId || '',
+        type: 'p2p',
       }),
     })
 
@@ -136,6 +146,24 @@ export default async function handler(req, res) {
     })
   } catch (err) {
     console.error('[MoMo] create-p2p error:', err)
+    // Trước đây nhánh lỗi này KHÔNG cập nhật Redis — đơn bị bỏ lại ở trạng
+    // thái PENDING dù thực chất tạo thất bại. Với tính năng đồng bộ, điều
+    // đó nghĩa là một vé "ma" (PENDING vô thời hạn) sẽ hiện ra ở MỌI thiết
+    // bị khác. Sửa luôn: đánh dấu FAILED + gỡ khỏi danh sách đang mở.
+    try {
+      await redis.hset('momo:orders', {
+        [orderId]: JSON.stringify({
+          orderId, amount: amt, orderInfo, status: 'FAILED',
+          createdAt: now, paidAt: null, transId: '', payType: '',
+          paymentOption: '', source: shortcutOk ? 'create-p2p-shortcut' : 'create-p2p',
+          storeId, storeName, partnerName, error: 'server_error',
+          type: 'p2p',
+        }),
+      })
+      await markOrderClosed(redis, orderId)
+    } catch (cleanupErr) {
+      console.error('[MoMo] create-p2p cleanup error:', cleanupErr)
+    }
     return res.status(500).json({ error: 'Lỗi server, thử lại sau' })
   }
 }
