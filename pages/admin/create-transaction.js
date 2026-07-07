@@ -61,6 +61,7 @@ function serializeTxs(list) {
     storeId: t.storeId || '', storeName: t.storeName || '', status: t.status,
     payUrl: t.payUrl || '', deeplink: t.deeplink || '', expiresAt: t.expiresAt || null,
     submittedCode: t.submittedCode || '',
+    pos: t.pos || { x: 24, y: 24 }, zIndex: t.zIndex || 10, minimized: !!t.minimized,
   }))
 }
 function deserializeTxs(arr) {
@@ -69,6 +70,7 @@ function deserializeTxs(arr) {
     ...t,
     checkMsg: '', checking: false, cancelling: false, copied: false,
     manualCode: t.submittedCode || '', manualErr: '', isSubmittingCode: false, camError: '',
+    pos: t.pos || { x: 24, y: 24 }, zIndex: t.zIndex || 10, minimized: !!t.minimized,
   }))
 }
 
@@ -111,22 +113,95 @@ const IconCam = () => (
   </svg>
 )
 
-// ─── TICKET CARD (kiểu vé/hóa đơn POS, xếp lưới — không kéo thả) ──
-function TicketCard({ tx, isFocused, onFocus, children, headerRight, headerLeft }) {
+const IconNewTab = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+    <path d="M15 3h6v6"/><path d="M10 14 21 3"/>
+  </svg>
+)
+
+// ─── TICKET CARD (cửa sổ nổi kéo-thả tự do, kiểu vé/hóa đơn POS) ──
+function TicketCard({ tx, isFocused, onFocus, onHeaderDown, children, headerRight, headerLeft }) {
   return (
     <div
-      className={`ticket${isFocused ? ' focused' : ''}${tx.status === 'PAID' ? ' is-paid' : ''}`}
+      className={`ticket${isFocused ? ' focused' : ''}${tx.status === 'PAID' ? ' is-paid' : ''}${tx.status === 'EXPIRED' ? ' is-expired' : ''}`}
       onMouseDown={onFocus}
     >
       {tx.status === 'PAID' && <div className="ticket-stamp">Đã TT</div>}
       <div className="ticket-notch left" />
       <div className="ticket-notch right" />
-      <div className="ticket-head">
+      <div className="ticket-head" onMouseDown={onHeaderDown} onTouchStart={onHeaderDown}>
         <div className="ticket-head-left">{headerLeft}</div>
         <div className="ticket-head-right">{headerRight}</div>
       </div>
       <div className="ticket-perf" />
       <div className="ticket-body">{children}</div>
+    </div>
+  )
+}
+
+// ─── QR IMAGE: tự thử lại nếu route qr-extract lỗi/timeout tạm thời ──
+// Trước đây <img onError> chỉ set display:none MỘT LẦN rồi thôi — nếu
+// Puppeteer/Chromium cold-start chậm hơn timeout hoặc lỗi mạng thoáng qua,
+// mã QR biến mất vĩnh viễn khỏi thẻ, không có cách nào tự hồi phục ngoài
+// việc đóng vé và tạo lại từ đầu. Giờ tự retry với backoff tăng dần
+// (1.2s, 2.4s, 3.6s, 4.8s), có cache-busting bằng query `r`, và sau khi
+// hết lượt tự retry thì hiện nút "Thử lại" thủ công thay vì im lặng ẩn.
+function QrImage({ orderId }) {
+  const [attempt, setAttempt] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
+  const retryTimerRef = useRef(null)
+
+  useEffect(() => () => clearTimeout(retryTimerRef.current), [])
+
+  function handleLoad() {
+    setLoading(false)
+    setFailed(false)
+  }
+  function handleError() {
+    if (attempt < 4) {
+      const delay = 1200 * (attempt + 1)
+      retryTimerRef.current = setTimeout(() => {
+        setLoading(true)
+        setAttempt(a => a + 1)
+      }, delay)
+    } else {
+      setLoading(false)
+      setFailed(true)
+    }
+  }
+  function manualRetry() {
+    clearTimeout(retryTimerRef.current)
+    setFailed(false)
+    setLoading(true)
+    setAttempt(a => a + 1)
+  }
+
+  return (
+    <div className="qr-wrap">
+      {loading && (
+        <div className="qr-loading">
+          <div className="spinner qr-spinner" />
+          Đang tải mã QR…
+        </div>
+      )}
+      {!failed && (
+        <img
+          key={attempt}
+          src={`/api/momo/qr-extract?orderId=${encodeURIComponent(orderId)}&r=${attempt}`}
+          alt="QR MoMo"
+          style={{ display: loading ? 'none' : 'block' }}
+          onLoad={handleLoad}
+          onError={handleError}
+        />
+      )}
+      {failed && (
+        <div className="qr-loading">
+          ⚠ Không tải được mã QR
+          <button className="btn-secondary qr-retry-btn" onClick={manualRetry}>⟲ Thử lại</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -159,7 +234,7 @@ export default function CreateTransactionPage() {
   const [txs, setTxs] = useState([])
   const txsRef = useRef([])
   useEffect(() => { txsRef.current = txs }, [txs])
-  const hydratedFromUrlRef = useRef(false)
+  const hydratedFromStorageRef = useRef(false)
 
   const [activeCamId, setActiveCamId] = useState(null) // id đơn Scan đang giữ camera
   const [now, setNow] = useState(Date.now())            // tick 1s cho đếm ngược P2P
@@ -181,47 +256,107 @@ export default function CreateTransactionPage() {
   function removeTx(id) {
     setTxs(prev => prev.filter(t => t.id !== id))
   }
+
+  // ─── CỬA SỔ NỔI: kéo-thả tự do + thu nhỏ xuống taskbar ──────
+  const zCounterRef = useRef(10)
+  const dragStateRef = useRef(null) // { id, startX, startY, origX, origY }
+  const windowLayerRef = useRef(null)
+  const TICKET_W = 300, TICKET_HEAD_H = 44
+
   function bringToFront(id) {
     setLastFocusedId(id)
+    zCounterRef.current += 1
+    updateTx(id, { zIndex: zCounterRef.current })
     const tx = txsRef.current.find(t => t.id === id)
     if (tx && tx.type === 'scan') setActiveCamId(id)
   }
 
-  // ─── KHÔI PHỤC GIAO DỊCH TỪ URL (?txs=...) LÚC MỞ TRANG ──
-  // Chỉ chạy 1 lần, sau khi router.query đã sẵn sàng (router.isReady).
+  function toggleMinimize(id) {
+    updateTx(id, t => ({ minimized: !t.minimized }))
+    bringToFront(id)
+  }
+
+  // Vị trí ban đầu cho vé mới: xếp chéo (cascade) để không đè hẳn lên
+  // vé trước đó, quay vòng lại sau vài vé để không chạy ra ngoài màn hình.
+  function nextCascadePos() {
+    const visibleCount = txsRef.current.filter(t => !t.minimized).length
+    const step = visibleCount % 8
+    return { x: 24 + step * 26, y: 24 + step * 22 }
+  }
+
+  function clampPos(x, y) {
+    const layer = windowLayerRef.current
+    const maxX = layer ? Math.max(8, layer.clientWidth - TICKET_W) : x
+    const maxY = layer ? Math.max(8, layer.clientHeight - TICKET_HEAD_H) : y
+    return { x: Math.min(Math.max(0, x), maxX), y: Math.min(Math.max(0, y), maxY) }
+  }
+
+  function onDragStart(e, tx) {
+    if (e.target.closest('button')) return
+    bringToFront(tx.id)
+    const point = e.touches ? e.touches[0] : e
+    dragStateRef.current = {
+      id: tx.id, startX: point.clientX, startY: point.clientY,
+      origX: tx.pos?.x ?? 24, origY: tx.pos?.y ?? 24,
+    }
+    window.addEventListener('mousemove', onDragMove)
+    window.addEventListener('mouseup', onDragEnd)
+    window.addEventListener('touchmove', onDragMove, { passive: false })
+    window.addEventListener('touchend', onDragEnd)
+  }
+
+  function onDragMove(e) {
+    const st = dragStateRef.current
+    if (!st) return
+    if (e.cancelable) e.preventDefault()
+    const point = e.touches ? e.touches[0] : e
+    const dx = point.clientX - st.startX
+    const dy = point.clientY - st.startY
+    const { x, y } = clampPos(st.origX + dx, st.origY + dy)
+    updateTx(st.id, { pos: { x, y } })
+  }
+
+  function onDragEnd() {
+    dragStateRef.current = null
+    window.removeEventListener('mousemove', onDragMove)
+    window.removeEventListener('mouseup', onDragEnd)
+    window.removeEventListener('touchmove', onDragMove)
+    window.removeEventListener('touchend', onDragEnd)
+  }
+
+  // ─── KHÔI PHỤC GIAO DỊCH TỪ sessionStorage LÚC MỞ TRANG ──
+  // Chỉ chạy 1 lần lúc mount. Khác URL: mất khi đóng hẳn tab (chấp nhận
+  // được — coi như hết ca), nhưng F5 vẫn còn nguyên, và không giới hạn
+  // độ dài như query string.
+  const TXS_STORAGE_KEY = 'momo-pos-open-txs'
   useEffect(() => {
-    if (!router.isReady || hydratedFromUrlRef.current) return
-    hydratedFromUrlRef.current = true
-    const raw = router.query.txs
-    if (typeof raw === 'string' && raw) {
-      try {
-        const arr = JSON.parse(decodeURIComponent(raw))
+    if (hydratedFromStorageRef.current) return
+    hydratedFromStorageRef.current = true
+    try {
+      const raw = sessionStorage.getItem(TXS_STORAGE_KEY)
+      if (raw) {
+        const arr = JSON.parse(raw)
         const restored = deserializeTxs(arr)
         if (restored.length) {
           setTxs(restored)
           const nextScan = restored.find(t => t.type === 'scan' && t.status === 'PENDING' && !t.submittedCode)
           if (nextScan) setActiveCamId(nextScan.id)
         }
-      } catch (e) {
-        console.error('Không khôi phục được giao dịch từ URL:', e)
       }
+    } catch (e) {
+      console.error('Không khôi phục được giao dịch từ sessionStorage:', e)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router.isReady])
+  }, [])
 
-  // ─── GHI DANH SÁCH GIAO DỊCH VÀO URL MỖI KHI ĐỔI ─────────
-  // Dùng router.replace + shallow để không reload trang / không đẻ thêm
-  // entry trong history mỗi lần đổi. Chỉ ghi sau khi đã thử khôi phục từ
-  // URL xong (tránh ghi đè query gốc trước khi kịp đọc nó).
+  // ─── GHI DANH SÁCH GIAO DỊCH VÀO sessionStorage MỖI KHI ĐỔI ──
   useEffect(() => {
-    if (!hydratedFromUrlRef.current) return
-    const encoded = txs.length ? encodeURIComponent(JSON.stringify(serializeTxs(txs))) : null
-    const nextQuery = { ...router.query }
-    if (encoded) nextQuery.txs = encoded
-    else delete nextQuery.txs
-    if (nextQuery.txs === router.query.txs) return // không đổi gì thì thôi, khỏi replace
-    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!hydratedFromStorageRef.current) return
+    try {
+      if (txs.length) sessionStorage.setItem(TXS_STORAGE_KEY, JSON.stringify(serializeTxs(txs)))
+      else sessionStorage.removeItem(TXS_STORAGE_KEY)
+    } catch (e) {
+      console.error('Không lưu được giao dịch vào sessionStorage:', e)
+    }
   }, [txs])
 
   // ─── TẢI DANH SÁCH CỬA HÀNG ──────────────────────────────
@@ -416,6 +551,7 @@ export default function CreateTransactionPage() {
           return
         }
         const finalStoreId = data.storeId || storeId
+        zCounterRef.current += 1
         setTxs(prev => [...prev, {
           id, type: 'p2p',
           orderId: data.orderId || finalOrderInfo,
@@ -425,6 +561,7 @@ export default function CreateTransactionPage() {
           status: 'PENDING', checkMsg: '', checking: false, cancelling: false,
           payUrl: data.payUrl, deeplink: data.deeplink || '',
           expiresAt: Date.now() + P2P_DURATION_MS, copied: false,
+          pos: nextCascadePos(), zIndex: zCounterRef.current, minimized: false,
         }])
       } catch (e) {
         setFormErr('Lỗi server, thử lại sau.')
@@ -439,6 +576,7 @@ export default function CreateTransactionPage() {
           body: JSON.stringify({ orderId: generatedId, amount: amt, orderInfo: finalOrderInfo, ...(storeId ? { storeId } : {}) }),
         })
       } catch (e) { console.error('Lỗi lưu đơn hàng nháp:', e) }
+      zCounterRef.current += 1
       setTxs(prev => [...prev, {
         id, type: 'scan',
         orderId: generatedId,
@@ -446,6 +584,7 @@ export default function CreateTransactionPage() {
         storeId, storeName: stores.find(s => s.id === storeId)?.name || '',
         status: 'PENDING', checkMsg: '', checking: false, cancelling: false,
         manualCode: '', manualErr: '', submittedCode: '', isSubmittingCode: false, camError: '',
+        pos: nextCascadePos(), zIndex: zCounterRef.current, minimized: false,
       }])
       setActiveCamId(id) // đơn mới tạo tự giữ camera
     }
@@ -560,6 +699,20 @@ export default function CreateTransactionPage() {
       }
     } catch (e) {
       updateTx(txId, { checking: false, checkMsg: '⚠ Lỗi kết nối, thử kiểm tra lại.' })
+    }
+  }
+
+  // Đóng vé: nếu còn PENDING (đang chờ thật sự) mới cần hỏi xác nhận vì
+  // hủy lúc này = gọi API hủy/đánh dấu thất bại thật trên server. Nếu vé
+  // đã ở trạng thái kết thúc rồi (PAID/EXPIRED/FAILED) thì không còn gì
+  // để "hủy" nữa — đóng thẳng khỏi danh sách, không hỏi lại.
+  function closeTicket(txId) {
+    const tx = txsRef.current.find(t => t.id === txId)
+    if (!tx) return
+    if (tx.status === 'PENDING') {
+      setConfirmCancel({ id: txId })
+    } else {
+      removeTx(txId)
     }
   }
 
@@ -710,11 +863,18 @@ export default function CreateTransactionPage() {
         .board-bar-title { font-size: 14px; font-weight: 800; color: var(--text); }
         .board-bar-count { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--muted); }
         .board-bar-count b { color: var(--mm); }
-        .board {
-          flex: 1; overflow-y: auto; padding: 24px 28px 40px;
-          display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; gap: 18px;
+        .board-bar-right { display: flex; align-items: center; gap: 12px; }
+        .new-tab-btn {
+          display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 9px;
+          border: 1.5px solid var(--border); background: var(--surface); color: var(--text);
+          font-size: 11.5px; font-weight: 700; cursor: pointer; transition: border-color 0.15s, color 0.15s;
         }
-        .board.is-empty { align-items: center; justify-content: center; }
+        .new-tab-btn:hover { border-color: var(--mm); color: var(--mm); }
+        .board {
+          flex: 1; position: relative; overflow: auto; padding: 24px 28px 40px;
+        }
+        .board.is-empty { display: flex; align-items: center; justify-content: center; }
+        .ticket-float { position: absolute; }
         .board-empty {
           display: flex; flex-direction: column; align-items: center; justify-content: center;
           gap: 6px; color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: center;
@@ -730,6 +890,12 @@ export default function CreateTransactionPage() {
         }
         .ticket.focused { border-color: var(--mm); box-shadow: 0 10px 28px rgba(174,0,112,0.16); }
         .ticket.is-paid { opacity: 0.88; }
+        .ticket.is-expired { opacity: 0.7; }
+        .ticket-ended-msg {
+          font-size: 12.5px; font-weight: 700; color: var(--muted); text-align: center;
+          padding: 14px 8px; background: var(--subtle); border-radius: 9px;
+        }
+        .ticket-close-btn { width: 100%; margin-top: 10px; }
         .ticket-notch {
           position: absolute; top: 44px; width: 16px; height: 16px; border-radius: 50%;
           background: var(--bg); border: 1px solid var(--border); z-index: 1;
@@ -745,7 +911,9 @@ export default function CreateTransactionPage() {
         .ticket-head {
           display: flex; align-items: center; justify-content: space-between; gap: 8px;
           padding: 12px 16px; background: var(--mm-light);
+          cursor: grab; user-select: none; touch-action: none;
         }
+        .ticket-head:active { cursor: grabbing; }
         .ticket-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
         .ticket-head-right { display: flex; align-items: center; gap: 6px; }
         .ticket-perf {
@@ -759,6 +927,23 @@ export default function CreateTransactionPage() {
           display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
         .modal-close-btn:hover { background: rgba(192,57,43,0.12); color: #c0392b; }
+        .modal-min-btn {
+          width: 22px; height: 22px; border-radius: 6px; border: none; background: transparent; color: var(--muted);
+          display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; font-weight: 800; line-height: 1; padding-bottom: 3px;
+        }
+        .modal-min-btn:hover { background: rgba(0,0,0,0.08); color: var(--text); }
+
+        /* ── TASKBAR: các vé đã thu nhỏ ── */
+        .taskbar {
+          flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 10px 20px;
+          border-top: 1px solid var(--border); background: var(--surface); overflow-x: auto;
+        }
+        .taskbar-item {
+          display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 9px;
+          border: 1.5px solid var(--border); background: var(--subtle); color: var(--text);
+          font-family: var(--mono); font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer;
+        }
+        .taskbar-item:hover { border-color: var(--mm); color: var(--mm); }
         .cam-active-pill {
           display: flex; align-items: center; gap: 4px; font-size: 9.5px; font-weight: 800; color: var(--mm);
           background: rgba(174,0,112,0.12); padding: 3px 7px; border-radius: 999px;
@@ -776,7 +961,9 @@ export default function CreateTransactionPage() {
 
         .qr-wrap { display: flex; justify-content: center; padding: 10px 0; }
         .qr-wrap img { width: 170px; height: 170px; border-radius: 10px; border: 1px solid var(--border); }
-        .qr-loading { width: 170px; height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 11.5px; }
+        .qr-loading { width: 170px; height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 11.5px; text-align: center; }
+        .qr-spinner { border-color: rgba(174,0,112,0.2); border-top-color: var(--mm); }
+        .qr-retry-btn { width: auto; flex: none; margin-top: 4px; padding: 6px 14px; }
 
         .countdown { font-size: 13px; font-weight: 800; color: var(--text); }
         .countdown.warn { color: #c0392b; }
@@ -834,8 +1021,13 @@ export default function CreateTransactionPage() {
           .pos-shell { flex-direction: column; }
           .dock { flex: 0 0 auto; width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 46vh; }
           .board-wrap { height: auto; }
-          .board { padding: 18px 16px 32px; }
+          .board {
+            padding: 18px 16px 32px; display: flex; flex-direction: column; align-items: center; gap: 16px;
+          }
+          /* Màn hình nhỏ: bỏ kéo-thả tự do, xếp vé theo cột như danh sách bình thường */
+          .ticket-float { position: static !important; left: auto !important; top: auto !important; width: 100%; max-width: 340px; }
           .ticket { width: 100%; }
+          .ticket-head { cursor: default; }
           .board-bar { padding: 12px 16px; }
         }
       `}</style>
@@ -921,9 +1113,18 @@ export default function CreateTransactionPage() {
         <div className="board-wrap">
           <div className="board-bar">
             <span className="board-bar-title">Giao dịch đang mở</span>
-            <span className="board-bar-count"><b>{txs.length}</b> / {MAX_PER_TYPE * 2} vé</span>
+            <div className="board-bar-right">
+              <span className="board-bar-count"><b>{txs.length}</b> / {MAX_PER_TYPE * 2} vé</span>
+              <button
+                className="new-tab-btn"
+                onClick={() => window.open(window.location.pathname, '_blank')}
+                title="Mở tab mới — tab mới sẽ có danh sách giao dịch riêng, độc lập với tab này"
+              >
+                <IconNewTab /> Mở tab mới
+              </button>
+            </div>
           </div>
-          <div className={`board${txs.length === 0 ? ' is-empty' : ''}`}>
+          <div className={`board${txs.length === 0 ? ' is-empty' : ''}`} ref={windowLayerRef}>
             {txs.length === 0 && (
               <div className="board-empty">
                 <span className="board-empty-icon"><IconScan /></span>
@@ -931,14 +1132,20 @@ export default function CreateTransactionPage() {
               </div>
             )}
 
-            {txs.map(tx => {
+            {txs.filter(tx => !tx.minimized).map(tx => {
               const isCamOwner = tx.type === 'scan' && activeCamId === tx.id
+              const pos = tx.pos || { x: 24, y: 24 }
               return (
-                <TicketCard
+                <div
                   key={tx.id}
+                  className="ticket-float"
+                  style={{ left: pos.x, top: pos.y, zIndex: tx.zIndex || 10 }}
+                >
+                <TicketCard
                   tx={tx}
                   isFocused={lastFocusedId === tx.id}
                   onFocus={() => bringToFront(tx.id)}
+                  onHeaderDown={e => onDragStart(e, tx)}
                   headerLeft={
                   <>
                     <span className="modal-type-icon">{tx.type === 'p2p' ? <IconP2P /> : <IconScan />}</span>
@@ -949,10 +1156,8 @@ export default function CreateTransactionPage() {
                   <>
                     {isCamOwner && <span className="cam-active-pill"><IconCam /> Camera</span>}
                     <StatusBadge status={tx.status} />
-                    <button className="modal-close-btn" onClick={() => {
-                      if (tx.status === 'PAID') { removeTx(tx.id); return }
-                      setConfirmCancel({ id: tx.id })
-                    }}><IconClose /></button>
+                    <button className="modal-min-btn" title="Thu nhỏ" onClick={() => toggleMinimize(tx.id)}>–</button>
+                    <button className="modal-close-btn" onClick={() => closeTicket(tx.id)}><IconClose /></button>
                   </>
                 }
               >
@@ -962,16 +1167,14 @@ export default function CreateTransactionPage() {
                 <div className="info-divider" />
 
                 {tx.type === 'p2p' ? (
+                  tx.status === 'EXPIRED' ? (
+                    <>
+                      <div className="ticket-ended-msg">⚠ Mã QR đã hết hạn</div>
+                      <button className="btn-primary ticket-close-btn" onClick={() => removeTx(tx.id)}>Đóng vé này</button>
+                    </>
+                  ) : (
                   <>
-                    <div className="qr-wrap">
-                      {tx.status === 'PAID' ? null : (
-                        <img
-                          src={`/api/momo/qr-extract?orderId=${encodeURIComponent(tx.orderId)}`}
-                          alt="QR MoMo"
-                          onError={e => { e.currentTarget.style.display = 'none' }}
-                        />
-                      )}
-                    </div>
+                    {tx.status !== 'PAID' && <QrImage orderId={tx.orderId} />}
                     {tx.status === 'PENDING' && (
                       <div className="info-row"><span>Còn lại</span>
                         <span className={`countdown${Math.ceil((tx.expiresAt - now) / 1000) <= 60 ? ' warn' : ''}`}>
@@ -980,7 +1183,7 @@ export default function CreateTransactionPage() {
                       </div>
                     )}
                     {tx.checkMsg && (
-                      <div className={`check-msg${tx.status === 'PAID' ? ' ok' : (tx.status === 'FAILED' || tx.status === 'EXPIRED') ? ' err' : ''}`}>{tx.checkMsg}</div>
+                      <div className={`check-msg${tx.status === 'PAID' ? ' ok' : tx.status === 'FAILED' ? ' err' : ''}`}>{tx.checkMsg}</div>
                     )}
                     {tx.payUrl && tx.status !== 'PAID' && (
                       <button className={`copy-link-btn${tx.copied ? ' copied' : ''}`} onClick={() => copyPayUrl(tx.id)}>
@@ -988,14 +1191,15 @@ export default function CreateTransactionPage() {
                       </button>
                     )}
                     <div className="btn-row">
-                      <button className="btn-primary" disabled={tx.checking || tx.status === 'PAID'} onClick={() => checkP2pNow(tx.id)}>
+                      <button className="btn-primary" disabled={tx.checking || tx.status !== 'PENDING'} onClick={() => checkP2pNow(tx.id)}>
                         {tx.checking ? <div className="spinner" /> : '✓ Kiểm tra'}
                       </button>
-                      <button className="btn-secondary" disabled={tx.cancelling || tx.status === 'PAID'} onClick={() => setConfirmCancel({ id: tx.id })}>
-                        ✕ Hủy
+                      <button className="btn-secondary" disabled={tx.cancelling} onClick={() => closeTicket(tx.id)}>
+                        ✕ {tx.status === 'PENDING' ? 'Hủy' : 'Đóng'}
                       </button>
                     </div>
                   </>
+                  )
                 ) : (
                   <>
                     {!tx.submittedCode ? (
@@ -1017,7 +1221,7 @@ export default function CreateTransactionPage() {
                           <button className="btn-primary" disabled={!tx.manualCode?.trim() || tx.isSubmittingCode} onClick={() => submitManualCode(tx.id)}>
                             {tx.isSubmittingCode ? <div className="spinner" /> : '✓ Xác nhận'}
                           </button>
-                          <button className="btn-secondary" disabled={tx.cancelling} onClick={() => setConfirmCancel({ id: tx.id })}>
+                          <button className="btn-secondary" disabled={tx.cancelling} onClick={() => closeTicket(tx.id)}>
                             ✕ Hủy
                           </button>
                         </div>
@@ -1049,8 +1253,8 @@ export default function CreateTransactionPage() {
                           ) : (
                             <button className="btn-primary" disabled>⏳ Đang xác nhận…</button>
                           )}
-                          <button className="btn-secondary" disabled={tx.status === 'PAID'} onClick={() => setConfirmCancel({ id: tx.id })}>
-                            ✕ Hủy
+                          <button className="btn-secondary" disabled={tx.status === 'PAID'} onClick={() => closeTicket(tx.id)}>
+                            ✕ {tx.status === 'PENDING' ? 'Hủy' : 'Đóng'}
                           </button>
                         </div>
                       </>
@@ -1058,9 +1262,22 @@ export default function CreateTransactionPage() {
                   </>
                 )}
                 </TicketCard>
+                </div>
               )
             })}
           </div>
+
+          {txs.some(t => t.minimized) && (
+            <div className="taskbar">
+              {txs.filter(t => t.minimized).map(t => (
+                <button key={t.id} className="taskbar-item" onClick={() => toggleMinimize(t.id)}>
+                  <span className="modal-type-icon">{t.type === 'p2p' ? <IconP2P /> : <IconScan />}</span>
+                  {formatAmount(String(t.amount))}₫
+                  <StatusBadge status={t.status} />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
