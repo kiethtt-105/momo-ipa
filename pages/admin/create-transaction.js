@@ -24,7 +24,7 @@ import Head from 'next/head'
 
 // ─── CONSTANTS ─────────────────────────────────────────────
 const TX_BASE_URL   = 'https://kiehtt.vercel.app'
-const MAX_PER_TYPE   = 100
+const MAX_PER_TYPE   = 5
 const P2P_DURATION_MS = 10 * 60 * 1000
 const POLL_MS         = 1000
 const LIVE_VERIFY_EVERY_TICKS = 10 // ~10s — gọi /api/momo/query verify thật cho P2P
@@ -807,11 +807,6 @@ export default function CreateTransactionPage() {
   async function createTransaction() {
     const amt = parseInt(amount, 10)
     if (!amt || amt <= 0) { setFormErr('Nhập số tiền hợp lệ.'); return }
-    const countOfType = txs.filter(t => t.type === method).length
-    if (countOfType >= MAX_PER_TYPE) {
-      setFormErr(`Đã đạt tối đa ${MAX_PER_TYPE} giao dịch ${method === 'p2p' ? 'P2P' : 'Scan'} đang chờ. Đóng bớt cửa sổ để tạo thêm.`)
-      return
-    }
     setFormErr('')
     setCreating(true)
     const finalOrderInfo = (orderInfo || '').trim() || genOrderId()
@@ -848,7 +843,7 @@ export default function CreateTransactionPage() {
         return
       }
     } else {
-      const generatedId = `POS${Date.now()}${countOfType}`
+      const generatedId = `POS${Date.now()}${Math.random().toString(36).slice(2, 6)}`
       try {
         await fetch('/api/momo/save-pending', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
