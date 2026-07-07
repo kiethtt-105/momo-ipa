@@ -349,6 +349,7 @@ export default function CreateTransactionPage() {
   const [storeId,   setStoreId]   = useState('')
   const [storesLoading, setStoresLoading] = useState(true)
   const [creating,  setCreating]  = useState(false)
+  const [justCreated, setJustCreated] = useState(false) // giữ ô nhập bị khóa 1 nhịp ngắn sau khi tạo xong, để người dùng thấy rõ đã khóa trước khi form tự reset cho giao dịch kế tiếp
   const [formErr,   setFormErr]   = useState('')
   const amountInputRef = useRef(null)
   const [recentAmounts, setRecentAmounts] = useState({})
@@ -400,7 +401,19 @@ export default function CreateTransactionPage() {
   const windowLayerRef = useRef(null)
   const TICKET_W = 300, TICKET_HEAD_H = 44, GRID_GAP = 20, GRID_ROW_H = 452
   const [layoutW, setLayoutW] = useState(0)
+  const [layoutH, setLayoutH] = useState(0)
   const [boardMinHeight, setBoardMinHeight] = useState(0)
+
+  // ─── CỬA SỔ ĐĂNG KÝ (form tạo giao dịch) — giờ cũng là một cửa sổ
+  // nổi kéo-thả được như vé giao dịch, nhưng "đặc biệt" hơn: mặc định
+  // luôn xuất hiện chính giữa màn hình, viền/đổ bóng nổi bật hơn, và có
+  // dải ruy-băng "Quầy chính" ghim ở góc để phân biệt với các vé thường.
+  const REGISTER_W = 340
+  const [regPos, setRegPos] = useState({ x: 24, y: 24 })
+  const [regZIndex, setRegZIndex] = useState(9000)
+  const [regUserPositioned, setRegUserPositioned] = useState(false)
+  const regDragRef = useRef(null)
+  const regElRef = useRef(null)
 
   function bringToFront(id) {
     setLastFocusedId(id)
@@ -427,12 +440,23 @@ export default function CreateTransactionPage() {
   useEffect(() => {
     const layer = windowLayerRef.current
     if (!layer) return
-    const update = () => setLayoutW(layer.clientWidth)
+    const update = () => { setLayoutW(layer.clientWidth); setLayoutH(layer.clientHeight) }
     update()
     const ro = new ResizeObserver(update)
     ro.observe(layer)
     return () => ro.disconnect()
   }, [])
+
+  // Đưa cửa sổ đăng ký về CHÍNH GIỮA màn hình mỗi khi kích thước bảng
+  // thay đổi — trừ khi người dùng đã tự tay kéo nó đi chỗ khác.
+  useEffect(() => {
+    if (regUserPositioned || !layoutW || !layoutH) return
+    const h = regElRef.current?.offsetHeight || 560
+    setRegPos({
+      x: Math.max(16, (layoutW - REGISTER_W) / 2),
+      y: Math.max(16, (layoutH - h) / 2),
+    })
+  }, [layoutW, layoutH, regUserPositioned])
 
   // Tự xếp lại vị trí cho MỌI vé chưa bị kéo tay (userPositioned=false)
   // và chưa thu nhỏ, thành lưới đều lấp đầy chiều rộng khả dụng. Các vé
@@ -448,19 +472,25 @@ export default function CreateTransactionPage() {
     const effectiveCols = Math.min(cols, Math.max(1, autoCount))
     const gridContentWidth = effectiveCols * (TICKET_W + GRID_GAP) - GRID_GAP
     const offsetX = Math.max(GRID_GAP, (layoutW - gridContentWidth) / 2)
+    // Nếu cửa sổ đăng ký (quầy chính) chưa bị kéo tay đi chỗ khác, nó vẫn
+    // đang nằm chính giữa — chừa chỗ bên dưới nó để vé mới tự xếp không
+    // đè lên cửa sổ đặc biệt này.
+    const topOffset = regUserPositioned
+      ? GRID_GAP
+      : regPos.y + (regElRef.current?.offsetHeight || 560) + GRID_GAP
     let autoIdx = 0
     const next = txsRef.current.map(t => {
       if (t.minimized || t.userPositioned) return t
       const col = autoIdx % effectiveCols
       const row = Math.floor(autoIdx / effectiveCols)
       autoIdx++
-      return { ...t, pos: { x: offsetX + col * (TICKET_W + GRID_GAP), y: GRID_GAP + row * GRID_ROW_H } }
+      return { ...t, pos: { x: offsetX + col * (TICKET_W + GRID_GAP), y: topOffset + row * GRID_ROW_H } }
     })
     const maxBottom = next.reduce((m, t) => (t.minimized ? m : Math.max(m, (t.pos?.y || 0) + GRID_ROW_H)), 0)
     setTxs(next)
     setBoardMinHeight(maxBottom + GRID_GAP)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutW, autoLayoutKey])
+  }, [layoutW, autoLayoutKey, regUserPositioned, regPos.y])
 
   function onDragStart(e, tx) {
     if (e.target.closest('button')) return
@@ -498,6 +528,49 @@ export default function CreateTransactionPage() {
     window.removeEventListener('mouseup', onDragEnd)
     window.removeEventListener('touchmove', onDragMove)
     window.removeEventListener('touchend', onDragEnd)
+  }
+
+  function bringRegToFront() {
+    zCounterRef.current += 1
+    setRegZIndex(zCounterRef.current)
+  }
+
+  function onRegDragStart(e) {
+    if (e.target.closest('button, input, .store-dd, textarea')) return
+    bringRegToFront()
+    const point = e.touches ? e.touches[0] : e
+    regDragRef.current = { startX: point.clientX, startY: point.clientY, origX: regPos.x, origY: regPos.y, moved: false }
+    window.addEventListener('mousemove', onRegDragMove)
+    window.addEventListener('mouseup', onRegDragEnd)
+    window.addEventListener('touchmove', onRegDragMove, { passive: false })
+    window.addEventListener('touchend', onRegDragEnd)
+  }
+
+  function onRegDragMove(e) {
+    const st = regDragRef.current
+    if (!st) return
+    if (e.cancelable) e.preventDefault()
+    const point = e.touches ? e.touches[0] : e
+    const dx = point.clientX - st.startX
+    const dy = point.clientY - st.startY
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) st.moved = true
+    const layer = windowLayerRef.current
+    const h = regElRef.current?.offsetHeight || 560
+    const maxX = layer ? Math.max(8, layer.clientWidth - REGISTER_W) : st.origX + dx
+    const maxY = layer ? Math.max(8, layer.clientHeight - 60) : st.origY + dy
+    const x = Math.min(Math.max(0, st.origX + dx), maxX)
+    const y = Math.min(Math.max(0, st.origY + dy), Math.max(maxY, layer ? layer.clientHeight - h : maxY))
+    setRegPos({ x, y })
+  }
+
+  function onRegDragEnd() {
+    const st = regDragRef.current
+    if (st?.moved) setRegUserPositioned(true)
+    regDragRef.current = null
+    window.removeEventListener('mousemove', onRegDragMove)
+    window.removeEventListener('mouseup', onRegDragEnd)
+    window.removeEventListener('touchmove', onRegDragMove)
+    window.removeEventListener('touchend', onRegDragEnd)
   }
 
   // ─── KHÔI PHỤC GIAO DỊCH TỪ sessionStorage LÚC MỞ TRANG ──
@@ -739,6 +812,8 @@ export default function CreateTransactionPage() {
           expiresAt: Date.now() + P2P_DURATION_MS, copied: false,
           pos: { x: 24, y: 24 }, zIndex: zCounterRef.current, minimized: false, userPositioned: false,
         }])
+        setLastFocusedId(id)
+        scrollNewTicketIntoView(id)
       } catch (e) {
         setFormErr('Lỗi server, thử lại sau.')
         setCreating(false)
@@ -763,13 +838,33 @@ export default function CreateTransactionPage() {
         pos: { x: 24, y: 24 }, zIndex: zCounterRef.current, minimized: false, userPositioned: false,
       }])
       setActiveCamId(id) // đơn mới tạo tự giữ camera
+      setLastFocusedId(id)
+      scrollNewTicketIntoView(id)
     }
 
     recordAmountUsage(amt)
     setRecentAmounts(loadRecentAmounts())
-    setAmount('')
-    setOrderInfo(genOrderId())
+    // Khóa các ô nhập số tiền / mã đơn 1 nhịp ngắn để xác nhận rõ ràng với
+    // người thu ngân rằng giao dịch đã được ghi nhận, trước khi mở lại
+    // form trống cho giao dịch kế tiếp.
     setCreating(false)
+    setJustCreated(true)
+    setTimeout(() => {
+      setAmount('')
+      setOrderInfo(genOrderId())
+      setJustCreated(false)
+    }, 650)
+  }
+
+  // Cuộn nhẹ khu vực bảng để vé vừa tạo luôn nằm trong tầm nhìn, tránh
+  // trường hợp vé mới bị "lạc" phía dưới nếu đã có nhiều vé khác ở trên.
+  function scrollNewTicketIntoView(id) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = windowLayerRef.current?.querySelector(`[data-tx-id="${id}"]`)
+        el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+      })
+    })
   }
 
   // ─── SCAN: GỬI MÃ THANH TOÁN ─────────────────────────────
@@ -968,15 +1063,31 @@ export default function CreateTransactionPage() {
           --mono: 'JetBrains Mono', ui-monospace, monospace;
         }
         html, body, #__next { background: var(--bg); }
-        .pos-shell { display: flex; width: 100%; min-height: 100dvh; background: var(--bg); }
+        .app-shell { display: flex; flex-direction: column; width: 100%; height: 100dvh; overflow: hidden; background: var(--bg); }
 
-        /* ── REGISTER PANEL: form tạo giao dịch (quầy thu ngân) ── */
-        .dock {
-          flex: 0 0 296px; width: 296px;
-          background: var(--surface); border-right: 1px solid var(--border);
-          padding: 24px 20px; overflow-y: auto;
-          display: flex; flex-direction: column;
+        /* ── CỬA SỔ ĐĂNG KÝ (quầy thu ngân): giờ là 1 cửa sổ nổi kéo-thả
+           được như vé giao dịch, mặc định nằm CHÍNH GIỮA màn hình, nhưng
+           được làm NỔI BẬT hơn hẳn các vé thường: viền đậm màu thương
+           hiệu, đổ bóng hồng sâu hơn, và dải ruy-băng "Quầy chính" ghim
+           ở góc để không ai nhầm nó với một vé giao dịch bình thường ── */
+        .register-float { position: absolute; }
+        .register-window {
+          position: relative; width: 100%; background: var(--surface);
+          border: 2px solid var(--mm); border-radius: 20px; overflow: hidden;
+          box-shadow: 0 26px 60px rgba(174,0,112,0.30), 0 0 0 6px rgba(174,0,112,0.07);
         }
+        .register-ribbon {
+          position: absolute; top: 17px; right: -38px; z-index: 3; pointer-events: none;
+          background: var(--mm); color: #fff; font-size: 10px; font-weight: 800;
+          letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 42px;
+          transform: rotate(45deg); box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+        }
+        .register-head {
+          display: flex; flex-direction: column; gap: 2px; padding: 20px 22px 4px;
+          cursor: grab; user-select: none; touch-action: none;
+        }
+        .register-head:active { cursor: grabbing; }
+        .register-body { padding: 12px 22px 22px; max-height: 82vh; overflow-y: auto; }
         .dock-eyebrow {
           display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono);
           font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
@@ -984,8 +1095,11 @@ export default function CreateTransactionPage() {
         }
         .dock-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--mm); display: inline-block; }
         .dock-title { font-size: 21px; font-weight: 800; color: var(--text); margin-bottom: 2px; letter-spacing: -0.01em; }
-        .dock-sub { font-size: 12px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
-        .field-label { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 8px; }
+        .field-label {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 8px;
+        }
+        .field-label svg { flex-shrink: 0; display: block; }
         .field-block { margin-bottom: 18px; }
 
         .method-tabs { display: flex; gap: 8px; }
@@ -1003,51 +1117,64 @@ export default function CreateTransactionPage() {
         .method-tab.active .method-tab-label { color: var(--mm); }
         .method-tab-desc { font-size: 9px; font-weight: 500; color: var(--muted); text-align: center; }
 
-        .amount-input, .info-input {
+        .info-input {
           width: 100%; padding: 11px 12px; border: 1.5px solid var(--border); border-radius: 10px;
           font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: var(--surface);
           outline: none; transition: border-color 0.15s;
         }
+        .info-input:disabled { opacity: 0.6; cursor: not-allowed; background: var(--subtle); }
+        .info-input:focus { border-color: var(--mm); }
+
+        /* ── Ô SỐ TIỀN: input và ký hiệu ₫ là 2 khối flex TÁCH BIỆT (không
+           còn đè lớp tuyệt đối lên nhau) → dù số dài cỡ nào, ₫ luôn đứng
+           yên trong khối riêng của nó, không bao giờ dính/che vào chữ số ── */
+        .amount-suffix-row {
+          display: flex; align-items: stretch; width: 100%;
+          border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface);
+          overflow: hidden; transition: border-color 0.15s;
+        }
+        .amount-suffix-row:focus-within { border-color: var(--mm); }
+        .amount-suffix-row.locked { opacity: 0.6; background: var(--subtle); }
         .amount-input {
-          font-size: 26px; font-weight: 800; text-align: right;
-          padding-right: 40px; /* chừa chỗ cho ký hiệu ₫ để không đè lên số */
+          flex: 1 1 auto; min-width: 0; width: auto; padding: 11px 12px;
+          border: none; border-radius: 0; outline: none; background: transparent;
+          font-size: 26px; font-weight: 800; text-align: right; color: var(--text);
           font-family: var(--mono);
         }
-        .amount-input:disabled, .info-input:disabled { opacity: 0.6; cursor: not-allowed; background: var(--subtle); }
-        .amount-input:focus, .info-input:focus { border-color: var(--mm); }
+        .amount-input:disabled { cursor: not-allowed; }
+        .amount-suffix {
+          flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+          padding: 0 14px; font-size: 15px; font-weight: 800; color: var(--mm);
+          background: var(--mm-light); border-left: 1.5px solid var(--border); pointer-events: none;
+        }
 
         /* ── STORE DROPDOWN: thay <select> mặc định của trình duyệt ── */
         .store-dd { position: relative; }
         .store-dd-trigger {
           width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
-          padding: 11px 12px; border: 1.5px solid var(--border); border-radius: 10px;
+          padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 14px;
           font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: var(--surface);
-          cursor: pointer; transition: border-color 0.15s; text-align: left;
+          cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s, background 0.15s; text-align: left;
         }
-        .store-dd-trigger:hover { border-color: rgba(174,0,112,0.35); }
-        .store-dd.open .store-dd-trigger { border-color: var(--mm); }
+        .store-dd-trigger:hover { border-color: var(--mm); background: var(--mm-light); box-shadow: 0 4px 14px rgba(174,0,112,0.14); }
+        .store-dd.open .store-dd-trigger { border-color: var(--mm); box-shadow: 0 0 0 3px rgba(174,0,112,0.14); }
         .store-dd.disabled .store-dd-trigger { opacity: 0.6; cursor: not-allowed; }
         .store-dd-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .store-dd-chevron { color: var(--muted); flex-shrink: 0; display: flex; transition: transform 0.15s; }
         .store-dd.open .store-dd-chevron { transform: rotate(180deg); color: var(--mm); }
         .store-dd-list {
           position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40;
-          background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px;
+          background: var(--surface); border: 1.5px solid var(--border); border-radius: 16px;
           box-shadow: 0 14px 34px rgba(26,15,22,0.16); padding: 6px; max-height: 240px; overflow-y: auto;
         }
         .store-dd-item {
           display: flex; align-items: center; justify-content: space-between; gap: 8px;
-          padding: 9px 10px; border-radius: 8px; font-size: 13.5px; font-weight: 600; color: var(--text);
+          padding: 9px 10px; border-radius: 10px; font-size: 13.5px; font-weight: 600; color: var(--text);
           cursor: pointer;
         }
         .store-dd-item:hover { background: var(--mm-light); }
         .store-dd-item.active { background: var(--mm-light); color: var(--mm); font-weight: 800; }
         .store-dd-check { color: var(--mm); display: flex; flex-shrink: 0; }
-        .amount-suffix-row { position: relative; }
-        .amount-suffix {
-          position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
-          font-size: 14px; font-weight: 700; color: var(--mm); pointer-events: none;
-        }
         .quick-amounts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
         .quick-amt-chip {
           padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--subtle);
@@ -1055,6 +1182,7 @@ export default function CreateTransactionPage() {
         }
         .quick-amt-chip:hover { border-color: var(--mm); color: var(--mm); }
         .quick-amt-chip:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--border); color: var(--muted); }
+        .quick-amt-chip.primary { border-color: var(--mm); background: var(--mm-light); color: var(--mm); }
 
         .count-badge { font-size: 10.5px; font-weight: 700; color: var(--muted); margin-top: 6px; }
         .count-badge.full { color: #c0392b; }
@@ -1070,8 +1198,8 @@ export default function CreateTransactionPage() {
         .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ── BOARD: bảng vé giao dịch, lấp đầy toàn bộ phần còn lại ── */
-        .board-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+        /* ── BOARD: bảng vé giao dịch, lấp đầy toàn bộ phần còn lại, nền
+           luôn có hiệu ứng gradient trôi nhẹ (không chỉ lúc trống) ── */
         .board-bar {
           flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
           padding: 16px 28px; border-bottom: 1px solid var(--border); background: var(--surface);
@@ -1088,18 +1216,35 @@ export default function CreateTransactionPage() {
         .new-tab-btn:hover { border-color: var(--mm); color: var(--mm); }
         .board {
           flex: 1; position: relative; overflow: auto; padding: 24px 28px 40px;
+          background: linear-gradient(120deg, var(--bg) 0%, var(--mm-light) 30%, #fdf2f8 50%, var(--mm-light) 70%, var(--bg) 100%);
+          background-size: 300% 300%;
+          animation: driftGradient 16s ease-in-out infinite;
+          /* Ẩn tạm cho tới khi đã đo được kích thước khung để canh giữa —
+             tránh hiện tượng vé/quầy bị dồn vào góc trên-trái rồi mới
+             "nhảy" ra giữa màn hình ngay trước mắt người dùng */
+          opacity: 0; transition: opacity 0.2s ease;
         }
+        .board.ready { opacity: 1; }
         .board.is-empty {
           display: flex; align-items: center; justify-content: center;
-          background: linear-gradient(120deg, var(--bg) 0%, var(--mm-light) 35%, #fdf2f8 55%, var(--mm-light) 75%, var(--bg) 100%);
-          background-size: 300% 300%;
-          animation: driftGradient 10s ease-in-out infinite;
         }
         @keyframes driftGradient {
           0%   { background-position: 0% 50%; }
           50%  { background-position: 100% 50%; }
           100% { background-position: 0% 50%; }
         }
+        /* ── MÀN HÌNH CHỜ (loading toàn màn hình khi đang tải dữ liệu quầy) ── */
+        .page-loader {
+          position: fixed; inset: 0; z-index: 5000; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 16px;
+          background: linear-gradient(120deg, var(--bg) 0%, var(--mm-light) 30%, #fdf2f8 50%, var(--mm-light) 70%, var(--bg) 100%);
+          background-size: 300% 300%; animation: driftGradient 6s ease-in-out infinite;
+        }
+        .page-loader-spin {
+          width: 42px; height: 42px; border: 3px solid rgba(174,0,112,0.15); border-top-color: var(--mm);
+          border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        .page-loader-text { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0.02em; }
         .ticket-float { position: absolute; }
         .board-empty {
           display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -1170,7 +1315,8 @@ export default function CreateTransactionPage() {
 
         /* ── TASKBAR: các vé đã thu nhỏ ── */
         .taskbar {
-          flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 10px 20px;
+          flex: 0 0 auto; flex-shrink: 0; min-height: 44px; position: relative; z-index: 60;
+          display: flex; align-items: center; gap: 8px; padding: 10px 20px;
           border-top: 1px solid var(--border); background: var(--surface); overflow-x: auto;
         }
         .taskbar-item {
@@ -1264,135 +1410,166 @@ export default function CreateTransactionPage() {
         .cancel-modal-confirm { background: #c0392b; color: #fff; }
 
         @media (max-width: 860px) {
-          .pos-shell { flex-direction: column; }
-          .dock { flex: 0 0 auto; width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 46vh; }
-          .board-wrap { height: auto; }
+          .app-shell { height: auto; min-height: 100dvh; }
           .board {
             padding: 18px 16px 32px; display: flex; flex-direction: column; align-items: center; gap: 16px;
+            overflow: visible;
           }
-          /* Màn hình nhỏ: bỏ kéo-thả tự do, xếp vé theo cột như danh sách bình thường */
-          .ticket-float { position: static !important; left: auto !important; top: auto !important; width: 100%; max-width: 340px; }
+          /* Màn hình nhỏ: bỏ kéo-thả tự do, xếp cửa sổ theo cột như danh sách bình thường */
+          .ticket-float, .register-float { position: static !important; left: auto !important; top: auto !important; width: 100% !important; max-width: 340px; }
           .ticket { width: 100%; }
-          .ticket-head { cursor: default; }
+          .register-window { width: 100%; }
+          .ticket-head, .register-head { cursor: default; }
           .board-bar { padding: 12px 16px; }
         }
       `}</style>
 
-      <div className="pos-shell">
-        {/* ── REGISTER PANEL: form tạo giao dịch ── */}
-        <div className="dock">
-          <div className="dock-eyebrow">Quầy thu ngân</div>
-          <div className="dock-title">Tạo giao dịch</div>
-
-          {stores.length > 1 && (
-            <div className="field-block">
-              <div className="field-label"><IconStore /> Cửa hàng</div>
-              <StoreDropdown stores={stores} value={storeId} onChange={setStoreId} disabled={storesLoading} />
-            </div>
-          )}
-
-          <div className="field-block">
-            <div className="field-label">Phương thức</div>
-            <div className="method-tabs">
-              {methodConfig.map(m => (
-                <div
-                  key={m.key}
-                  className={`method-tab${method === m.key ? ' active' : ''}${creating ? ' locked' : ''}`}
-                  onClick={() => !creating && setMethod(m.key)}
-                >
-                  <span className="method-tab-icon">{m.icon}</span>
-                  <span className="method-tab-label">{m.label}</span>
-                  <span className="method-tab-desc">{m.desc}</span>
-                </div>
-              ))}
-            </div>
+      <div className="app-shell">
+        {storesLoading && (
+          <div className="page-loader">
+            <div className="page-loader-spin" />
+            <div className="page-loader-text">Đang tải dữ liệu quầy…</div>
           </div>
-
-          <div className="field-block">
-            <div className="field-label">Số tiền thanh toán</div>
-            <div className="amount-suffix-row">
-              <input
-                ref={amountInputRef}
-                className="amount-input"
-                type="text"
-                inputMode="numeric"
-                placeholder="0"
-                value={formatAmount(amount)}
-                onChange={e => setAmount(unformatAmount(e.target.value))}
-                onKeyDown={e => { if (e.key === 'Enter' && canSubmit && !creating) createTransaction() }}
-                disabled={creating}
-              />
-              <span className="amount-suffix">₫</span>
-            </div>
-            <div className="quick-amounts">
-              {suggestedAmounts.map(a => (
-                <button
-                  key={a}
-                  className="quick-amt-chip"
-                  disabled={creating}
-                  onClick={() => setAmount(String(a))}
-                >
-                  {a >= 1000000 ? `${(a / 1000000).toLocaleString('en-US')}tr` : `${a / 1000}k`}
-                </button>
-              ))}
-            </div>
+        )}
+        <div className="board-bar">
+          <span className="board-bar-title">Giao dịch đang mở</span>
+          <div className="board-bar-right">
+            {txs.length > 0 && <span className="board-bar-count"><b>{txs.length}</b> đang mở</span>}
+            <button
+              className="new-tab-btn"
+              onClick={() => window.open(window.location.pathname, '_blank')}
+              title="Mở tab mới — tab mới sẽ có danh sách giao dịch riêng, độc lập với tab này"
+            >
+              <IconNewTab /> Mở tab mới
+            </button>
           </div>
-
-          <div className="field-block">
-            <div className="field-label">Mã đơn hàng</div>
-            <input
-              className="info-input"
-              type="text"
-              value={orderInfo}
-              onChange={e => setOrderInfo(e.target.value)}
-              disabled={creating}
-            />
-          </div>
-
-          {formErr && <div className="form-err">⚠ {formErr}</div>}
-
-          <button className="confirm-btn" onClick={createTransaction} disabled={!canSubmit || creating}>
-            {creating ? <><div className="spinner" /> Đang tạo…</> : <>+ Tạo giao dịch</>}
-          </button>
-
-          {currentStoreName && stores.length <= 1 && (
-            <div className="count-badge" style={{ marginTop: 10 }}>Cửa hàng: {currentStoreName}</div>
-          )}
         </div>
 
-        {/* ── BOARD: bảng vé giao dịch ── */}
-        <div className="board-wrap">
-          <div className="board-bar">
-            <span className="board-bar-title">Giao dịch đang mở</span>
-            <div className="board-bar-right">
-              <span className="board-bar-count"><b>{txs.length}</b> / {MAX_PER_TYPE * 2} vé</span>
-              <button
-                className="new-tab-btn"
-                onClick={() => window.open(window.location.pathname, '_blank')}
-                title="Mở tab mới — tab mới sẽ có danh sách giao dịch riêng, độc lập với tab này"
-              >
-                <IconNewTab /> Mở tab mới
-              </button>
+        {/* ── BOARD: nền chuyển động gradient + toàn bộ cửa sổ nổi ── */}
+        <div
+          className={`board${txs.length === 0 ? ' is-empty' : ''}${layoutW ? ' ready' : ''}`}
+          ref={windowLayerRef}
+          style={boardMinHeight ? { minHeight: boardMinHeight } : undefined}
+        >
+          {txs.length === 0 && (
+            <div className="board-empty">
+              <span className="board-empty-icon"><IconScan /></span>
+              Chưa có giao dịch nào đang mở.<br />Tạo giao dịch mới từ quầy thu ngân ở giữa màn hình.
+            </div>
+          )}
+
+          {/* ── CỬA SỔ ĐĂNG KÝ (quầy thu ngân): giờ là 1 cửa sổ nổi kéo-thả
+              được như vé giao dịch, nhưng mặc định nằm CHÍNH GIỮA màn hình
+              và được "đóng dấu" đặc biệt hơn (viền đậm, đổ bóng hồng, dải
+              ruy-băng "Quầy chính") để phân biệt với các vé thường ── */}
+          <div
+            className="ticket-float register-float"
+            ref={regElRef}
+            style={{ left: regPos.x, top: regPos.y, width: REGISTER_W, zIndex: regZIndex }}
+            onMouseDown={bringRegToFront}
+          >
+            <div className="register-window">
+              <div className="register-ribbon">Quầy chính</div>
+              <div className="register-head" onMouseDown={onRegDragStart} onTouchStart={onRegDragStart}>
+                <div className="dock-eyebrow">Quầy thu ngân</div>
+                <div className="dock-title">Tạo giao dịch</div>
+              </div>
+
+              <div className="register-body">
+                {stores.length > 1 && (
+                  <div className="field-block">
+                    <div className="field-label"><IconStore /> Cửa hàng</div>
+                    <StoreDropdown stores={stores} value={storeId} onChange={setStoreId} disabled={storesLoading} />
+                  </div>
+                )}
+
+                <div className="field-block">
+                  <div className="field-label">Phương thức</div>
+                  <div className="method-tabs">
+                    {methodConfig.map(m => (
+                      <div
+                        key={m.key}
+                        className={`method-tab${method === m.key ? ' active' : ''}${creating ? ' locked' : ''}`}
+                        onClick={() => !creating && setMethod(m.key)}
+                      >
+                        <span className="method-tab-icon">{m.icon}</span>
+                        <span className="method-tab-label">{m.label}</span>
+                        <span className="method-tab-desc">{m.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="field-block">
+                  <div className="field-label">Số tiền thanh toán</div>
+                  <div className={`amount-suffix-row${creating || justCreated ? ' locked' : ''}`}>
+                    <input
+                      ref={amountInputRef}
+                      className="amount-input"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={formatAmount(amount)}
+                      onChange={e => setAmount(unformatAmount(e.target.value))}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && canSubmit && !creating && !justCreated) createTransaction()
+                        // Tab/mũi tên phải khi ô còn trống → tự điền theo gợi ý hàng đầu
+                        if ((e.key === 'Tab' || e.key === 'ArrowRight') && !amount && suggestedAmounts[0]) {
+                          e.preventDefault()
+                          setAmount(String(suggestedAmounts[0]))
+                        }
+                      }}
+                      disabled={creating || justCreated}
+                    />
+                    <span className="amount-suffix">₫</span>
+                  </div>
+                  <div className="quick-amounts">
+                    {suggestedAmounts.map((a, i) => (
+                      <button
+                        key={a}
+                        className={`quick-amt-chip${i === 0 ? ' primary' : ''}`}
+                        disabled={creating || justCreated}
+                        onClick={() => setAmount(String(a))}
+                      >
+                        {a >= 1000000 ? `${(a / 1000000).toLocaleString('en-US')}tr` : `${a / 1000}k`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="field-block">
+                  <div className="field-label">Mã đơn hàng</div>
+                  <input
+                    className="info-input"
+                    type="text"
+                    value={orderInfo}
+                    onChange={e => setOrderInfo(e.target.value)}
+                    disabled={creating || justCreated}
+                  />
+                </div>
+
+                {formErr && <div className="form-err">⚠ {formErr}</div>}
+
+                <button className="confirm-btn" onClick={createTransaction} disabled={!canSubmit || creating || justCreated}>
+                  {creating
+                    ? <><div className="spinner" /> Đang tạo…</>
+                    : justCreated ? <>✓ Đã tạo giao dịch</> : <>+ Tạo giao dịch</>}
+                </button>
+
+                {currentStoreName && stores.length <= 1 && (
+                  <div className="count-badge" style={{ marginTop: 10 }}>Cửa hàng: {currentStoreName}</div>
+                )}
+              </div>
             </div>
           </div>
-          <div
-            className={`board${txs.length === 0 ? ' is-empty' : ''}`}
-            ref={windowLayerRef}
-            style={boardMinHeight ? { minHeight: boardMinHeight } : undefined}
-          >
-            {txs.length === 0 && (
-              <div className="board-empty">
-                <span className="board-empty-icon"><IconScan /></span>
-                Chưa có giao dịch nào đang mở.<br />Tạo giao dịch mới từ quầy bên trái.
-              </div>
-            )}
 
-            {txs.filter(tx => !tx.minimized).map(tx => {
+          {txs.filter(tx => !tx.minimized).map(tx => {
               const isCamOwner = tx.type === 'scan' && activeCamId === tx.id
               const pos = tx.pos || { x: 24, y: 24 }
               return (
                 <div
                   key={tx.id}
+                  data-tx-id={tx.id}
                   className="ticket-float"
                   style={{ left: pos.x, top: pos.y, zIndex: tx.zIndex || 10 }}
                 >
@@ -1534,7 +1711,6 @@ export default function CreateTransactionPage() {
             </div>
           )}
         </div>
-      </div>
 
       {/* ── XÁC NHẬN HỦY ── */}
       {confirmCancel && (
