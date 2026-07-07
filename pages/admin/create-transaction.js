@@ -52,14 +52,31 @@ function formatCountdown(totalSeconds) {
   const r = (s % 60).toString().padStart(2, '0')
   return `${m}:${r}`
 }
+// ─── LƯU/KHÔI PHỤC DANH SÁCH GIAO DỊCH QUA URL (?txs=...) ──────────
+// Chỉ lưu các field cần thiết để hiển thị lại + tiếp tục poll đúng đơn
+// (không lưu state tạm thời như checkMsg/checking/manualCode...).
+function serializeTxs(list) {
+  return list.map(t => ({
+    id: t.id, type: t.type, orderId: t.orderId, amount: t.amount, orderInfo: t.orderInfo,
+    storeId: t.storeId || '', storeName: t.storeName || '', status: t.status,
+    payUrl: t.payUrl || '', deeplink: t.deeplink || '', expiresAt: t.expiresAt || null,
+    submittedCode: t.submittedCode || '',
+  }))
+}
+function deserializeTxs(arr) {
+  if (!Array.isArray(arr)) return []
+  return arr.map(t => ({
+    ...t,
+    checkMsg: '', checking: false, cancelling: false, copied: false,
+    manualCode: t.submittedCode || '', manualErr: '', isSubmittingCode: false, camError: '',
+  }))
+}
+
 function buildP2pUrl(amount, orderInfo, storeId) {
   const amt = parseInt(amount, 10)
   if (!amt || amt <= 0) return null
   const base = `${TX_BASE_URL}/api/momo/create-p2p?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
   return storeId ? `${base}&storeId=${encodeURIComponent(storeId)}` : base
-}
-function buildOwnPayUrl(orderId) {
-  return `${TX_BASE_URL}/pay/${encodeURIComponent(orderId)}`
 }
 
 // ─── ICONS ─────────────────────────────────────────────────
@@ -142,6 +159,7 @@ export default function CreateTransactionPage() {
   const [txs, setTxs] = useState([])
   const txsRef = useRef([])
   useEffect(() => { txsRef.current = txs }, [txs])
+  const hydratedFromUrlRef = useRef(false)
 
   const [activeCamId, setActiveCamId] = useState(null) // id đơn Scan đang giữ camera
   const [now, setNow] = useState(Date.now())            // tick 1s cho đếm ngược P2P
@@ -168,6 +186,43 @@ export default function CreateTransactionPage() {
     const tx = txsRef.current.find(t => t.id === id)
     if (tx && tx.type === 'scan') setActiveCamId(id)
   }
+
+  // ─── KHÔI PHỤC GIAO DỊCH TỪ URL (?txs=...) LÚC MỞ TRANG ──
+  // Chỉ chạy 1 lần, sau khi router.query đã sẵn sàng (router.isReady).
+  useEffect(() => {
+    if (!router.isReady || hydratedFromUrlRef.current) return
+    hydratedFromUrlRef.current = true
+    const raw = router.query.txs
+    if (typeof raw === 'string' && raw) {
+      try {
+        const arr = JSON.parse(decodeURIComponent(raw))
+        const restored = deserializeTxs(arr)
+        if (restored.length) {
+          setTxs(restored)
+          const nextScan = restored.find(t => t.type === 'scan' && t.status === 'PENDING' && !t.submittedCode)
+          if (nextScan) setActiveCamId(nextScan.id)
+        }
+      } catch (e) {
+        console.error('Không khôi phục được giao dịch từ URL:', e)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady])
+
+  // ─── GHI DANH SÁCH GIAO DỊCH VÀO URL MỖI KHI ĐỔI ─────────
+  // Dùng router.replace + shallow để không reload trang / không đẻ thêm
+  // entry trong history mỗi lần đổi. Chỉ ghi sau khi đã thử khôi phục từ
+  // URL xong (tránh ghi đè query gốc trước khi kịp đọc nó).
+  useEffect(() => {
+    if (!hydratedFromUrlRef.current) return
+    const encoded = txs.length ? encodeURIComponent(JSON.stringify(serializeTxs(txs))) : null
+    const nextQuery = { ...router.query }
+    if (encoded) nextQuery.txs = encoded
+    else delete nextQuery.txs
+    if (nextQuery.txs === router.query.txs) return // không đổi gì thì thôi, khỏi replace
+    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [txs])
 
   // ─── TẢI DANH SÁCH CỬA HÀNG ──────────────────────────────
   useEffect(() => {
@@ -369,7 +424,7 @@ export default function CreateTransactionPage() {
           storeName: stores.find(s => s.id === finalStoreId)?.name || '',
           status: 'PENDING', checkMsg: '', checking: false, cancelling: false,
           payUrl: data.payUrl, deeplink: data.deeplink || '',
-          expiresAt: Date.now() + P2P_DURATION_MS, copied: false, copiedOwn: false,
+          expiresAt: Date.now() + P2P_DURATION_MS, copied: false,
         }])
       } catch (e) {
         setFormErr('Lỗi server, thử lại sau.')
@@ -555,24 +610,6 @@ export default function CreateTransactionPage() {
     setTimeout(() => updateTx(txId, { copied: false }), 2000)
   }
 
-  async function copyOwnPayUrl(txId) {
-    const tx = txsRef.current.find(t => t.id === txId)
-    if (!tx) return
-    const url = buildOwnPayUrl(tx.orderId)
-    try {
-      await navigator.clipboard.writeText(url)
-    } catch (e) {
-      try {
-        const ta = document.createElement('textarea')
-        ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0'
-        document.body.appendChild(ta); ta.focus(); ta.select()
-        document.execCommand('copy'); document.body.removeChild(ta)
-      } catch { return }
-    }
-    updateTx(txId, { copiedOwn: true })
-    setTimeout(() => updateTx(txId, { copiedOwn: false }), 2000)
-  }
-
   const currentStoreName = stores.find(s => s.id === storeId)?.name || ''
   const canSubmit = parseInt(amount || 0, 10) > 0
   const methodConfig = [
@@ -675,19 +712,19 @@ export default function CreateTransactionPage() {
         .board-bar-count b { color: var(--mm); }
         .board {
           flex: 1; overflow-y: auto; padding: 24px 28px 40px;
-          display: grid; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
-          align-content: start; gap: 18px;
+          display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; gap: 18px;
         }
+        .board.is-empty { align-items: center; justify-content: center; }
         .board-empty {
-          grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
           gap: 6px; color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: center;
-          padding: 60px 20px; min-height: 40vh;
+          padding: 60px 20px;
         }
         .board-empty-icon { color: var(--border); margin-bottom: 6px; }
 
         /* ── TICKET (vé giao dịch, kiểu hóa đơn POS) ── */
         .ticket {
-          position: relative; background: var(--paper); border-radius: 14px;
+          position: relative; width: 300px; max-width: 100%; background: var(--paper); border-radius: 14px;
           box-shadow: 0 2px 10px rgba(26,15,22,0.06); border: 1px solid var(--border);
           overflow: hidden; transition: box-shadow 0.15s, border-color 0.15s; align-self: start;
         }
@@ -761,8 +798,6 @@ export default function CreateTransactionPage() {
           background: transparent; font-size: 11.5px; font-weight: 700; color: var(--muted); cursor: pointer;
         }
         .copy-link-btn.copied { color: #1e8449; border-color: #1e8449; }
-        .copy-link-btn-own { border-style: solid; border-color: var(--mm); color: var(--mm); background: var(--mm-light); }
-        .copy-link-btn-own.copied { color: #1e8449; border-color: #1e8449; background: rgba(39,174,96,0.08); }
 
         .code-input {
           width: 100%; padding: 10px; border: 1.5px solid var(--border); border-radius: 9px;
@@ -799,7 +834,8 @@ export default function CreateTransactionPage() {
           .pos-shell { flex-direction: column; }
           .dock { flex: 0 0 auto; width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 46vh; }
           .board-wrap { height: auto; }
-          .board { grid-template-columns: 1fr; padding: 18px 16px 32px; }
+          .board { padding: 18px 16px 32px; }
+          .ticket { width: 100%; }
           .board-bar { padding: 12px 16px; }
         }
       `}</style>
@@ -887,7 +923,7 @@ export default function CreateTransactionPage() {
             <span className="board-bar-title">Giao dịch đang mở</span>
             <span className="board-bar-count"><b>{txs.length}</b> / {MAX_PER_TYPE * 2} vé</span>
           </div>
-          <div className="board">
+          <div className={`board${txs.length === 0 ? ' is-empty' : ''}`}>
             {txs.length === 0 && (
               <div className="board-empty">
                 <span className="board-empty-icon"><IconScan /></span>
@@ -949,11 +985,6 @@ export default function CreateTransactionPage() {
                     {tx.payUrl && tx.status !== 'PAID' && (
                       <button className={`copy-link-btn${tx.copied ? ' copied' : ''}`} onClick={() => copyPayUrl(tx.id)}>
                         {tx.copied ? '✓ Đã copy link thanh toán' : '📋 Copy link thanh toán'}
-                      </button>
-                    )}
-                    {tx.status !== 'PAID' && (
-                      <button className={`copy-link-btn copy-link-btn-own${tx.copiedOwn ? ' copied' : ''}`} onClick={() => copyOwnPayUrl(tx.id)}>
-                        {tx.copiedOwn ? '✓ Đã copy link trang riêng' : '🔗 Copy link trang thanh toán riêng'}
                       </button>
                     )}
                     <div className="btn-row">
