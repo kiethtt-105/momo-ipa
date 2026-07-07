@@ -119,6 +119,67 @@ const IconNewTab = () => (
     <path d="M15 3h6v6"/><path d="M10 14 21 3"/>
   </svg>
 )
+const IconChevronDown = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
+    <path d="m6 9 6 6 6-6"/>
+  </svg>
+)
+const IconCheck = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+    <path d="M20 6 9 17l-5-5"/>
+  </svg>
+)
+
+// ─── DROPDOWN CHỌN CỬA HÀNG (thay cho <select> mặc định xấu, viền
+// xanh, không theo được theme hồng của app — không style được list) ──
+function StoreDropdown({ stores, value, onChange, disabled }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onClickOutside(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    function onKey(e) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onClickOutside)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const current = stores.find(s => s.id === value)
+
+  return (
+    <div className={`store-dd${open ? ' open' : ''}${disabled ? ' disabled' : ''}`} ref={wrapRef}>
+      <button
+        type="button"
+        className="store-dd-trigger"
+        onClick={() => !disabled && setOpen(o => !o)}
+        disabled={disabled}
+      >
+        <span className="store-dd-value">{current?.name || 'Chọn cửa hàng'}</span>
+        <span className="store-dd-chevron"><IconChevronDown /></span>
+      </button>
+      {open && (
+        <div className="store-dd-list">
+          {stores.map(s => (
+            <div
+              key={s.id}
+              className={`store-dd-item${s.id === value ? ' active' : ''}`}
+              onClick={() => { onChange(s.id); setOpen(false) }}
+            >
+              <span>{s.name}</span>
+              {s.id === value && <span className="store-dd-check"><IconCheck /></span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── TICKET CARD (cửa sổ nổi kéo-thả tự do, kiểu vé/hóa đơn POS) ──
 function TicketCard({ tx, isFocused, onFocus, onHeaderDown, children, headerRight, headerLeft }) {
@@ -824,13 +885,41 @@ export default function CreateTransactionPage() {
         .method-tab.active .method-tab-label { color: var(--mm); }
         .method-tab-desc { font-size: 9px; font-weight: 500; color: var(--muted); text-align: center; }
 
-        .amount-input, .info-input, .store-select {
+        .amount-input, .info-input {
           width: 100%; padding: 11px 12px; border: 1.5px solid var(--border); border-radius: 10px;
           font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: var(--surface);
           outline: none; transition: border-color 0.15s;
         }
         .amount-input { font-size: 20px; font-weight: 800; text-align: right; }
-        .amount-input:focus, .info-input:focus, .store-select:focus { border-color: var(--mm); }
+        .amount-input:focus, .info-input:focus { border-color: var(--mm); }
+
+        /* ── STORE DROPDOWN: thay <select> mặc định của trình duyệt ── */
+        .store-dd { position: relative; }
+        .store-dd-trigger {
+          width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+          padding: 11px 12px; border: 1.5px solid var(--border); border-radius: 10px;
+          font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: var(--surface);
+          cursor: pointer; transition: border-color 0.15s; text-align: left;
+        }
+        .store-dd-trigger:hover { border-color: rgba(174,0,112,0.35); }
+        .store-dd.open .store-dd-trigger { border-color: var(--mm); }
+        .store-dd.disabled .store-dd-trigger { opacity: 0.6; cursor: not-allowed; }
+        .store-dd-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .store-dd-chevron { color: var(--muted); flex-shrink: 0; display: flex; transition: transform 0.15s; }
+        .store-dd.open .store-dd-chevron { transform: rotate(180deg); color: var(--mm); }
+        .store-dd-list {
+          position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40;
+          background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px;
+          box-shadow: 0 14px 34px rgba(26,15,22,0.16); padding: 6px; max-height: 240px; overflow-y: auto;
+        }
+        .store-dd-item {
+          display: flex; align-items: center; justify-content: space-between; gap: 8px;
+          padding: 9px 10px; border-radius: 8px; font-size: 13.5px; font-weight: 600; color: var(--text);
+          cursor: pointer;
+        }
+        .store-dd-item:hover { background: var(--mm-light); }
+        .store-dd-item.active { background: var(--mm-light); color: var(--mm); font-weight: 800; }
+        .store-dd-check { color: var(--mm); display: flex; flex-shrink: 0; }
         .amount-suffix-row { position: relative; }
         .amount-suffix { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--muted); pointer-events: none; }
         .quick-amounts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
@@ -1042,9 +1131,7 @@ export default function CreateTransactionPage() {
           {stores.length > 1 && (
             <div className="field-block">
               <div className="field-label"><IconStore /> Cửa hàng</div>
-              <select className="store-select" value={storeId} onChange={e => setStoreId(e.target.value)} disabled={storesLoading}>
-                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <StoreDropdown stores={stores} value={storeId} onChange={setStoreId} disabled={storesLoading} />
             </div>
           )}
 
