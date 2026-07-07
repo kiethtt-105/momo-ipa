@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
+import { describeResultCode } from '../lib/momoResultCodes'
 
 const REFRESH_INTERVAL = 1000
 const EXPIRE_MINUTES = 10
@@ -81,18 +82,24 @@ const normalizeStatus = (order) => {
   return { ...order, status }
 }
 
-const RESULT_CODE_MAP = {
-  0:'Thành công',10:'Hệ thống đang bảo trì',11:'Truy cập bị từ chối',12:'Phiên bản API không được hỗ trợ',
-  13:'Xác thực merchant thất bại',20:'Request sai định dạng',21:'Số tiền không hợp lệ',22:'orderId không hợp lệ',
-  23:'requestId không hợp lệ',24:'Chữ ký không hợp lệ',26:'Thông tin đơn hàng không hợp lệ',29:'Vượt quá giới hạn tần suất API',
-  1000:'Đang chờ xác nhận từ người dùng',1001:'Thanh toán thất bại (số dư không đủ)',1002:'Từ chối bởi nhà phát hành',
-  1003:'Đơn hàng bị huỷ hoặc hết hạn',1004:'Số tiền vượt hạn mức cho phép',1005:'URL thanh toán đã hết hạn',
-  1006:'Người dùng từ chối xác nhận',1007:'Tài khoản không được xác minh',1017:'Giao dịch bị huỷ bởi hệ thống',
-  1026:'Bị giới hạn vì chính sách của MoMo',2019:'orderGroupId không hợp lệ',4001:'Giao dịch bị hạn chế (KYC)',
-  4010:'Xác thực 2 yếu tố thất bại',4011:'OTP chưa được gửi hoặc đã hết hạn',4100:'Người dùng chưa đăng nhập',
-  7000:'Đang xử lý',7002:'Đang xử lý bởi nhà cung cấp',9000:'Giao dịch đã được xác nhận thành công',
+// Bảng resultCode giờ dùng chung từ lib/momoResultCodes.js (đầy đủ theo tài
+// liệu chính thức MoMo + phân loại merchant/system/user/pending) — bỏ bảng
+// cục bộ cũ ở đây vì thiếu vài mã và có mã sai (23/24/26/29/4010/4011 không
+// có trong tài liệu chính thức, trong khi các mã thật như 43/45/47/1080/
+// 1081/1088/2019/4002 lại bị thiếu).
+const getResultDesc = code => describeResultCode(code).vi
+const getResultInfo = code => describeResultCode(code)
+
+// Màu badge theo category (đồng bộ với nhãn trong momoResultCodes.js) —
+// merchant tô đỏ đậm nhất vì đây là nhóm admin CẦN kiểm tra/xử lý ngay.
+const RESULT_CATEGORY_COLOR = {
+  success:  '#16a34a',
+  merchant: '#dc2626',
+  system:   '#d97706',
+  user:     '#6b7280',
+  pending:  '#2563eb',
+  unknown:  '#6b7280',
 }
-const getResultDesc = code => RESULT_CODE_MAP[code] !== undefined ? RESULT_CODE_MAP[code] : 'Mã lỗi không xác định'
 
 // ─── TOP BAR (thay cho sidebar đã bỏ) ──────────────────────────────────────
 // Trang chỉ còn 1 khu vực nội dung duy nhất (Lịch sử giao dịch) nên không cần
@@ -756,7 +763,14 @@ function DetailModal({ order: o, checking, onClose, onDelete, onQuery, onConfirm
         <Row label="Hình thức"      value={o.payType || (o.orderId?.startsWith('POS')||o.orderId?.startsWith('iPOS')?'POS':'P2P')} />
         <Row label="Mã GD MoMo"     value={o.transId || '—'} mono copy={() => copy(o.transId)} />
         <Row label="Result Code"    value={o.resultCode !== undefined
-          ? <span className="font-mono font-bold" style={{ color: o.resultCode===0?'#16a34a':'#dc2626' }}>{o.resultCode} — {getResultDesc(o.resultCode)}</span>
+          ? (() => { const info = getResultInfo(o.resultCode); const color = RESULT_CATEGORY_COLOR[info.category]
+            return (
+              <div className="flex flex-col gap-1">
+                <span className="font-mono font-bold" style={{ color }}>{o.resultCode} — {info.vi}</span>
+                <span className="w-fit rounded-full px-2 py-[2px] text-[10.5px] font-bold" style={{ color, background: `${color}18` }}>{info.label}</span>
+              </div>
+            )
+          })()
           : '—'} />
         <Row label="Thông điệp"     value={o.message || '—'} />
       </Section>
@@ -828,6 +842,7 @@ function DetailModal({ order: o, checking, onClose, onDelete, onQuery, onConfirm
 function ConfirmModal({ orderId, amount, loading, result, error, onConfirm, onCancel, onClose }) {
   const rc   = result?.resultCode
   const isOk = rc === 0
+  const rcInfo = rc !== undefined ? getResultInfo(rc) : null
 
   return (
     <FloatingWindow
@@ -874,7 +889,8 @@ function ConfirmModal({ orderId, amount, loading, result, error, onConfirm, onCa
         <div className="py-1">
           <div className="flex flex-shrink-0 flex-col gap-1 px-[22px] py-4" style={{ background: isOk?'#dcfce7':'#fee2e2' }}>
             <div className="font-mono text-[22px] font-extrabold tracking-[-0.5px]" style={{ color: isOk?'#16a34a':'#dc2626' }}>{isOk?'✓':'✗'} {rc}</div>
-            <div className="text-sm font-bold text-[#374151]">{result.requestType==='capture'?'Capture':'Cancel'} — {getResultDesc(rc)}</div>
+            <div className="text-sm font-bold text-[#374151]">{result.requestType==='capture'?'Capture':'Cancel'} — {rcInfo?.vi}</div>
+            {rcInfo && <span className="w-fit rounded-full px-2 py-[2px] text-[10.5px] font-bold" style={{ color: RESULT_CATEGORY_COLOR[rcInfo.category], background: `${RESULT_CATEGORY_COLOR[rcInfo.category]}18` }}>{rcInfo.label}</span>}
             {result.message && <div className="text-xs text-[#6b7280]">{result.message}</div>}
           </div>
           <Section title="Raw Response">
@@ -1450,7 +1466,7 @@ function LookupWindow({ win, onQuery, onClose }) {
   const copy   = text => navigator.clipboard?.writeText(String(text))
   const rc     = win.result?.resultCode
   const isOk   = rc === 0 || rc === 9000
-  const rcDesc = rc !== undefined ? getResultDesc(rc) : null
+  const rcInfo = rc !== undefined ? getResultInfo(rc) : null
   const submit = () => input.trim() && onQuery(input)
 
   return (
@@ -1526,7 +1542,8 @@ function LookupWindow({ win, onQuery, onClose }) {
           )}
           <div className="flex flex-col gap-1 px-[22px] py-4" style={{ background: isOk?'#f0fdf4':'#fff5f5' }}>
             <div className="font-mono text-[22px] font-extrabold tracking-[-0.5px]" style={{ color: isOk?'#16a34a':'#dc2626' }}>{isOk?'✓':'✗'} {rc}</div>
-            <div className="text-sm font-bold text-[#374151]">{rcDesc}</div>
+            <div className="text-sm font-bold text-[#374151]">{rcInfo?.vi}</div>
+            {rcInfo && <span className="w-fit rounded-full px-2 py-[2px] text-[10.5px] font-bold" style={{ color: RESULT_CATEGORY_COLOR[rcInfo.category], background: `${RESULT_CATEGORY_COLOR[rcInfo.category]}18` }}>{rcInfo.label}</span>}
             {win.result.message && <div className="text-xs text-[#6b7280]">{win.result.message}</div>}
           </div>
 
