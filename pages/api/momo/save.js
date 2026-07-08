@@ -1,7 +1,6 @@
 // pages/api/momo/save.js
 import { queryMoMoTransaction } from '../../../lib/momo'
 import { Redis } from '@upstash/redis'
-import { requireAdmin } from '../../../lib/requireAdmin'
 import { markOrderClosed } from '../../../lib/openOrders'
 import { formatResultCodeMessage } from '../../../lib/momoResultCodes'
 
@@ -13,7 +12,12 @@ const redis = new Redis({
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  if (!requireAdmin(req, res)) return
+  // Đã bỏ check requireAdmin: endpoint này được /result gọi TRỰC TIẾP cho MỌI
+  // khách hàng ngay sau khi thanh toán ví/thẻ xong (luồng redirect), không
+  // riêng gì admin — trước đây yêu cầu admin khiến phần lớn khách bị 401 âm
+  // thầm, kết quả không được lưu/verify lại qua route này. An toàn để bỏ vì
+  // bên dưới luôn tự gọi lại queryMoMoTransaction để xác minh thật với MoMo,
+  // không tin thẳng dữ liệu client tự gửi lên.
 
   const { orderId } = req.body
   if (!orderId) return res.status(400).json({ error: 'Thiếu orderId' })

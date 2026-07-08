@@ -378,11 +378,8 @@ function bringFloatWinToFront() { return ++__floatWinTopZ }
 // hình — mở thêm cửa sổ thứ 4 sẽ tự động thu nhỏ cửa sổ cũ nhất (mở lâu nhất
 // mà chưa bị thu nhỏ) để nhường chỗ, thay vì chồng lấp tùm lum không kiểm soát.
 const MAX_OPEN_FLOAT_WINS = 3
-// Vị trí lệch cố định cho từng "slot" (0, 1, 2) — thay cho cascade cộng dồn vô
-// hạn kiểu cũ (nhảy lung tung tuỳ theo đã mở bao nhiêu cửa sổ từ đầu phiên).
-// Với tối đa 3 slot, vị trí luôn có thể đoán trước: cửa sổ thứ N (N ≤ 3) luôn
-// rơi đúng vào slot N, không phụ thuộc lịch sử mở/đóng trước đó.
-const FLOAT_WIN_SLOT_OFFSETS = [{ x: 0, y: 0 }, { x: 36, y: 36 }, { x: 72, y: 72 }]
+const FLOAT_WIN_TOP_MARGIN = 20
+const FLOAT_WIN_GUTTER     = 16
 
 const __floatWinRegistry  = new Map()
 const __floatWinOrder     = [] // thứ tự "hoạt động gần nhất" — cũ nhất ở đầu mảng
@@ -417,17 +414,6 @@ function markFloatWinActive(id) {
   __floatWinOrder.push(id)
 }
 
-// Đếm số cửa sổ đang thực sự mở (không tính đang thu nhỏ), không tính chính
-// cửa sổ có id = excludeId (dùng khi tính slot cho 1 cửa sổ sắp mở, trước khi
-// nó được đăng ký vào registry).
-function countOpenFloatWins(excludeId) {
-  let n = 0
-  for (const [id, meta] of __floatWinRegistry) {
-    if (id !== excludeId && meta && !meta.minimized) n++
-  }
-  return n
-}
-
 // Nếu đang có nhiều hơn MAX_OPEN_FLOAT_WINS cửa sổ mở, tự thu nhỏ bớt các cửa
 // sổ cũ nhất (theo __floatWinOrder) cho tới khi vừa đủ 3 — luôn giữ lại
 // activeId (cửa sổ vừa mở/khôi phục) dù nó có đứng đầu hàng đợi hay không.
@@ -449,6 +435,31 @@ function enforceMaxOpenFloatWins(activeId) {
   }
 }
 
+// Tự xếp các cửa sổ đang mở (không tính thu nhỏ) THÀNH HÀNG NGANG, chia đều
+// bề ngang màn hình theo số cửa sổ đang mở (tối đa 3 cột) — để không cửa sổ
+// nào che nội dung của cửa sổ khác. Cửa sổ nào đã bị NGƯỜI DÙNG kéo tay
+// (meta.dragged) thì bỏ qua, giữ nguyên chỗ họ vừa kéo tới, chỉ những cửa sổ
+// còn lại (chưa từng bị kéo) mới được tự động xếp lại theo cột của nó.
+function relayoutFloatWins() {
+  const openIds = __floatWinOrder.filter(id => {
+    const meta = __floatWinRegistry.get(id)
+    return meta && !meta.minimized
+  })
+  if (openIds.length === 0) return
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1200
+  const cols = Math.max(1, Math.min(MAX_OPEN_FLOAT_WINS, openIds.length))
+  const colWidth = vw / cols
+  openIds.forEach((id, idx) => {
+    const meta = __floatWinRegistry.get(id)
+    if (!meta || meta.dragged) return
+    if (typeof meta.onReposition !== 'function') return
+    const col = Math.min(idx, cols - 1)
+    const w  = Math.max(300, Math.min(meta.width || 560, colWidth - FLOAT_WIN_GUTTER))
+    const x  = col * colWidth + Math.max(FLOAT_WIN_GUTTER / 2, (colWidth - w) / 2)
+    meta.onReposition(Math.round(x), FLOAT_WIN_TOP_MARGIN, Math.round(w))
+  })
+}
+
 let __floatWinIdSeq = 0
 function useFloatWinList() {
   const [, forceTick] = useState(0)
@@ -459,6 +470,7 @@ function useFloatWinList() {
   }, [])
   return Array.from(__floatWinRegistry.entries()).map(([id, meta]) => ({ id, ...meta }))
 }
+
 
 
 
@@ -535,68 +547,54 @@ function LookupBar({ onOpenLookup, onOpenCreate, filter, setFilter, counts }) {
 
 function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor = '#ae0070', onClose, children, footer, width = 560, taskbarLabel, cascade = true }) {
   const [pos,       setPos]       = useState(null)
+  const [layoutW,   setLayoutW]   = useState(width)
   const [z,         setZ]         = useState(0)
   const [dragging,  setDragging]  = useState(false)
   const [minimized, setMinimized] = useState(false)
   const [maximized, setMaximized] = useState(false)
-  const dragState  = useRef({ startX: 0, startY: 0, origX: 0, origY: 0 })
-  const slotRef    = useRef(null)
+  const dragState  = useRef({ startX: 0, startY: 0, origX: 0, origY: 0, moved: false })
+  const draggedRef = useRef(false) // đã từng bị người dùng kéo tay chưa — nếu rồi thì auto-layout bỏ qua cửa sổ này
   const prevGeom   = useRef(null) // { pos } trước khi phóng to, để khôi phục lại
   const winId      = useRef(null)
 
   if (winId.current === null) winId.current = `fw-${++__floatWinIdSeq}`
-  // Slot được tính 1 LẦN DUY NHẤT lúc mở, dựa trên số cửa sổ đang mở tại thời
-  // điểm đó (0, 1 hoặc 2) — không cộng dồn vô hạn theo lịch sử cả phiên như
-  // cascade cũ, nên vị trí luôn nhất quán, dễ đoán, không còn cảm giác "nhảy
-  // tùm lum" mỗi lần bấm mở 1 giao dịch khác.
-  if (slotRef.current === null) {
-    const slotIndex = cascade ? Math.min(countOpenFloatWins(winId.current), FLOAT_WIN_SLOT_OFFSETS.length - 1) : 0
-    slotRef.current = FLOAT_WIN_SLOT_OFFSETS[slotIndex]
-  }
-
-  useEffect(() => {
-    const w = typeof window !== 'undefined' ? window.innerWidth  : 1200
-    const winW = Math.min(width, w - 32)
-    const baseX = Math.max(16, (w - winW) / 2)
-    // Luôn mở sát mép trên (không còn canh giữa theo chiều dọc) — mở ở giữa
-    // màn hình dễ đè lên đúng vùng dữ liệu (thẻ thống kê / hàng đầu bảng) mà
-    // người dùng vừa bấm vào, phải cuộn lên mới thấy tiêu đề cửa sổ. Neo gần
-    // đỉnh màn hình để phần đầu (trạng thái, số tiền) luôn hiện ngay, tránh
-    // bị khuất phía trên; vẫn còn khoảng trống nhỏ để không dính sát viền.
-    const TOP_MARGIN = 20
-    setPos({ x: baseX + slotRef.current.x, y: TOP_MARGIN + slotRef.current.y })
-    setZ(bringFloatWinToFront())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // Đăng ký cửa sổ vào registry chung khi mount, gỡ khi đóng hẳn — đây là
   // "nguồn sự thật" để FloatingWinDock biết cửa sổ nào đang bị thu nhỏ, đồng
-  // thời cũng là nơi ép giới hạn tối đa MAX_OPEN_FLOAT_WINS cửa sổ mở cùng lúc.
+  // thời cũng là nơi ép giới hạn tối đa MAX_OPEN_FLOAT_WINS cửa sổ mở cùng lúc
+  // và tự xếp hàng ngang (relayoutFloatWins) mỗi khi có cửa sổ mở/đóng.
   useEffect(() => {
     registerFloatWin(winId.current, {
-      label: taskbarLabel || 'Cửa sổ', iconBg, iconColor, minimized: false,
+      label: taskbarLabel || 'Cửa sổ', iconBg, iconColor, minimized: false, dragged: false, width,
       onRestore: () => { setMinimized(false); setZ(bringFloatWinToFront()) },
       onMinimize: () => setMinimized(true),
+      onReposition: (x, y, w) => { setPos({ x, y }); setLayoutW(w) },
     })
-    return () => unregisterFloatWin(winId.current)
+    setZ(bringFloatWinToFront())
+    enforceMaxOpenFloatWins(winId.current)
+    relayoutFloatWins()
+    return () => { unregisterFloatWin(winId.current); relayoutFloatWins() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => {
     updateFloatWin(winId.current, { minimized })
     // Vừa mở lần đầu hoặc vừa khôi phục từ thu nhỏ → đánh dấu hoạt động gần
     // nhất, rồi kiểm tra: nếu giờ có quá 3 cửa sổ đang mở, tự thu nhỏ bớt cửa
-    // sổ cũ nhất (không phải cửa sổ này) để nhường chỗ.
+    // sổ cũ nhất (không phải cửa sổ này) để nhường chỗ. Sau đó xếp lại hàng
+    // ngang cho các cửa sổ còn đang mở (cửa sổ vừa thu nhỏ nhường chỗ trống
+    // lại cho các cửa sổ còn lại giãn ra).
     if (!minimized) {
       markFloatWinActive(winId.current)
       enforceMaxOpenFloatWins(winId.current)
     }
+    relayoutFloatWins()
   }, [minimized])
 
   function clamp(x, y) {
     const w = typeof window !== 'undefined' ? window.innerWidth  : 1200
     const h = typeof window !== 'undefined' ? window.innerHeight : 800
     return {
-      x: Math.min(Math.max(x, -width + 120), w - 80),
+      x: Math.min(Math.max(x, -layoutW + 120), w - 80),
       y: Math.min(Math.max(y, 0), h - 60),
     }
   }
@@ -606,13 +604,21 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
     if (maximized) return // đang phóng to thì không kéo (bấm nút khôi phục trước)
     setZ(bringFloatWinToFront())
     setDragging(true)
-    dragState.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
+    dragState.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y, moved: false }
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
   }
   function onPointerMove(e) {
     const dx = e.clientX - dragState.current.startX
     const dy = e.clientY - dragState.current.startY
+    // Chỉ tính là "đã kéo tay" khi di chuyển đủ xa (>4px) — tránh 1 cú click
+    // nhẹ bị tính nhầm thành kéo, vô tình rút cửa sổ ra khỏi layout tự động.
+    if (!draggedRef.current && !dragState.current.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+      dragState.current.moved = true
+      draggedRef.current = true
+      updateFloatWin(winId.current, { dragged: true })
+      relayoutFloatWins() // các cửa sổ còn lại (chưa bị kéo) giãn ra lấp chỗ trống
+    }
     setPos(clamp(dragState.current.origX + dx, dragState.current.origY + dy))
   }
   function onPointerUp() {
@@ -655,7 +661,7 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
         animation: 'floatWinIn 0.22s cubic-bezier(0.34,1.35,0.64,1) both',
       } : {
         left: pos.x, top: pos.y,
-        width: `min(${width}px, calc(100vw - 32px))`,
+        width: `min(${layoutW}px, calc(100vw - 32px))`,
         zIndex: z,
         boxShadow: dragging
           ? '0 46px 110px rgba(23,7,20,0.38), 0 10px 30px rgba(174,0,112,0.18), 0 0 0 1px rgba(174,0,112,0.14)'

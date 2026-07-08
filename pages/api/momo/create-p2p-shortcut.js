@@ -1,7 +1,7 @@
+// pages/api/momo/create-p2p-shortcut.js
 import { createMoMoPayment } from '../../../lib/momo'
 import { Redis } from '@upstash/redis'
 import QRCode from 'qrcode'
-import { requireAdmin } from '../../../lib/requireAdmin'
 import { resolveStore } from '../../../lib/stores'
 import { markOrderOpen, markOrderClosed } from '../../../lib/openOrders'
 import { describeResultCode, formatResultCodeMessage } from '../../../lib/momoResultCodes'
@@ -11,17 +11,31 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 })
 
-// File này CHỈ dành cho ADMIN (trang "Tạo giao dịch" trong khu vực quản trị).
-// Nhánh xác thực bằng shortcut key đã tách riêng sang create-p2p-shortcut.js
-// để 2 luồng không lẫn vào nhau — admin luôn phải đăng nhập, shortcut luôn
-// chỉ cần đúng key, không có "hoặc" nào ở giữa.
+// File này CHỈ dùng cho luồng "shortcut" — tạo đơn P2P bằng 1 link GET kèm
+// key, KHÔNG cần đăng nhập admin (tách hẳn khỏi create-p2p.js, không còn
+// nhánh "hoặc admin hoặc key" nữa). Ví dụ:
+//   /api/momo/create-p2p-shortcut?key=...&amount=10000&orderInfo=...&storeId=...
+//
+// TODO (phát triển sau): hiện tại chỉ có 1 SHORTCUT_API_KEY dùng chung. Sau
+// này có thể đổi sang danh sách nhiều key (map key -> tên nhân viên) để biết
+// chính xác ai đã tạo đơn qua shortcut, phục vụ đối soát/phân quyền chi tiết hơn.
+const SHORTCUT_API_KEY = process.env.SHORTCUT_API_KEY || ''
+
+function isValidShortcutKey(req) {
+  if (!SHORTCUT_API_KEY) return false
+  const headerKey = req.headers['x-api-key']
+  const queryKey = (req.query.key || '').toString()
+  return headerKey === SHORTCUT_API_KEY || queryKey === SHORTCUT_API_KEY
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  if (!requireAdmin(req, res)) return
+  if (!isValidShortcutKey(req)) {
+    return res.status(401).json({ error: 'Thiếu hoặc sai key' })
+  }
 
   const params = req.method === 'GET' ? req.query : req.body
 
@@ -49,10 +63,8 @@ export default async function handler(req, res) {
   }
 
   // ─── CHỌN CỬA HÀNG ───────────────────────────────────────────
-  // - Nếu request truyền storeId (chọn thủ công trên trang tạo giao dịch)
-  //   → dùng đúng cửa hàng đó.
-  // - Nếu không truyền (ví dụ link nhanh/shortcut không kèm storeId)
-  //   → tự động dùng cửa hàng được đánh dấu "default" trong MOMO_STORES.
+  // - Nếu request truyền storeId → dùng đúng cửa hàng đó.
+  // - Nếu không truyền → tự động dùng cửa hàng "default" trong MOMO_STORES.
   const rawStoreId = (params.storeId || '').toString().trim()
   const store = resolveStore(rawStoreId)
 
@@ -67,7 +79,7 @@ export default async function handler(req, res) {
       [orderId]: JSON.stringify({
         orderId, amount: amt, orderInfo, status: 'PENDING',
         createdAt: now, paidAt: null, transId: '', payType: '',
-        paymentOption: '', source: 'create-p2p',
+        paymentOption: '', source: 'create-p2p-shortcut',
         storeId, storeName, partnerName,
         type: 'p2p',
       }),
@@ -86,7 +98,7 @@ export default async function handler(req, res) {
         [orderId]: JSON.stringify({
           orderId, amount: amt, orderInfo, status: 'FAILED',
           createdAt: now, paidAt: null, transId: '', payType: '',
-          paymentOption: '', source: 'create-p2p',
+          paymentOption: '', source: 'create-p2p-shortcut',
           storeId, storeName, partnerName, error: result.message || '',
           message: finalMessage, resultCode: result.resultCode,
           type: 'p2p',
@@ -110,7 +122,7 @@ export default async function handler(req, res) {
           width: 400,
         })
       } catch (qrErr) {
-        console.error('[create-p2p] QR Generate Error:', qrErr.message)
+        console.error('[create-p2p-shortcut] QR Generate Error:', qrErr.message)
       }
     }
 
@@ -118,7 +130,7 @@ export default async function handler(req, res) {
       [orderId]: JSON.stringify({
         orderId, amount: amt, orderInfo, status: 'PENDING',
         createdAt: now, paidAt: null, transId: '', payType: '',
-        paymentOption: '', source: 'create-p2p',
+        paymentOption: '', source: 'create-p2p-shortcut',
         storeId, storeName, partnerName,
         payUrl: result.payUrl || '',
         deeplink: result.deeplink || '',
@@ -140,17 +152,15 @@ export default async function handler(req, res) {
       storeName,
     })
   } catch (err) {
-    console.error('[MoMo] create-p2p error:', err)
-    // Trước đây nhánh lỗi này KHÔNG cập nhật Redis — đơn bị bỏ lại ở trạng
-    // thái PENDING dù thực chất tạo thất bại. Với tính năng đồng bộ, điều
-    // đó nghĩa là một vé "ma" (PENDING vô thời hạn) sẽ hiện ra ở MỌI thiết
-    // bị khác. Sửa luôn: đánh dấu FAILED + gỡ khỏi danh sách đang mở.
+    console.error('[MoMo] create-p2p-shortcut error:', err)
+    // Không để đơn kẹt ở PENDING vô thời hạn nếu tạo lỗi giữa chừng — đánh
+    // dấu FAILED + gỡ khỏi danh sách đang mở, giống create-p2p.js.
     try {
       await redis.hset('momo:orders', {
         [orderId]: JSON.stringify({
           orderId, amount: amt, orderInfo, status: 'FAILED',
           createdAt: now, paidAt: null, transId: '', payType: '',
-          paymentOption: '', source: 'create-p2p',
+          paymentOption: '', source: 'create-p2p-shortcut',
           storeId, storeName, partnerName, error: 'server_error',
           message: `⚠ Lỗi hệ thống (server) khi gọi MoMo — ADMIN cần kiểm tra log server: ${err.message || 'không rõ nguyên nhân'}`,
           type: 'p2p',
@@ -158,7 +168,7 @@ export default async function handler(req, res) {
       })
       await markOrderClosed(redis, orderId)
     } catch (cleanupErr) {
-      console.error('[MoMo] create-p2p cleanup error:', cleanupErr)
+      console.error('[MoMo] create-p2p-shortcut cleanup error:', cleanupErr)
     }
     return res.status(500).json({ error: 'Lỗi server, thử lại sau' })
   }
