@@ -121,6 +121,32 @@ async function handlePosCharge(req, res) {
   }
   console.log('[pos-charge] Bước 5: orderId =', orderId)
 
+  // Kiểm tra trùng orderId — URL/query chỉ có mỗi trường này để định danh
+  // đơn hàng, nên nếu Shortcut lỡ gửi lại orderId đã tồn tại trong Redis
+  // (đơn cũ), phải báo lỗi ngay và dừng ở đây — KHÔNG cho ghi đè lên đơn
+  // cũ (tránh mất dữ liệu giao dịch trước + tránh gọi MoMo 2 lần cho cùng
+  // 1 orderId).
+  try {
+    const existingRaw = await redis.hget('momo:orders', orderId)
+    if (existingRaw) {
+      console.log('[pos-charge] Bước 5b: orderId ĐÃ TỒN TẠI -> dừng ở đây, trả 409. orderId =', orderId)
+      let existingData = null
+      try {
+        existingData = typeof existingRaw === 'string' ? JSON.parse(existingRaw) : existingRaw
+      } catch {
+        existingData = null
+      }
+      return res.status(409).json({
+        error: `Trùng orderId: "${orderId}" đã tồn tại trong hệ thống, vui lòng dùng orderId khác`,
+        existing: existingData,
+      })
+    }
+    console.log('[pos-charge] Bước 5b: orderId chưa tồn tại, OK để tiếp tục')
+  } catch (err) {
+    console.error('[pos-charge] Bước 5b: LỖI khi kiểm tra trùng orderId trong Redis:', err)
+    return res.status(500).json({ error: 'Lỗi kiểm tra trùng orderId (Redis)' })
+  }
+
   const paymentCode = String(rawPaymentCode).trim()
   if (!/^(MM|mm)?\d{18}$/.test(paymentCode)) {
     console.log('[pos-charge] Bước 6: paymentCode KHÔNG HỢP LỆ -> dừng ở đây. Nhận:', paymentCode)
@@ -140,7 +166,14 @@ async function handlePosCharge(req, res) {
   // partnerName từ store — dùng cho body gửi MoMo thay vì chỉ đọc thẳng
   // process.env.MOMO_PARTNER_NAME như bản cũ (mỗi cửa hàng có thể có
   // partnerName riêng, giống create-p2p.js).
-  const rawStoreId = (params.storeId || '').toString().trim()
+  // Chấp nhận storeId gửi lên với bất kỳ kiểu hoa/thường nào
+  // (storeId, storeID, STOREID, StoreId...) — vì query string phân biệt
+  // hoa/thường nên nếu Shortcut lỡ gõ khác "storeId" (ví dụ "storeID")
+  // thì trước đây sẽ bị bỏ qua và rơi về cửa hàng mặc định.
+  const storeIdKey = Object.keys(params).find(
+    (k) => k.toLowerCase() === 'storeid'
+  )
+  const rawStoreId = (storeIdKey ? params[storeIdKey] : '').toString().trim()
   const store = resolveStore(rawStoreId)
   const { id: storeId, name: storeName, partnerName: storePartnerName } = store
   console.log('[pos-charge] Bước 8: store resolved =', JSON.stringify(store))
