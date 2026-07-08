@@ -16,16 +16,20 @@ function notifyOtherTabs(orderId, status) {
   }
 }
 
-// Trang này phục vụ cả KHÁCH lẫn ADMIN mở CHUNG một link kết quả:
-//  - /api/momo/status: an toàn cho khách, không cần đăng nhập, chỉ trả dữ liệu cơ bản.
-//  - /api/momo/query: vẫn giữ nguyên yêu cầu requireAdmin (không đổi phía backend) vì
-//    trả nhiều thông tin hơn. Ta vẫn gọi thử từ đây — nếu trình duyệt đang mở trang
-//    này CHÍNH LÀ trình duyệt mà admin đã đăng nhập (cookie phiên admin có sẵn), request
-//    sẽ tự động thành công nhờ cookie, và admin sẽ thấy thêm chi tiết khi tự kiểm tra
-//    bằng link đã gửi cho khách. Nếu là khách bình thường (chưa đăng nhập admin trên
-//    máy đó), request này sẽ bị 401 — ta bỏ qua kết quả một cách IM LẶNG, không throw,
-//    không hiện lỗi ra UI, khách vẫn thấy đầy đủ trang bình thường dựa trên status.
-async function fetchFullInfo(query) {
+// Trang này phục vụ cả KHÁCH lẫn ADMIN mở CHUNG một link kết quả, nhưng KHÔNG
+// còn phân biệt quyền admin theo kiểu "cùng trình duyệt có cookie thì thấy
+// thêm" nữa. Thay vào đó chia theo LUỒNG GIAO DỊCH:
+//  - P2P (chuyển khoản): khách và admin xem THẤY GIỐNG NHAU — chỉ dữ liệu cần
+//    thiết cho 1 đơn (qua /api/momo/status, endpoint public, an toàn cho khách).
+//    KHÔNG gọi /api/momo/query cho luồng này nữa, dù người mở link có phải admin
+//    hay không, để tránh việc admin vô tình thấy nhiều hơn khách trên cùng 1 đơn.
+//  - Scan QR: trang kết quả trong luồng này trên thực tế CHỈ được mở bởi máy/trình
+//    duyệt của admin (chính admin cầm máy quét), nên không cần kiểm tra quyền gì
+//    thêm — cứ gọi /api/momo/query như bình thường, cookie phiên admin đã có sẵn
+//    trên máy đó nên request tự thành công.
+//  - Nếu vì lý do nào đó /query vẫn trả 401 (không phải admin), ta bỏ qua kết quả
+//    một cách IM LẶNG, không throw, không hiện lỗi ra UI.
+async function fetchFullInfo(query, { includeQuery = true } = {}) {
   const orderId = query.orderId
   if (!orderId) return null
 
@@ -33,20 +37,36 @@ async function fetchFullInfo(query) {
     .then(r => r.json())
     .catch(() => null)
 
-  // credentials mặc định của fetch same-origin đã tự gửi kèm cookie phiên (nếu có),
-  // nên không cần cấu hình thêm gì để "nhận diện" admin đang đăng nhập trên máy đó.
+  // Luồng P2P: không gọi /query — status.js là đủ và là TẤT CẢ những gì khách
+  // lẫn admin nên thấy cho đơn P2P.
+  if (!includeQuery) {
+    const statusData = await statusPromise
+    return statusData || null
+  }
+
+  // credentials mặc định của fetch same-origin đã tự gửi kèm cookie phiên (nếu có).
   const queryPromise = fetch('/api/momo/query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ orderId }),
   })
-    .then(r => (r.ok ? r.json() : null)) // 401 (không phải admin) -> null, im lặng bỏ qua
+    .then(r => (r.ok ? r.json() : null)) // 401 -> null, im lặng bỏ qua
     .catch(() => null)
 
   const [statusData, momoFull] = await Promise.all([statusPromise, queryPromise])
   if (!statusData && !momoFull) return null
-  // Nếu có quyền admin, dữ liệu chi tiết từ /query sẽ đè lên dữ liệu cơ bản từ /status.
   return { ...(statusData || {}), ...(momoFull || {}) }
+}
+
+// Xác định 1 đơn có phải luồng P2P (chuyển khoản) hay không, dựa trên payType
+// hoặc source — dùng để quyết định có gọi /api/momo/query (admin-gated) hay không,
+// và field nào được phép hiện trong "Thông tin chi tiết".
+function isP2pFlow(data) {
+  if (!data) return false
+  if (data.payType === 'p2p' || data.payType === 'bank_transfer') return true
+  const src = typeof data.source === 'string' ? data.source.toLowerCase() : ''
+  if (src.includes('p2p')) return true
+  return false
 }
 
 const fmt = n => {
@@ -78,6 +98,11 @@ const CURATED_KEYS = new Set(['orderId', 'orderInfo', 'transId', 'payType', 'amo
 
 // Không bao giờ hiển thị các field nhạy cảm / nội bộ này ra UI.
 const HIDDEN_KEYS = new Set(['signature', 'accessKey', 'secretKey', 'partnerAccessToken', 'raw', 'lang', 'ipnUrl', 'redirectUrl'])
+
+// Luồng P2P: khách và admin xem GIỐNG NHAU, chỉ hiện field thật sự cần thiết
+// cho 1 đơn (không hiện field nội bộ như storeId, terminalId, merchantName,
+// requestId, partnerCode... dù ai đang xem đi nữa).
+const P2P_EXTRA_ALLOWED_KEYS = new Set(['payUrl', 'qrCodeImage', 'status', 'createdAt', 'source'])
 
 const TIME_KEYS = new Set(['responseTime', 'paidAt', 'createdAt', 'updatedAt', 'requestTime', 'transDate', 'payDate'])
 
@@ -150,6 +175,16 @@ export default function ResultPage() {
   const resolvedRef = useRef(false)
   const pollRef = useRef(null)
   const lastQueryRef = useRef({})
+  // Giữ bản sao "info" mới nhất ngoài state, để đọc được NGAY (không bị stale
+  // do closure) ở những nơi cần biết luồng P2P hay không trước khi setState kịp áp dụng.
+  const infoRef = useRef(null)
+  const updateInfo = useCallback((updater) => {
+    setInfo(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      infoRef.current = next
+      return next
+    })
+  }, [])
 
   // ── Main logic: đọc query / poll (redirect flow lẫn P2P / quét QR) ──
   useEffect(() => {
@@ -183,9 +218,13 @@ export default function ResultPage() {
       setStatus(st)
       // Giữ lại mọi field đã có trong query (kể cả field lạ của P2P/QR) rồi mới
       // merge dữ liệu chi tiết trả về từ API, để không mất bất kỳ thông tin nào.
-      setInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...infoData }))
+      updateInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...infoData }))
       notifyOtherTabs(trackingId, st === 'success' ? 'success' : 'failed')
-      fetchFullInfo(mergedQuery).then(full => { if (full) setInfo(prev => ({ ...prev, ...full })) })
+      // P2P: bỏ qua /api/momo/query (admin-gated) — khách và admin chỉ nên thấy
+      // dữ liệu từ /status, giống hệt nhau. Scan QR: gọi như bình thường vì trên
+      // thực tế chỉ admin (máy quét) mở trang này.
+      const skipAdminQuery = isP2pFlow({ ...mergedQuery, ...infoData })
+      fetchFullInfo(mergedQuery, { includeQuery: !skipAdminQuery }).then(full => { if (full) updateInfo(prev => ({ ...prev, ...full })) })
     }
 
     if (code !== undefined) {
@@ -237,7 +276,7 @@ export default function ResultPage() {
           }
           if (data.status === 'EXPIRED') {
             resolvedRef.current = true
-            setInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...data }))
+            updateInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...data }))
             setStatus('expired')
             clearInterval(pollRef.current); cleanUrl(); return
           }
@@ -245,12 +284,12 @@ export default function ResultPage() {
           attempts++
           if (attempts === FAST_ATTEMPTS) {
             // Không dừng poll, chỉ đổi UI sang "đang chờ" và poll chậm lại.
-            setInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...data }))
+            updateInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...data }))
             setStatus('pending')
             clearInterval(pollRef.current)
             pollRef.current = setInterval(runPoll, SLOW_INTERVAL)
           } else {
-            setInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...data }))
+            updateInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...data }))
           }
         } catch (e) {
           console.error('Poll error:', e)
@@ -269,9 +308,10 @@ export default function ResultPage() {
     if (!q || (!q.orderId && !q.requestId)) return
     setRefreshing(true)
     try {
-      const full = await fetchFullInfo(q)
+      const skipAdminQuery = isP2pFlow({ ...q, ...(infoRef.current || {}) })
+      const full = await fetchFullInfo(q, { includeQuery: !skipAdminQuery })
       if (full) {
-        setInfo(prev => ({ ...(prev || {}), ...full }))
+        updateInfo(prev => ({ ...(prev || {}), ...full }))
         if (full.status === 'PAID' || full.resultCode === 0) {
           setStatus('success')
           notifyOtherTabs(q.orderId || q.requestId, 'success')
@@ -302,10 +342,14 @@ export default function ResultPage() {
 
   const accentColor = isSuccess ? '#16a34a' : isFailed ? '#dc2626' : status === 'pending' ? '#d97706' : '#ae0070'
 
+  const isP2p = isP2pFlow(info)
+
   const extraEntries = info
     ? Object.entries(info).filter(([k, v]) => {
         if (HIDDEN_KEYS.has(k) || CURATED_KEYS.has(k)) return false
         if (v === undefined || v === null || v === '') return false
+        // P2P: khách và admin thấy giống nhau, chỉ field thật sự cần thiết.
+        if (isP2p && !P2P_EXTRA_ALLOWED_KEYS.has(k)) return false
         return true
       })
     : []
