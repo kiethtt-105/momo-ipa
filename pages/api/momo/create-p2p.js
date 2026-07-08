@@ -79,10 +79,7 @@ export default async function handler(req, res) {
         type: 'p2p',
       }),
     })
-    // Đánh dấu "đang mở" NGAY từ bước ghi nháp đầu tiên — nếu bước gọi
-    // MoMo bên dưới bị lỗi/timeout, ticket vẫn hiện với trạng thái đúng
-    // (FAILED, xem các nhánh bên dưới) thay vì treo "PENDING ma" mãi trong
-    // danh sách đồng bộ.
+
     await markOrderOpen(redis, orderId, Date.now())
 
     const result = await createMoMoPayment({
@@ -103,11 +100,6 @@ export default async function handler(req, res) {
         }),
       })
       await markOrderClosed(redis, orderId)
-      // Trả về cả message đã dịch/phân loại để admin thấy ngay lý do thật
-      // (VD: lỗi 41 "trùng orderId" là do CẤU HÌNH bên mình, cần sửa
-      // ngay, khác hẳn lỗi 1006 "khách từ chối xác nhận" — không cần
-      // admin làm gì) thay vì chỉ hiện "MoMo từ chối giao dịch" chung
-      // chung như trước.
       return res.status(400).json({
         error: finalMessage,
         resultCode: result.resultCode,

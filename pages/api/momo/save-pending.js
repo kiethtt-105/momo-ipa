@@ -12,9 +12,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' })
   }
 
-  // Chỉ admin đang đăng nhập mới được tạo đơn nháp — trước đây route này
-  // public hoàn toàn, không nhất quán với scan.js (gọi ngay sau route này)
-  // vốn đã có check session.
+
   if (!requireAdmin(req, res)) return
 
   const { orderId, amount, orderInfo } = req.body

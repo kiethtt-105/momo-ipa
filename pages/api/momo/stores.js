@@ -1,9 +1,5 @@
 // /pages/api/momo/stores.js
-// GET-only: trả danh sách cửa hàng (id, name, default) để trang
-// /admin/create-transaction hiển thị dropdown chọn cửa hàng.
-//
-// Cũng chấp nhận SHORTCUT_API_KEY (giống create-p2p.js) để các link nhanh
-// tự render (nếu sau này cần) mà không bắt buộc phải đăng nhập admin.
+
 
 import { requireAdmin } from '../../../lib/requireAdmin'
 import { getStores } from '../../../lib/stores'

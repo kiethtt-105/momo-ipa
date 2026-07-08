@@ -1,30 +1,5 @@
 // pages/api/momo/qr-extract.js
-//
-// Mục đích: MoMo chưa cấp quyền field `qrCodeUrl` cho tài khoản production,
-// nên ta không tự vẽ được QR chuẩn từ chuỗi VietQR. Thay vào đó, route này
-// mở `payUrl` (trang thanh toán MoMo) bằng headless browser (Puppeteer)
-// và LẤY THẲNG chuỗi base64 mà chính MoMo đã vẽ sẵn, thay vì chụp ảnh
-// (screenshot) cả vùng card như trước.
-//
-// ĐỔI CHIẾN LƯỢC (quan trọng):
-// Trước đây route này screenshot nguyên khối "card" (banner hồng + logo +
-// khung viền quanh QR...) rồi mới crop — vừa chậm (phải đợi mọi ảnh trong
-// card tải xong, đợi layout ổn định, rồi mới composite ảnh) vừa dư thừa
-// (frontend chỉ cần đúng mã QR, không cần banner/logo). Qua DevTools xác
-// nhận: MoMo tự vẽ QR bằng canvas rồi export ra
-//   <img class="image-qr-code" src="data:image/png;base64,...">
-// tức là mã QR đã nằm sẵn dưới dạng base64 ngay trong DOM — không cần
-// chụp ảnh gì cả, chỉ cần đọc thuộc tính `src` này ra là có đúng, đủ
-// pixel gốc (350x350 theo thực tế đo được), không viền, không nền dư.
-// => Nhanh hơn nhiều vì:
-//   1) Không cần đợi banner/logo/nền card tải (giờ chặn luôn toàn bộ
-//      ảnh + CSS, vì ta không render trực quan gì cả, chỉ cần DOM+JS).
-//   2) Không cần page.screenshot()/element.screenshot() (bước tốn thời
-//      gian nhất trong Puppeteer).
-//   3) Ảnh trả về đúng là mã QR MoMo xuất ra, không qua nén lại của
-//      screenshot → sắc nét hơn, ít lỗi khi máy quét đọc.
-//
-// Cài đặt cần thiết (chạy trong project):
+
 //   npm install puppeteer-core @sparticuz/chromium
 
 import chromium from '@sparticuz/chromium'

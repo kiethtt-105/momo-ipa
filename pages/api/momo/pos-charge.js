@@ -1,16 +1,5 @@
 // /pages/api/momo/pos-charge.js
-//
-// ⚠️ FILE NÀY ĐƯỢC DỰNG LẠI TỪ scan.js — CHƯA THẤY FILE GỐC pos-charge.js.
-// Vui lòng diff với file thật trên Vercel trước khi deploy, để không mất
-// logic riêng (nếu có) mà bản gốc từng có nhưng bản này không biết tới.
-//
-// Thay đổi so với scan.js:
-//   - requireAdmin(req, res)  ->  isValidShortcutKey(req) rồi requireAdmin
-//     làm fallback — ĐÚNG cơ chế đã có sẵn trong create-p2p.js (dùng biến
-//     env SHORTCUT_API_KEY, chấp nhận header x-api-key hoặc query ?key=).
-//     Không tạo biến env mới — dùng lại secret đang chạy cho create-p2p.
-//   - orderId KHÔNG còn bắt buộc — nếu Shortcut không gửi, tự sinh
-//     `iPOS${Date.now()}${random}` giống hệt create-p2p.js.
+
 
 import crypto from 'crypto'
 import { Redis } from '@upstash/redis'

@@ -9,8 +9,7 @@ const TX_BASE_URL = 'https://kiehtt.vercel.app'
 function buildTxUrl(method, amount, orderInfo) {
   const amt = parseInt(amount, 10)
   if (!amt || amt <= 0) return null
-  // Scan QR giờ xử lý INLINE ngay trong trang (xem startScan()), không còn
-  // điều hướng qua /api/momo/scan (GET) nữa → chỉ build URL cho p2p.
+
   if (method !== 'p2p') return null
   return `${TX_BASE_URL}/api/momo/create-p2p?amount=${amt}&orderInfo=${encodeURIComponent(orderInfo)}`
 }

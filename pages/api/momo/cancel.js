@@ -1,6 +1,4 @@
 // pages/api/momo/cancel.js
-// Hủy 1 đơn hàng đang PENDING theo yêu cầu admin (nút "Hủy giao dịch" trên
-// trang create-transaction, cả luồng P2P lẫn Scan đều có thể dùng chung route này).
 import { Redis } from '@upstash/redis'
 import { requireAdmin } from '../../../lib/requireAdmin'
 import { markOrderClosed } from '../../../lib/openOrders'
@@ -33,9 +31,6 @@ export default async function handler(req, res) {
 
     let order = typeof raw === 'string' ? JSON.parse(raw) : raw
 
-    // Chỉ hủy khi đơn còn đang PENDING — tránh trường hợp khách vừa quét QR
-    // thanh toán xong (IPN vừa cập nhật PAID) đúng lúc admin bấm hủy, hoặc
-    // đơn đã kết luận FAILED/EXPIRED từ trước.
     if (order.status !== 'PENDING') {
       // Tự chữa lành: đơn đã ở trạng thái cuối rồi nhưng lỡ còn sót trong
       // index "đang mở" → dọn luôn (an toàn, vô hại nếu gọi thừa).

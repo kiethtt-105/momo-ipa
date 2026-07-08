@@ -16,10 +16,7 @@ const EXPIRE_MS           = EXPIRE_MINUTES * 60 * 1000
 const RECHECK_WINDOW_MS   = 60 * 1000
 // Throttle: tối đa 1 lần gọi MoMo mỗi N giây trong khoảng recheck window, tránh rate-limit (resultCode 29).
 const RECHECK_THROTTLE_MS = 5 * 1000
-// resultCode coi là "đang xử lý", chưa kết luận được — không vội gắn FAILED/EXPIRED khi gặp các mã này.
-// Theo bảng Result Code chính thức của MoMo, các mã này có Final Status = "No":
-// 1000 (chờ xác nhận), 7000/7002 (đang xử lý), 9000 (đã xác nhận nhưng chưa phải kết quả
-// cuối — với thanh toán 2-step (autoCapture=0) còn cần capture/cancel tiếp).
+// Theo bảng Result Code chính thức của MoMo (Final Status = "No"):
 const STILL_PROCESSING_CODES = [1000, 7000, 7002, 9000]
 // resultCode coi là "hết hạn" theo MoMo — khác với 1003 (bị hủy, thuộc nhóm FAILED).
 // 1005: Giao dịch thất bại do url hoặc QR code đã hết hạn.

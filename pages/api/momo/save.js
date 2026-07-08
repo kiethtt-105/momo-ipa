@@ -13,10 +13,6 @@ const redis = new Redis({
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  // Route này trigger 1 lệnh gọi THẬT (đã ký signature) sang MoMo cho orderId
-  // bất kỳ — nếu để public, ai cũng có thể spam gọi (tốn quota/rate-limit
-  // MoMo) hoặc dò trạng thái/amount của đơn người khác. Chỉ admin đã đăng
-  // nhập mới được gọi.
   if (!requireAdmin(req, res)) return
 
   const { orderId } = req.body

@@ -1,7 +1,4 @@
 // /pages/api/momo/scan.js
-// POST-only handler: nhận mã thanh toán từ create-transaction inline scan
-// GET handler + redirect đã bỏ — không còn dùng /admin/scan nữa
-
 import crypto from 'crypto'
 import { Redis } from '@upstash/redis'
 import { requireAdmin } from '../../../lib/requireAdmin'
@@ -47,10 +44,7 @@ export default async function handler(req, res) {
 }
 
 async function handlePosCharge(req, res) {
-  // Trước đây check session bằng cách tự fetch(`${BASE_URL}/api/admin/session`)
-  // — tốn 1 round-trip HTTP không cần thiết, và BASE_URL hardcode theo
-  // NODE_ENV nên hỏng trên Vercel Preview deployment (không phải production,
-  // không phải localhost). Gọi thẳng requireAdmin như các route khác.
+  
   if (!requireAdmin(req, res)) return
 
   if (!PARTNER_CODE || !ACCESS_KEY || !SECRET_KEY) {
@@ -71,9 +65,7 @@ async function handlePosCharge(req, res) {
 
   let orderInfo = String(rawOrderInfo || '').trim()
   if (!orderInfo) {
-    // Đồng bộ với create-p2p.js / pos-charge.js: "Thanh Toán {mã đơn hàng}"
-    // thay vì gán bằng chính orderId (trước đây orderInfo === orderId trông
-    // như thiếu nội dung hiển thị cho khách).
+   
     orderInfo = `Thanh Toán ${orderId}`
   }
 
@@ -87,8 +79,7 @@ async function handlePosCharge(req, res) {
     return res.status(400).json({ error: 'Số tiền không hợp lệ (1.000 – 10.000.000 ₫)' })
   }
 
-  // Chọn cửa hàng: dùng storeId được truyền lên, nếu không có thì tự
-  // dùng cửa hàng mặc định (giống hệt cơ chế trong create-p2p.js).
+
   const store = resolveStore((rawStoreId || '').toString().trim())
 
   let encryptedCode
@@ -146,10 +137,7 @@ async function handlePosCharge(req, res) {
         paymentOption: '',
         source: 'pos', storeId: store.id, storeName: store.name,
         type: 'scan',
-        // Lưu lại mã vừa quét/nhập ngay từ bước này — để nếu 1 thiết bị
-        // khác đồng bộ tới NGAY LÚC MoMo đang xử lý (còn PENDING), nó vẫn
-        // hiển thị đúng trạng thái "đã gửi mã, đang xác nhận" thay vì
-        // trông như đơn còn trống, chưa ai quét.
+
         submittedCode: paymentCode,
       }),
     })

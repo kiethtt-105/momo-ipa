@@ -10,14 +10,10 @@ const redis = new Redis({
 
 const MOMO_ENDPOINT = process.env.MOMO_QUERY_ENDPOINT
 
-// Theo bảng Result Code chính thức của MoMo (Final Status = "No"):
-// 1000: chờ người dùng xác nhận | 7000/7002: đang xử lý | 9000: đã xác nhận nhưng
-// chưa phải kết quả cuối — với 2-step (autoCapture=0) còn cần capture/cancel tiếp,
-// nên KHÔNG kết luận vội theo các mã này, chờ poll lần sau.
+
 const STILL_PROCESSING_CODES = [1000, 7000, 7002, 9000]
 
-// resultCode coi là "hết hạn" — khác với FAILED/CANCELLED (1003: bị hủy) và PENDING.
-// 1005: Giao dịch thất bại do url hoặc QR code đã hết hạn (Final: Yes, System error).
+
 const EXPIRED_CODES = [1005]
 
 // Suy ra trạng thái đúng từ resultCode của MoMo — PAID/EXPIRED/FAILED là 3 trạng thái

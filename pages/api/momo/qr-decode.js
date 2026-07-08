@@ -1,33 +1,5 @@
 // pages/api/momo/qr-decode.js
-//
-// API MỚI — KHÔNG đụng vào qr-extract.js (route cũ vẫn giữ nguyên, dùng ở
-// chỗ khác để trả PNG hiển thị QR như bình thường).
-//
-// Route này làm thêm 1 việc: mở lại trang thanh toán MoMo (giống hệt cách
-// qr-extract.js làm), lấy đúng chuỗi base64 QR y hệt, nhưng thay vì trả
-// về ảnh PNG, nó GIẢI MÃ ngược nội dung QR (đọc pixel → jsQR → ra chuỗi
-// EMV thô) rồi PARSE chuỗi EMV chuẩn VietQR/NAPAS để tách ra:
-//   - BIN ngân hàng thật (tag 38.01.00)
-//   - Số tài khoản ngân hàng thật (tag 38.01.01)
-//   - Số tiền, nội dung chuyển khoản, tên/thành phố người nhận...
-//
-// LƯU Ý QUAN TRỌNG (đọc trước khi dùng):
-// QR do MoMo tự vẽ trên trang payment CÓ THỂ là 1 trong 2 loại:
-//   (a) VietQR/NAPAS 24/7 chuẩn — tag 38 có GUID "A000000727" → parse ra
-//       được BIN + số TK ngân hàng thật, dùng auto-fill được cho các app
-//       ngân hàng có tính năng quét-QR-chuyển-khoản.
-//   (b) QR ví MoMo riêng (proprietary) — không có tag 38 chuẩn NAPAS, tức
-//       QR này về bản chất KHÔNG phải QR chuyển khoản ngân hàng, mà là mã
-//       nội bộ để MoMo tự xử lý nạp tiền/thanh toán ví. Trường hợp này
-//       route trả về isVietQR: false + raw string để tự xem, KHÔNG có
-//       BIN/số TK vì bản thân QR không chứa thông tin đó.
-// => Gọi route này trước, xem field `isVietQR` để biết QR MoMo trả về có
-//    dùng được cho mục đích auto-fill ngân hàng hay không, trước khi build
-//    tiếp phần chọn ngân hàng dựa theo BIN.
-//
-// Cài đặt cần thiết (thêm so với qr-extract.js):
-//   npm install jsqr pngjs
-// (puppeteer-core, @sparticuz/chromium, @upstash/redis coi như đã có sẵn)
+
 
 import chromium from '@sparticuz/chromium'
 import puppeteer from 'puppeteer-core'
