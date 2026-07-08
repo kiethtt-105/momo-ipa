@@ -59,7 +59,7 @@ export default async function handler(req, res) {
 
   let orderInfo = String(rawOrderInfo || '').trim()
   if (!orderInfo) {
-    orderInfo = `Thanh toan DH ${orderId}`
+    orderInfo = `Thanh toán - ${orderId}`
   }
 
   // ─── CHỌN CỬA HÀNG ───────────────────────────────────────────
