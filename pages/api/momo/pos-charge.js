@@ -13,14 +13,16 @@
 // nên route này chấp nhận query cho GET, JSON body cho POST, cùng logic xử
 // lý phía sau như nhau. Giống hệt cơ chế GET của create-p2p.js.
 //
-// Xác thực: isValidShortcutKey(req) trước (header x-api-key hoặc query
-// ?key=, dùng chung biến env SHORTCUT_API_KEY với create-p2p.js), rơi về
-// requireAdmin(req, res) làm fallback nếu không có/sai key — cho phép vừa
-// gọi từ Shortcut (không có session) vừa gọi từ trang admin (có session).
+// Xác thực: CHỈ isValidShortcutKey(req) (header x-api-key hoặc query
+// ?key=, dùng chung biến env SHORTCUT_API_KEY với create-p2p.js) — không
+// còn fallback requireAdmin. Route này chỉ dành cho Shortcut của chủ cửa
+// hàng (người giữ key), không phải cho trang admin nên bỏ luôn nhánh check
+// session admin — vừa đơn giản hoá vừa tránh trường hợp Shortcuts (không
+// gửi cookie session) bị rơi vào nhánh requireAdmin và phải chờ tới khi
+// hết hạn function.
 
 import crypto from 'crypto'
 import { Redis } from '@upstash/redis'
-import { requireAdmin } from '../../../lib/requireAdmin'
 import { resolveStore } from '../../../lib/stores'
 import { markOrderOpen, markOrderClosed } from '../../../lib/openOrders'
 import { formatResultCodeMessage } from '../../../lib/momoResultCodes'
@@ -76,11 +78,11 @@ export default async function handler(req, res) {
 }
 
 async function handlePosCharge(req, res) {
-  // Cho phép Shortcut gọi bằng key cố định; nếu không có/sai key thì rơi
-  // về check session admin như bình thường (giống hệt create-p2p.js).
+  // Chỉ chấp nhận key đúng — không còn fallback session admin. Sai/thiếu
+  // key thì từ chối ngay, không có nhánh nào phải chờ/verify gì thêm.
   const shortcutOk = isValidShortcutKey(req)
   if (!shortcutOk) {
-    if (!requireAdmin(req, res)) return
+    return res.status(401).json({ error: 'Sai hoặc thiếu key' })
   }
 
   if (!PARTNER_CODE || !ACCESS_KEY || !SECRET_KEY) {
@@ -191,7 +193,7 @@ async function handlePosCharge(req, res) {
         transId: '',
         payType: '',
         paymentOption: '',
-        source: shortcutOk ? 'pos-shortcut' : 'pos', storeId, storeName, partnerName: storePartnerName,
+        source: 'pos-shortcut', storeId, storeName, partnerName: storePartnerName,
         type: 'pos-charge',
         submittedCode: paymentCode,
       }),
@@ -216,7 +218,7 @@ async function handlePosCharge(req, res) {
           status: 'FAILED', createdAt: now, paidAt: null,
           transId: '', payType: 'pos', paymentOption: '',
           resultCode: -1, message: '⚠ Lỗi hệ thống MoMo — MoMo trả về dữ liệu không hợp lệ (không phải JSON). Thử lại sau, nếu lặp lại nhiều lần thì liên hệ MoMo.',
-          source: shortcutOk ? 'pos-shortcut' : 'pos', storeId, storeName, partnerName: storePartnerName,
+          source: 'pos-shortcut', storeId, storeName, partnerName: storePartnerName,
           type: 'pos-charge', submittedCode: paymentCode,
         }),
       })
@@ -237,7 +239,7 @@ async function handlePosCharge(req, res) {
       resultCode: data.resultCode,
       message: data.resultCode === 0 ? (data.message || 'Thanh toán thành công') : formatResultCodeMessage(data.resultCode, data.message),
       responseTime: data.responseTime,
-      source: shortcutOk ? 'pos-shortcut' : 'pos', storeId, storeName, partnerName: storePartnerName,
+      source: 'pos-shortcut', storeId, storeName, partnerName: storePartnerName,
       type: 'pos-charge', submittedCode: paymentCode,
     }
 
@@ -268,7 +270,7 @@ async function handlePosCharge(req, res) {
           message: isTimeout
             ? '⚠ Lỗi hệ thống MoMo — Timeout khi gọi MoMo (15s), không rõ giao dịch có được xử lý phía MoMo hay không. Kiểm tra lại bằng mã đơn hàng trước khi tạo lại.'
             : `⚠ Lỗi hệ thống (server) — ADMIN cần kiểm tra log server: ${err.message || 'Lỗi server'}`,
-          source: shortcutOk ? 'pos-shortcut' : 'pos', storeId, storeName, partnerName: storePartnerName,
+          source: 'pos-shortcut', storeId, storeName, partnerName: storePartnerName,
           type: 'pos-charge', submittedCode: paymentCode,
         }),
       })
