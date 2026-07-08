@@ -1,9 +1,7 @@
 // pages/result.js
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
-
-const AUTO_CLOSE_SEC = 15
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -18,86 +16,189 @@ function notifyOtherTabs(orderId, status) {
   }
 }
 
-async function fetchFullInfo(orderId) {
-  const [momoFull, ourRecord] = await Promise.all([
-    fetch('/api/momo/query', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId }),
-    }).then(r => r.json()).catch(() => null),
-    fetch(`/api/momo/status?orderId=${encodeURIComponent(orderId)}`)
-      .then(r => r.json()).catch(() => null),
-  ])
-  if (!momoFull && !ourRecord) return null
-  return { ...(ourRecord || {}), ...(momoFull || {}) }
+// Trang này phục vụ cả KHÁCH lẫn ADMIN mở CHUNG một link kết quả:
+//  - /api/momo/status: an toàn cho khách, không cần đăng nhập, chỉ trả dữ liệu cơ bản.
+//  - /api/momo/query: vẫn giữ nguyên yêu cầu requireAdmin (không đổi phía backend) vì
+//    trả nhiều thông tin hơn. Ta vẫn gọi thử từ đây — nếu trình duyệt đang mở trang
+//    này CHÍNH LÀ trình duyệt mà admin đã đăng nhập (cookie phiên admin có sẵn), request
+//    sẽ tự động thành công nhờ cookie, và admin sẽ thấy thêm chi tiết khi tự kiểm tra
+//    bằng link đã gửi cho khách. Nếu là khách bình thường (chưa đăng nhập admin trên
+//    máy đó), request này sẽ bị 401 — ta bỏ qua kết quả một cách IM LẶNG, không throw,
+//    không hiện lỗi ra UI, khách vẫn thấy đầy đủ trang bình thường dựa trên status.
+async function fetchFullInfo(query) {
+  const orderId = query.orderId
+  if (!orderId) return null
+
+  const statusPromise = fetch(`/api/momo/status?orderId=${encodeURIComponent(orderId)}`)
+    .then(r => r.json())
+    .catch(() => null)
+
+  // credentials mặc định của fetch same-origin đã tự gửi kèm cookie phiên (nếu có),
+  // nên không cần cấu hình thêm gì để "nhận diện" admin đang đăng nhập trên máy đó.
+  const queryPromise = fetch('/api/momo/query', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId }),
+  })
+    .then(r => (r.ok ? r.json() : null)) // 401 (không phải admin) -> null, im lặng bỏ qua
+    .catch(() => null)
+
+  const [statusData, momoFull] = await Promise.all([statusPromise, queryPromise])
+  if (!statusData && !momoFull) return null
+  // Nếu có quyền admin, dữ liệu chi tiết từ /query sẽ đè lên dữ liệu cơ bản từ /status.
+  return { ...(statusData || {}), ...(momoFull || {}) }
 }
 
-const fmt = n => parseInt(n || 0).toLocaleString('vi-VN')
+const fmt = n => {
+  const num = parseInt(n)
+  return isNaN(num) ? String(n) : num.toLocaleString('vi-VN')
+}
 
 const fmtTime = val => {
-  if (!val) return null
+  if (val === undefined || val === null || val === '') return null
   const d = new Date(typeof val === 'number' || /^\d+$/.test(val) ? parseInt(val) : val)
   return isNaN(d.getTime()) ? String(val) : d.toLocaleString('vi-VN')
 }
 
-const PAY_TYPE_LABEL = { wallet: 'Ví MoMo', napas: 'Thẻ ATM / Napas', credit: 'Thẻ tín dụng', pos: 'POS Scan' }
+const PAY_TYPE_LABEL = {
+  wallet: 'Ví MoMo',
+  napas: 'Thẻ ATM / Napas',
+  credit: 'Thẻ tín dụng',
+  pos: 'POS Scan',
+  qr: 'Quét mã QR',
+  scan: 'Quét mã QR',
+  p2p: 'Chuyển khoản P2P',
+  bank_transfer: 'Chuyển khoản ngân hàng',
+  atm: 'Thẻ ATM nội địa',
+}
+
+// Các field đã được hiển thị "trang trọng" riêng ở phần trên của thẻ kết quả —
+// không lặp lại chúng ở khu vực "Thông tin chi tiết" bên dưới.
+const CURATED_KEYS = new Set(['orderId', 'orderInfo', 'transId', 'payType', 'amount', 'message', 'resultCode', 'paidAt'])
+
+// Không bao giờ hiển thị các field nhạy cảm / nội bộ này ra UI.
+const HIDDEN_KEYS = new Set(['signature', 'accessKey', 'secretKey', 'partnerAccessToken', 'raw', 'lang', 'ipnUrl', 'redirectUrl'])
+
+const TIME_KEYS = new Set(['responseTime', 'paidAt', 'createdAt', 'updatedAt', 'requestTime', 'transDate', 'payDate'])
+
+const FIELD_LABELS = {
+  orderId: 'Mã đơn hàng',
+  requestId: 'Mã yêu cầu',
+  partnerCode: 'Mã đối tác',
+  transId: 'Mã giao dịch MoMo',
+  orderInfo: 'Nội dung',
+  orderType: 'Loại đơn hàng',
+  payType: 'Hình thức thanh toán',
+  amount: 'Số tiền',
+  resultCode: 'Mã kết quả',
+  message: 'Thông báo',
+  responseTime: 'Thời gian phản hồi',
+  paidAt: 'Thời gian thanh toán',
+  createdAt: 'Thời gian tạo',
+  updatedAt: 'Cập nhật lúc',
+  extraData: 'Dữ liệu bổ sung',
+  bankCode: 'Ngân hàng',
+  cardType: 'Loại thẻ',
+  storeId: 'Mã cửa hàng',
+  storeName: 'Cửa hàng',
+  terminalId: 'Mã máy POS',
+  merchantName: 'Merchant',
+  status: 'Trạng thái',
+  transType: 'Loại giao dịch',
+  refundTrans: 'Giao dịch hoàn tiền',
+}
+
+// camelCase / snake_case -> "Camel Case" khi gặp field lạ không có trong FIELD_LABELS
+function humanizeKey(key) {
+  const spaced = key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1)
+}
+
+function looksLikeId(key) {
+  return /id$|code$|trans|signature|token/i.test(key)
+}
+
+function formatValue(key, value) {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'object') {
+    try { return JSON.stringify(value) } catch { return String(value) }
+  }
+  if (TIME_KEYS.has(key) || /At$|Time$|Date$/.test(key)) {
+    const t = fmtTime(value)
+    if (t) return t
+  }
+  if (key === 'amount' || /amount$/i.test(key)) {
+    return `${fmt(value)} ₫`
+  }
+  return String(value)
+}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function ResultPage() {
   const router = useRouter()
-  const [status, setStatus] = useState('loading') // loading | success | failed | pending | error
-  const [info, setInfo]     = useState(null)
-  const [countdown, setCountdown] = useState(AUTO_CLOSE_SEC)
+  const [status, setStatus] = useState('loading') // loading | success | failed | pending | expired | error
+  const [info, setInfo] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
   const resolvedRef = useRef(false)
-  const countdownRef = useRef(null)
+  const pollRef = useRef(null)
+  const lastQueryRef = useRef({})
 
-  // ── Auto-close countdown cho mọi trạng thái đã xử lý xong (trừ loading) ──
-  // Đây là trang dành cho KHÁCH (không phải admin), nên không cần CTA dẫn về
-  // các trang quản trị — chỉ cần tự đóng tab sau khi hiển thị kết quả.
-  useEffect(() => {
-    if (status === 'loading') return
-    setCountdown(AUTO_CLOSE_SEC)
-    countdownRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(countdownRef.current)
-          if (typeof window !== 'undefined') window.close()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-    return () => clearInterval(countdownRef.current)
-  }, [status])
-
-  // ── Main logic: đọc query / poll ──
+  // ── Main logic: đọc query / poll (redirect flow lẫn P2P / quét QR) ──
   useEffect(() => {
     if (!router.isReady) return
     if (resolvedRef.current) return
 
     const fullQuery = { ...router.query }
-    let { orderId, resultCode, transId, amount, payType, message } = fullQuery
-    const code = parseInt(resultCode)
+    let { orderId, requestId, partnerCode, resultCode, transId, amount, payType, message } = fullQuery
+    const code = resultCode !== undefined ? parseInt(resultCode) : undefined
 
+    // Với luồng P2P / quét QR, có thể không có orderId ngay trong URL —
+    // dùng requestId hoặc lấy lại từ sessionStorage đã lưu lúc tạo đơn.
     if (!orderId && typeof window !== 'undefined') {
       orderId = sessionStorage.getItem('momo_current_order_id')
     }
-    if (!orderId) { setStatus('error'); resolvedRef.current = true; return }
+    if (!requestId && typeof window !== 'undefined') {
+      requestId = requestId || sessionStorage.getItem('momo_current_request_id')
+    }
+    if (!orderId && !requestId) {
+      setStatus('error'); resolvedRef.current = true; return
+    }
+
+    const trackingId = orderId || requestId
+    const mergedQuery = { ...fullQuery, orderId: orderId || fullQuery.orderId, requestId }
+    lastQueryRef.current = mergedQuery
 
     const cleanUrl = () => setTimeout(() => router.replace('/result', undefined, { shallow: true }), 500)
 
     const resolve = (st, infoData) => {
       resolvedRef.current = true
       setStatus(st)
-      setInfo(infoData)
-      notifyOtherTabs(orderId, st === 'success' ? 'success' : 'failed')
-      fetchFullInfo(orderId).then(full => { if (full) setInfo(prev => ({ ...prev, ...full })) })
+      // Giữ lại mọi field đã có trong query (kể cả field lạ của P2P/QR) rồi mới
+      // merge dữ liệu chi tiết trả về từ API, để không mất bất kỳ thông tin nào.
+      setInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...infoData }))
+      notifyOtherTabs(trackingId, st === 'success' ? 'success' : 'failed')
+      fetchFullInfo(mergedQuery).then(full => { if (full) setInfo(prev => ({ ...prev, ...full })) })
     }
 
-    if (resultCode !== undefined) {
-      if (typeof window !== 'undefined') sessionStorage.setItem('momo_current_order_id', orderId)
-      const infoData = { orderId, transId, amount: parseInt(amount), payType, message, resultCode: code }
+    if (code !== undefined) {
+      // ── Luồng redirect trực tiếp (ví MoMo, thẻ, và cả P2P/QR khi MoMo
+      // redirect kèm resultCode) ──
+      if (typeof window !== 'undefined') {
+        if (orderId) sessionStorage.setItem('momo_current_order_id', orderId)
+        if (requestId) sessionStorage.setItem('momo_current_request_id', requestId)
+      }
+      const infoData = {
+        ...mergedQuery,
+        orderId,
+        transId,
+        amount: amount !== undefined ? parseInt(amount) : undefined,
+        payType,
+        message,
+        resultCode: code,
+      }
       resolve(code === 0 ? 'success' : 'failed', infoData)
       fetch('/api/momo/save', {
         method: 'POST',
@@ -105,34 +206,104 @@ export default function ResultPage() {
         body: JSON.stringify({ ...fullQuery, resultCode: code === 0 ? 0 : code }),
       }).finally(cleanUrl)
     } else {
+      // ── Luồng không có resultCode ngay: đơn được tạo bằng mã QR / P2P và
+      // trang phải poll trạng thái. KHÔNG tự đóng, KHÔNG dừng hẳn sau vài lần —
+      // chuyển sang "pending" sau pha nhanh rồi tiếp tục poll nền chậm hơn để
+      // vẫn tự cập nhật khi khách quét/chuyển khoản xong. ──
       let attempts = 0
-      const poll = setInterval(async () => {
+      const FAST_ATTEMPTS = 10   // ~15s đầu, poll nhanh
+      const FAST_INTERVAL = 1500
+      const SLOW_INTERVAL = 4000
+
+      const runPoll = async () => {
         try {
-          const res  = await fetch(`/api/momo/status?orderId=${orderId}`)
+          // status.js chỉ đọc orderId từ query string — các field khác (requestId,
+          // partnerCode...) không được backend dùng tới nên không cần gửi lên.
+          const pollOrderId = mergedQuery.orderId
+          if (!pollOrderId) return
+          const res = await fetch(`/api/momo/status?orderId=${encodeURIComponent(pollOrderId)}`)
           const data = await res.json()
+
           if (data.status === 'PAID') {
-            resolve('success', data); clearInterval(poll); cleanUrl()
-          } else if (data.status === 'FAILED') {
-            resolve('failed', data); clearInterval(poll); cleanUrl()
-          } else if (data.status === 'EXPIRED') {
-            resolvedRef.current = true; setStatus('expired'); setInfo(data); clearInterval(poll); cleanUrl()
-          } else if (++attempts >= 10) {
-            resolvedRef.current = true; setStatus('pending'); clearInterval(poll); cleanUrl()
+            resolve('success', data); clearInterval(pollRef.current); cleanUrl(); return
           }
-        } catch {
-          resolvedRef.current = true; clearInterval(poll); cleanUrl()
+          if (data.status === 'FAILED') {
+            resolve('failed', data); clearInterval(pollRef.current); cleanUrl(); return
+          }
+          if (data.status === 'EXPIRED') {
+            resolvedRef.current = true
+            setInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...data }))
+            setStatus('expired')
+            clearInterval(pollRef.current); cleanUrl(); return
+          }
+
+          attempts++
+          if (attempts === FAST_ATTEMPTS) {
+            // Không dừng poll, chỉ đổi UI sang "đang chờ" và poll chậm lại.
+            setInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...data }))
+            setStatus('pending')
+            clearInterval(pollRef.current)
+            pollRef.current = setInterval(runPoll, SLOW_INTERVAL)
+          } else {
+            setInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...data }))
+          }
+        } catch (e) {
+          console.error('Poll error:', e)
         }
-      }, 1500)
-      return () => clearInterval(poll)
+      }
+
+      pollRef.current = setInterval(runPoll, FAST_INTERVAL)
+      runPoll()
+      return () => clearInterval(pollRef.current)
     }
   }, [router.isReady, router.query])
+
+  // Nút "Kiểm tra lại" thủ công cho trạng thái pending/expired/error.
+  const checkNow = useCallback(async () => {
+    const q = lastQueryRef.current
+    if (!q || (!q.orderId && !q.requestId)) return
+    setRefreshing(true)
+    try {
+      const full = await fetchFullInfo(q)
+      if (full) {
+        setInfo(prev => ({ ...(prev || {}), ...full }))
+        if (full.status === 'PAID' || full.resultCode === 0) {
+          setStatus('success')
+          notifyOtherTabs(q.orderId || q.requestId, 'success')
+          clearInterval(pollRef.current)
+        } else if (full.status === 'FAILED') {
+          setStatus('failed')
+          notifyOtherTabs(q.orderId || q.requestId, 'failed')
+          clearInterval(pollRef.current)
+        } else if (full.status === 'EXPIRED') {
+          setStatus('expired')
+          clearInterval(pollRef.current)
+        }
+      }
+    } finally {
+      setRefreshing(false)
+    }
+  }, [])
+
+  const handleClose = () => {
+    if (typeof window === 'undefined') return
+    try { window.close() } catch (e) { /* ignore */ }
+  }
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
   const isSuccess = status === 'success'
-  const isFailed  = status === 'failed'
+  const isFailed = status === 'failed'
 
   const accentColor = isSuccess ? '#16a34a' : isFailed ? '#dc2626' : status === 'pending' ? '#d97706' : '#ae0070'
+
+  const extraEntries = info
+    ? Object.entries(info).filter(([k, v]) => {
+        if (HIDDEN_KEYS.has(k) || CURATED_KEYS.has(k)) return false
+        if (v === undefined || v === null || v === '') return false
+        return true
+      })
+    : []
 
   return (
     <>
@@ -151,7 +322,6 @@ export default function ResultPage() {
           @keyframes om1    { 0%{transform:translate(0,0)scale(1)}50%{transform:translate(8vw,4vh)scale(1.15)}100%{transform:translate(-4vw,7vh)scale(.9)} }
           @keyframes om2    { 0%{transform:translate(0,0)scale(1.1)}50%{transform:translate(-10vw,-6vh)scale(.9)}100%{transform:translate(6vw,4vh)scale(1.1)} }
           @keyframes om3    { 0%{transform:translate(0,0)scale(.9)}50%{transform:translate(-5vw,7vh)scale(1.2)}100%{transform:translate(7vw,-4vh)scale(1)} }
-          @keyframes shrink { from { width: 100%; } to { width: 0%; } }
 
           .page   { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 20px; position: relative; overflow: hidden; }
           .blob   { position: absolute; border-radius: 50%; filter: blur(55px); pointer-events: none; z-index: 0; }
@@ -160,6 +330,7 @@ export default function ResultPage() {
           .body   { padding: 28px 24px 24px; }
 
           .spin-ring { width: 44px; height: 44px; border: 4px solid #f0d6e8; border-top-color: #ae0070; border-radius: 50%; margin: 0 auto 16px; animation: rot .8s linear infinite; }
+          .spin-ring.sm { width: 16px; height: 16px; border-width: 2.5px; margin: 0; display: inline-block; vertical-align: middle; }
 
           .icon-wrap { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
 
@@ -190,6 +361,24 @@ export default function ResultPage() {
 
           .reveal { animation: slideup .35s ease both; }
 
+          details.extra { margin-top: 4px; border-top: 1px dashed #f0d6e8; padding-top: 10px; }
+          details.extra > summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: #ae0070; list-style: none; display: flex; align-items: center; gap: 6px; user-select: none; }
+          details.extra > summary::-webkit-details-marker { display: none; }
+          details.extra > summary::before { content: '▸'; transition: transform .15s ease; display: inline-block; }
+          details.extra[open] > summary::before { transform: rotate(90deg); }
+          details.extra .info-list { margin-top: 6px; }
+
+          .btn-row { display: flex; gap: 10px; margin-top: 18px; }
+          .btn { flex: 1; border: none; border-radius: 12px; padding: 12px 14px; font-size: 13.5px; font-weight: 700; cursor: pointer; transition: transform .1s ease, opacity .15s ease; display: flex; align-items: center; justify-content: center; gap: 6px; }
+          .btn:active { transform: scale(.97); }
+          .btn:disabled { opacity: .6; cursor: default; }
+          .btn.primary { background: #ae0070; color: #fff; }
+          .btn.primary:hover { background: #97005f; }
+          .btn.secondary { background: #faf0f6; color: #ae0070; }
+          .btn.secondary:hover { background: #f4d9ec; }
+
+          .hint { font-size: 11.5px; color: #9b4470; text-align: center; margin-top: 10px; line-height: 1.5; }
+
           /* ── Small phones (≤360px) — tighten spacing so nothing feels cramped ── */
           @media (max-width: 360px) {
             .page { padding: 14px; }
@@ -213,11 +402,7 @@ export default function ResultPage() {
           .err-box .err-code { font-size: 12px; font-weight: 700; color: #dc2626; margin-bottom: 4px; }
           .err-box .err-msg  { font-size: 13px; color: #7f1d1d; line-height: 1.5; }
 
-          /* countdown bar */
-          .cdown-wrap { margin-bottom: 16px; }
-          .cdown-text { font-size: 12px; color: #9b4470; text-align: center; margin-bottom: 6px; font-weight: 600; }
-          .cdown-bar  { height: 3px; border-radius: 2px; background: #f0d6e8; overflow: hidden; }
-          .cdown-fill { height: 100%; background: #ae0070; border-radius: 2px; }
+          .pay-badge { display: inline-flex; align-items: center; gap: 5px; background: #faf0f6; color: #ae0070; font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; margin: 0 auto 14px; }
 
           /* pending/error/loading */
           .center-msg { text-align: center; padding: 24px 0 8px; }
@@ -271,6 +456,12 @@ export default function ResultPage() {
                   <div style={{ fontSize: 13, color: '#614655', marginTop: 4 }}>Giao dịch đã được MoMo xác nhận</div>
                 </div>
 
+                {info?.payType && (
+                  <div style={{ textAlign: 'center' }}>
+                    <span className="pay-badge">{PAY_TYPE_LABEL[info.payType] || info.payType}</span>
+                  </div>
+                )}
+
                 {info?.amount > 0 && (
                   <div className="amount-box">
                     <div className="label">Số tiền thanh toán</div>
@@ -286,7 +477,8 @@ export default function ResultPage() {
                   {info?.paidAt && <InfoRow k="Thời gian" v={fmtTime(info.paidAt)} />}
                 </div>
 
-                <Countdown sec={countdown} total={AUTO_CLOSE_SEC} />
+                <ExtraInfo entries={extraEntries} />
+                <ActionButtons onClose={handleClose} />
               </div>
             )}
 
@@ -304,7 +496,7 @@ export default function ResultPage() {
                 </div>
 
                 <div className="err-box">
-                  {info?.resultCode && <div className="err-code">#{info.resultCode}</div>}
+                  {info?.resultCode !== undefined && <div className="err-code">#{info.resultCode}</div>}
                   <div className="err-msg">{info?.message || 'Giao dịch không thành công'}</div>
                 </div>
 
@@ -312,9 +504,11 @@ export default function ResultPage() {
                   {info?.orderId && <InfoRow k="Mã đơn hàng" v={info.orderId} mono copyable />}
                   {info?.orderInfo && <InfoRow k="Nội dung" v={info.orderInfo} />}
                   {info?.amount > 0 && <InfoRow k="Số tiền" v={`${fmt(info.amount)} ₫`} />}
+                  {info?.payType && <InfoRow k="Hình thức" v={PAY_TYPE_LABEL[info.payType] || info.payType} />}
                 </div>
 
-                <Countdown sec={countdown} total={AUTO_CLOSE_SEC} />
+                <ExtraInfo entries={extraEntries} />
+                <ActionButtons onRetry={checkNow} retrying={refreshing} onClose={handleClose} />
               </div>
             )}
 
@@ -324,17 +518,29 @@ export default function ResultPage() {
                 <div className="icon">⏰</div>
                 <h2 style={{ color: '#d97706' }}>Giao dịch đã hết hạn</h2>
                 <p>Link/QR thanh toán này không còn hiệu lực.<br />Vui lòng tạo đơn hàng mới.</p>
-                <Countdown sec={countdown} total={AUTO_CLOSE_SEC} />
+                <div className="info-list">
+                  {info?.orderId && <InfoRow k="Mã đơn hàng" v={info.orderId} mono copyable />}
+                </div>
+                <ExtraInfo entries={extraEntries} />
+                <ActionButtons onRetry={checkNow} retrying={refreshing} onClose={handleClose} />
               </div>
             )}
 
-            {/* ── PENDING ── */}
+            {/* ── PENDING (đang chờ quét QR / chuyển khoản P2P xác nhận) ── */}
             {status === 'pending' && (
               <div className="center-msg">
-                <div className="icon">⏳</div>
-                <h2>Đang chờ xác nhận</h2>
-                <p>MoMo chưa phản hồi.<br />Vui lòng kiểm tra lại sau.</p>
-                <Countdown sec={countdown} total={AUTO_CLOSE_SEC} />
+                <div className="spin-ring" style={{ borderTopColor: '#d97706' }} />
+                <h2 style={{ color: '#d97706' }}>Đang chờ xác nhận</h2>
+                <p>Hệ thống vẫn đang tự động kiểm tra giao dịch.<br />Nếu bạn vừa quét mã QR hoặc chuyển khoản P2P, vui lòng đợi trong giây lát.</p>
+                <div className="info-list">
+                  {info?.orderId && <InfoRow k="Mã đơn hàng" v={info.orderId} mono copyable />}
+                  {info?.requestId && <InfoRow k="Mã yêu cầu" v={info.requestId} mono copyable />}
+                  {info?.amount > 0 && <InfoRow k="Số tiền" v={`${fmt(info.amount)} ₫`} />}
+                  {info?.payType && <InfoRow k="Hình thức" v={PAY_TYPE_LABEL[info.payType] || info.payType} />}
+                </div>
+                <ExtraInfo entries={extraEntries} />
+                <ActionButtons onRetry={checkNow} retrying={refreshing} onClose={handleClose} />
+                <div className="hint">Trang sẽ tự cập nhật khi có kết quả — bạn không cần tải lại.</div>
               </div>
             )}
 
@@ -344,7 +550,7 @@ export default function ResultPage() {
                 <div className="icon">❗</div>
                 <h2>Không tìm thấy đơn hàng</h2>
                 <p>Link không hợp lệ hoặc đã hết hạn.</p>
-                <Countdown sec={countdown} total={AUTO_CLOSE_SEC} />
+                <ActionButtons onClose={handleClose} />
               </div>
             )}
 
@@ -413,20 +619,44 @@ function InfoRow({ k, v, mono, copyable }) {
   )
 }
 
-function Countdown({ sec, total }) {
-  const pct = (sec / total) * 100
+// Hiển thị TẤT CẢ các field còn lại lấy được từ query / API mà chưa được
+// hiển thị "trang trọng" ở trên — gấp gọn trong <details> để card không bị dài.
+function ExtraInfo({ entries }) {
+  if (!entries || entries.length === 0) return null
   return (
-    <div className="cdown-wrap" aria-live="polite">
-      <div className="cdown-text">Tự động đóng sau {sec}s</div>
-      <div className="cdown-bar">
-        <div
-          className="cdown-fill"
-          style={{
-            width: `${pct}%`,
-            transition: 'width 1s linear',
-          }}
-        />
+    <details className="extra">
+      <summary>Thông tin chi tiết ({entries.length})</summary>
+      <div className="info-list">
+        {entries.map(([k, v]) => {
+          const label = FIELD_LABELS[k] || humanizeKey(k)
+          const display = formatValue(k, v)
+          if (display === null) return null
+          return (
+            <InfoRow
+              key={k}
+              k={label}
+              v={display}
+              mono={looksLikeId(k)}
+              copyable={looksLikeId(k)}
+            />
+          )
+        })}
       </div>
+    </details>
+  )
+}
+
+function ActionButtons({ onRetry, retrying, onClose }) {
+  return (
+    <div className="btn-row">
+      {onRetry && (
+        <button type="button" className="btn secondary" onClick={onRetry} disabled={retrying}>
+          {retrying ? <span className="spin-ring sm" /> : '🔄'} Kiểm tra lại
+        </button>
+      )}
+      <button type="button" className="btn primary" onClick={onClose}>
+        Đóng trang
+      </button>
     </div>
   )
 }

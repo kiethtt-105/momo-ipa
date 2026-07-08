@@ -53,6 +53,45 @@ function sign(raw) {
   return crypto.createHmac('sha256', SECRET_KEY).update(raw).digest('hex')
 }
 
+// Mở URL này trực tiếp bằng Safari (Shortcut action "Open URLs"/"Open in
+// Safari") NHANH HƠN NHIỀU so với "Get Contents of URL" (thực đo: ~1.26s so
+// với ~5 phút khi phải đợi Shortcuts parse/hiện kết quả). Vì vậy route này hỗ
+// trợ trả về một HTTP redirect (302) thẳng sang trang /result?orderId=...
+// (thay vì JSON thô) khi phát hiện request đến từ trình duyệt mở link trực
+// tiếp — nhờ vậy Safari sẽ tự nhảy sang trang kết quả đẹp NGAY sau khi MoMo
+// xử lý xong, không cần Shortcut phải tự đọc JSON rồi tự mở URL kết quả.
+//
+// Phát hiện "mở trực tiếp bằng Safari" qua header Accept: text/html (trình
+// duyệt luôn gửi header này, còn "Get Contents of URL" của Shortcuts thường
+// gửi Accept: */*). Có thể ép buộc rõ ràng bằng ?format=html hoặc
+// ?format=json để không phụ thuộc vào header nếu cần.
+function wantsHtmlRedirect(req) {
+  const format = (req.query.format || '').toString().toLowerCase()
+  if (format === 'json') return false
+  if (format === 'html') return true
+  const accept = (req.headers.accept || '').toString()
+  return req.method === 'GET' && accept.includes('text/html')
+}
+
+// Dựng URL tuyệt đối tới /result kèm đầy đủ tham số mà pages/result.js đang
+// đọc trực tiếp từ router.query (orderId, resultCode, transId, amount,
+// payType, message) — xem result.js dòng ~80. Nhờ vậy trang /result hiển thị
+// kết quả NGAY, không cần polling /api/momo/status.
+function buildResultRedirectUrl(req, { orderId, resultCode, transId, amount, payType, message }) {
+  const proto = (req.headers['x-forwarded-proto'] || 'https').toString().split(',')[0].trim()
+  const host = (req.headers['x-forwarded-host'] || req.headers.host || '').toString()
+  const base = host ? `${proto}://${host}` : ''
+  const qs = new URLSearchParams({
+    orderId: orderId || '',
+    resultCode: String(resultCode),
+    transId: transId != null ? String(transId) : '',
+    amount: amount != null ? String(amount) : '',
+    payType: payType || '',
+    message: message || '',
+  })
+  return `${base}/result?${qs.toString()}`
+}
+
 function encryptPaymentCode(code) {
   if (!PUBLIC_KEY) throw new Error('MOMO_POS_PUBLIC_KEY chưa được thiết lập trong .env')
 
@@ -135,6 +174,16 @@ async function handlePosCharge(req, res) {
         existingData = typeof existingRaw === 'string' ? JSON.parse(existingRaw) : existingRaw
       } catch {
         existingData = null
+      }
+      if (wantsHtmlRedirect(req) && existingData) {
+        return res.redirect(302, buildResultRedirectUrl(req, {
+          orderId,
+          resultCode: existingData.resultCode ?? (existingData.status === 'PAID' ? 0 : -1),
+          transId: existingData.transId,
+          amount: existingData.amount,
+          payType: existingData.payType,
+          message: existingData.message || `Trùng orderId: "${orderId}" đã tồn tại trong hệ thống`,
+        }))
       }
       return res.status(409).json({
         error: `Trùng orderId: "${orderId}" đã tồn tại trong hệ thống, vui lòng dùng orderId khác`,
@@ -282,6 +331,12 @@ async function handlePosCharge(req, res) {
         }),
       })
       await markOrderClosed(redis, orderId)
+      if (wantsHtmlRedirect(req)) {
+        return res.redirect(302, buildResultRedirectUrl(req, {
+          orderId, resultCode: -1, transId: '', amount: amt, payType: 'pos',
+          message: 'MoMo trả về dữ liệu không hợp lệ',
+        }))
+      }
       return res.status(500).json({ error: 'MoMo trả về dữ liệu không hợp lệ' })
     }
 
@@ -311,6 +366,21 @@ async function handlePosCharge(req, res) {
       `message=${data.message}`
     )
 
+    // Nếu Shortcut mở URL này trực tiếp bằng Safari (nhanh hơn nhiều so với
+    // "Get Contents of URL" — xem ghi chú ở wantsHtmlRedirect phía trên),
+    // redirect thẳng sang /result để Safari tự hiện trang kết quả với
+    // orderId ngay lập tức, không cần Shortcut tự xử lý JSON.
+    if (wantsHtmlRedirect(req)) {
+      return res.redirect(302, buildResultRedirectUrl(req, {
+        orderId,
+        resultCode: data.resultCode,
+        transId: data.transId,
+        amount: amt,
+        payType: data.payType || 'pos',
+        message: updated.message,
+      }))
+    }
+
     // Trả nguyên `data` (resultCode/message gốc từ MoMo) để Shortcut tự
     // đọc resultCode === 0 và hiện thông báo tương ứng — giữ hành vi cũ,
     // không đổi format response để không phải sửa lại Shortcut đang dùng.
@@ -337,10 +407,15 @@ async function handlePosCharge(req, res) {
     } catch (redisErr) {
       console.error('[pos-charge] Redis update FAILED error:', redisErr)
     }
-    return res.status(isTimeout ? 504 : 500).json({
-      error: isTimeout
-        ? 'Timeout khi gọi MoMo, vui lòng thử lại'
-        : 'Lỗi server khi xử lý thanh toán',
-    })
+    const errMessage = isTimeout
+      ? 'Timeout khi gọi MoMo, vui lòng thử lại'
+      : 'Lỗi server khi xử lý thanh toán'
+    if (wantsHtmlRedirect(req)) {
+      return res.redirect(302, buildResultRedirectUrl(req, {
+        orderId, resultCode: -1, transId: '', amount: amt, payType: 'pos',
+        message: errMessage,
+      }))
+    }
+    return res.status(isTimeout ? 504 : 500).json({ error: errMessage })
   }
 }
