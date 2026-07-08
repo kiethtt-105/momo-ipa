@@ -185,7 +185,7 @@ async function handlePosCharge(req, res) {
   // rơi về "Thanh Toán {orderId}" như cũ.
   let orderInfo = String(rawOrderInfo || '').trim()
   if (!orderInfo || orderInfo.toLowerCase() === 'null') {
-    orderInfo = storeName ? `Thanh Toán ${orderId} - ${storeName}` : `Thanh Toán ${orderId}`
+    orderInfo = storeName ? `Thanh Toán - ${orderId} - ${storeName}` : `Thanh Toán - ${orderId}`
   }
   console.log('[pos-charge] Bước 8b: orderInfo =', orderInfo)
 
