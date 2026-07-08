@@ -1,37 +1,45 @@
 // /pages/api/momo/pos-charge.js
-// Route NÀY KHÔNG check session admin (cookie) — dành riêng cho gọi từ Shortcuts/app ngoài.
-// Bảo mật bằng 1 secret key riêng (MOMO_SHORTCUT_SECRET) thay cho session.
 //
-// Cách gọi từ Shortcuts (action "Get Contents of URL"):
-//   Method: POST
-//   URL: https://your-domain.vercel.app/api/momo/pos-charge
-//   Headers: Content-Type: application/json
-//            x-shortcut-key: <giá trị MOMO_SHORTCUT_SECRET>
-//   Body (JSON):
-//     {
-//       "orderId": "TEST001",          // optional, tự sinh nếu bỏ trống
-//       "amount": 10000,
-//       "orderInfo": "Thanh toan ban hang",  // optional
-//       "paymentCode": "970000123456789012"   // 18 số quét được từ camera
-//     }
+// ⚠️ FILE NÀY ĐƯỢC DỰNG LẠI TỪ scan.js — CHƯA THẤY FILE GỐC pos-charge.js.
+// Vui lòng diff với file thật trên Vercel trước khi deploy, để không mất
+// logic riêng (nếu có) mà bản gốc từng có nhưng bản này không biết tới.
+//
+// Thay đổi so với scan.js:
+//   - requireAdmin(req, res)  ->  isValidShortcutKey(req) rồi requireAdmin
+//     làm fallback — ĐÚNG cơ chế đã có sẵn trong create-p2p.js (dùng biến
+//     env SHORTCUT_API_KEY, chấp nhận header x-api-key hoặc query ?key=).
+//     Không tạo biến env mới — dùng lại secret đang chạy cho create-p2p.
+//   - orderId KHÔNG còn bắt buộc — nếu Shortcut không gửi, tự sinh
+//     `iPOS${Date.now()}${random}` giống hệt create-p2p.js.
 
 import crypto from 'crypto'
 import { Redis } from '@upstash/redis'
+import { requireAdmin } from '../../../lib/requireAdmin'
+import { resolveStore } from '../../../lib/stores'
+import { markOrderOpen, markOrderClosed } from '../../../lib/openOrders'
+import { formatResultCodeMessage } from '../../../lib/momoResultCodes'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
   token: process.env.KV_REST_API_TOKEN,
 })
 
-const PARTNER_CODE     = process.env.MOMO_PARTNER_CODE
-const ACCESS_KEY       = process.env.MOMO_ACCESS_KEY
-const SECRET_KEY       = process.env.MOMO_SECRET_KEY
-const PUBLIC_KEY       = process.env.MOMO_POS_PUBLIC_KEY || ''
-const PARTNER_NAME     = process.env.MOMO_PARTNER_NAME || ''
-const STORE_ID         = process.env.MOMO_STORE_ID || ''
-const STORE_NAME       = process.env.MOMO_STORE_NAME || ''
-const SHORTCUT_SECRET  = process.env.MOMO_SHORTCUT_SECRET || '' // tự đặt 1 chuỗi bí mật dài trong env
-const POS_ENDPOINT     = 'https://payment.momo.vn/v2/gateway/api/pos'
+const PARTNER_CODE = process.env.MOMO_PARTNER_CODE
+const ACCESS_KEY   = process.env.MOMO_ACCESS_KEY
+const SECRET_KEY   = process.env.MOMO_SECRET_KEY
+const PUBLIC_KEY   = process.env.MOMO_POS_PUBLIC_KEY || ''
+const POS_ENDPOINT = 'https://payment.momo.vn/v2/gateway/api/pos'
+
+const SHORTCUT_API_KEY = process.env.SHORTCUT_API_KEY || ''
+
+// Giống hệt hàm trong create-p2p.js — cho phép Shortcut gọi bằng key cố
+// định (header x-api-key hoặc query ?key=) thay vì session admin.
+function isValidShortcutKey(req) {
+  if (!SHORTCUT_API_KEY) return false
+  const headerKey = req.headers['x-api-key']
+  const queryKey = (req.query.key || '').toString()
+  return headerKey === SHORTCUT_API_KEY || queryKey === SHORTCUT_API_KEY
+}
 
 function sign(raw) {
   return crypto.createHmac('sha256', SECRET_KEY).update(raw).digest('hex')
@@ -41,6 +49,7 @@ function encryptPaymentCode(code) {
   if (!PUBLIC_KEY) throw new Error('MOMO_POS_PUBLIC_KEY chưa được thiết lập trong .env')
 
   let normalized = PUBLIC_KEY.replace(/\\n/g, '\n').trim()
+
   if (!normalized.includes('-----BEGIN')) {
     normalized = `-----BEGIN PUBLIC KEY-----\n${normalized}\n-----END PUBLIC KEY-----`
   }
@@ -53,50 +62,44 @@ function encryptPaymentCode(code) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
+    return res.status(405).json({ error: 'Method Not Allowed' })
+  }
+  return handlePosCharge(req, res)
+}
+
+async function handlePosCharge(req, res) {
+  // Cho phép Shortcut gọi bằng key cố định; nếu không có/sai key thì rơi
+  // về check session admin như bình thường (giống hệt create-p2p.js).
+  const shortcutOk = isValidShortcutKey(req)
+  if (!shortcutOk) {
+    if (!requireAdmin(req, res)) return
   }
 
-  // ====== Xác thực bằng secret key thay vì session admin ======
-  if (!SHORTCUT_SECRET) {
-    return res.status(500).json({ error: 'Server chưa cấu hình MOMO_SHORTCUT_SECRET' })
+  if (!PARTNER_CODE || !ACCESS_KEY || !SECRET_KEY) {
+    console.error('[pos-charge][POST] Thiếu env: MOMO_PARTNER_CODE / MOMO_ACCESS_KEY / MOMO_SECRET_KEY')
+    return res.status(500).json({ error: 'Server thiếu cấu hình MoMo (kiểm tra biến môi trường)' })
   }
 
-  const clientKey = req.headers['x-shortcut-key'] || req.body?.secretKey
-  if (clientKey !== SHORTCUT_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized - sai secret key' })
-  }
-
-  let { orderId: rawOrderId, amount, orderInfo: rawOrderInfo, paymentCode: rawPaymentCode } = req.body
+  let { orderId: rawOrderId, amount, orderInfo: rawOrderInfo, paymentCode: rawPaymentCode, storeId: rawStoreId } = req.body
 
   if (!amount || !rawPaymentCode) {
     return res.status(400).json({ error: 'Thiếu thông tin bắt buộc: amount, paymentCode' })
   }
 
-  // Sanitize: chỉ giữ chữ/số/_-, bỏ khoảng trắng và ký tự đặc biệt vì MoMo
-  // không chấp nhận orderId chứa dấu cách (lỗi resultCode 20 "Yêu cầu sai định dạng")
-  const sanitize = (s) => s.replace(/[^a-zA-Z0-9_-]/g, '')
-
+  // orderId không còn bắt buộc — nếu Shortcut không truyền, tự sinh
+  // giống hệt create-p2p.js.
   let orderId
   if (rawOrderId) {
-    const clean = sanitize(String(rawOrderId).trim())
-    orderId = (clean.startsWith('iPOS') || clean.startsWith('POS')) ? clean : `iPOS${clean}`
-  } else if (rawOrderInfo) {
-    // Shortcut trên iPhone thường chỉ gửi amount + orderInfo, không gửi
-    // orderId riêng — trước đây rơi vào nhánh dưới, sinh 1 orderId ngẫu
-    // nhiên hoàn toàn khác orderInfo, khiến "Mã đơn hàng" và "Nội dung"
-    // lệch nhau (cùng lỗi đã gặp ở create-p2p.js). Giờ dùng chính orderInfo
-    // (đã sanitize) làm orderId, chỉ fallback ngẫu nhiên nếu sanitize xong rỗng.
-    const clean = sanitize(String(rawOrderInfo).trim())
-    orderId = clean
-      ? ((clean.startsWith('iPOS') || clean.startsWith('POS')) ? clean : `iPOS${clean}`)
-      : `iPOS${Date.now()}${Math.random().toString(36).slice(2, 6)}`
+    orderId = String(rawOrderId).trim()
+    if (!orderId.startsWith('iPOS') && !orderId.startsWith('POS')) {
+      orderId = `iPOS${orderId}`
+    }
   } else {
     orderId = `iPOS${Date.now()}${Math.random().toString(36).slice(2, 6)}`
   }
 
   let orderInfo = String(rawOrderInfo || '').trim()
   if (!orderInfo) {
-    // Đồng bộ với create-p2p.js / scan.js: "Thanh Toán {mã đơn hàng}"
     orderInfo = `Thanh Toán ${orderId}`
   }
 
@@ -110,11 +113,13 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Số tiền không hợp lệ (1.000 – 10.000.000 ₫)' })
   }
 
+  const store = resolveStore((rawStoreId || '').toString().trim())
+
   let encryptedCode
   try {
     encryptedCode = encryptPaymentCode(paymentCode)
   } catch (err) {
-    console.error('[pos-charge] RSA Encrypt Error:', err.message)
+    console.error('[pos-charge][POST] RSA Encrypt Error:', err.message)
     return res.status(500).json({ error: 'Lỗi mã hóa mã thanh toán' })
   }
 
@@ -134,7 +139,7 @@ export default async function handler(req, res) {
 
   const body = {
     partnerCode: PARTNER_CODE,
-    partnerName: PARTNER_NAME,
+    partnerName: process.env.MOMO_PARTNER_NAME || '',
     requestId,
     amount: amt,
     orderId,
@@ -146,8 +151,8 @@ export default async function handler(req, res) {
     signature: sign(rawSignature),
   }
 
-  if (STORE_ID)   body.storeId   = STORE_ID
-  if (STORE_NAME) body.storeName = STORE_NAME
+  if (store.id)   body.storeId   = store.id
+  if (store.name) body.storeName = store.name
 
   const now = new Date().toISOString()
 
@@ -163,15 +168,18 @@ export default async function handler(req, res) {
         transId: '',
         payType: '',
         paymentOption: '',
-        source: 'shortcut-pos',
+        source: shortcutOk ? 'pos-shortcut' : 'pos', storeId: store.id, storeName: store.name,
+        type: 'pos-charge',
+        submittedCode: paymentCode,
       }),
     })
+    await markOrderOpen(redis, orderId, Date.now())
 
     const momoRes = await fetch(POS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(15000), // 15s timeout - tránh treo vô thời hạn
+      signal: AbortSignal.timeout(15000),
     })
 
     const rawText = await momoRes.text()
@@ -184,11 +192,13 @@ export default async function handler(req, res) {
           orderId, amount: amt, orderInfo,
           status: 'FAILED', createdAt: now, paidAt: null,
           transId: '', payType: 'pos', paymentOption: '',
-          resultCode: -1, message: 'MoMo trả về dữ liệu không hợp lệ',
-          source: 'shortcut-pos',
+          resultCode: -1, message: '⚠ Lỗi hệ thống MoMo — MoMo trả về dữ liệu không hợp lệ (không phải JSON). Thử lại sau, nếu lặp lại nhiều lần thì liên hệ MoMo.',
+          source: shortcutOk ? 'pos-shortcut' : 'pos', storeId: store.id, storeName: store.name,
+          type: 'pos-charge', submittedCode: paymentCode,
         }),
       })
-      return res.status(500).json({ error: 'MoMo trả về dữ liệu không hợp lệ', raw: rawText })
+      await markOrderClosed(redis, orderId)
+      return res.status(500).json({ error: 'MoMo trả về dữ liệu không hợp lệ' })
     }
 
     const updated = {
@@ -202,27 +212,25 @@ export default async function handler(req, res) {
       payType: data.payType || 'pos',
       paymentOption: data.paymentOption || '',
       resultCode: data.resultCode,
-      message: data.message || 'Không có thông báo',
+      message: data.resultCode === 0 ? (data.message || 'Thanh toán thành công') : formatResultCodeMessage(data.resultCode, data.message),
       responseTime: data.responseTime,
-      source: 'shortcut-pos',
+      source: shortcutOk ? 'pos-shortcut' : 'pos', storeId: store.id, storeName: store.name,
+      type: 'pos-charge', submittedCode: paymentCode,
     }
 
     await redis.hset('momo:orders', { [orderId]: JSON.stringify(updated) })
+    await markOrderClosed(redis, orderId)
 
-    console.log(`[pos-charge] ${orderId} - resultCode: ${data.resultCode} - message: ${data.message}`)
+    console.log(
+      `[pos-charge][POST] MoMo response: ${orderId}`,
+      `resultCode: ${data.resultCode}`,
+      `message: ${data.message}`
+    )
 
-    // Trả về gọn cho Shortcuts dễ hiển thị
-    return res.status(200).json({
-      success: data.resultCode === 0,
-      resultCode: data.resultCode,
-      message: data.message,
-      orderId,
-      amount: amt,
-      transId: data.transId || '',
-    })
+    return res.status(200).json(data)
 
   } catch (err) {
-    console.error('[pos-charge] Server Error:', err)
+    console.error('[pos-charge][POST] Server Error:', err)
     const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError'
     try {
       await redis.hset('momo:orders', {
@@ -231,15 +239,21 @@ export default async function handler(req, res) {
           status: 'FAILED', createdAt: now, paidAt: null,
           transId: '', payType: 'pos', paymentOption: '',
           resultCode: -1,
-          message: isTimeout ? 'Timeout khi gọi MoMo (15s)' : (err.message || 'Lỗi server'),
-          source: 'shortcut-pos',
+          message: isTimeout
+            ? '⚠ Lỗi hệ thống MoMo — Timeout khi gọi MoMo (15s), không rõ giao dịch có được xử lý phía MoMo hay không. Kiểm tra lại bằng mã đơn hàng trước khi tạo lại.'
+            : `⚠ Lỗi hệ thống (server) — ADMIN cần kiểm tra log server: ${err.message || 'Lỗi server'}`,
+          source: shortcutOk ? 'pos-shortcut' : 'pos', storeId: store.id, storeName: store.name,
+          type: 'pos-charge', submittedCode: paymentCode,
         }),
       })
+      await markOrderClosed(redis, orderId)
     } catch (redisErr) {
-      console.error('[pos-charge] Redis update FAILED error:', redisErr)
+      console.error('[pos-charge][POST] Redis update FAILED error:', redisErr)
     }
     return res.status(isTimeout ? 504 : 500).json({
-      error: isTimeout ? 'Timeout khi gọi MoMo, vui lòng thử lại' : 'Lỗi server khi xử lý thanh toán',
+      error: isTimeout
+        ? 'Timeout khi gọi MoMo, vui lòng thử lại'
+        : 'Lỗi server khi xử lý thanh toán',
     })
   }
 }
