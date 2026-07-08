@@ -106,7 +106,12 @@ const FIELD_LABELS = {
   status: 'Trạng thái',
   transType: 'Loại giao dịch',
   refundTrans: 'Giao dịch hoàn tiền',
+  payUrl: 'Link thanh toán',
+  qrCodeImage: 'Mã QR',
 }
+
+// Các field cần render đặc biệt (không phải text thường) trong ExtraInfo.
+const SPECIAL_RENDER_KEYS = new Set(['payUrl', 'qrCodeImage'])
 
 // camelCase / snake_case -> "Camel Case" khi gặp field lạ không có trong FIELD_LABELS
 function humanizeKey(key) {
@@ -379,6 +384,27 @@ export default function ResultPage() {
 
           .hint { font-size: 11.5px; color: #9b4470; text-align: center; margin-top: 10px; line-height: 1.5; }
 
+          /* ── payUrl row (buttons instead of raw link text) ── */
+          .url-row { padding: 10px 0; border-bottom: 1px solid #f4e6ee; }
+          .url-row .k { color: #9b4470; font-size: 13px; margin-bottom: 8px; display: block; }
+          .url-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+          .url-btn {
+            flex: 1; min-width: 120px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            border: none; border-radius: 10px; padding: 9px 12px; font-size: 12.5px; font-weight: 700;
+            cursor: pointer; transition: background .15s ease, color .15s ease, transform .1s ease;
+            background: #faf0f6; color: #ae0070;
+          }
+          .url-btn:hover { background: #f4d9ec; }
+          .url-btn:active { transform: scale(.96); }
+          .url-btn.copied { background: #dcfce7; color: #16a34a; }
+          .url-btn.open { background: #ae0070; color: #fff; }
+          .url-btn.open:hover { background: #97005f; }
+
+          /* ── qrCodeImage row (render actual image, not base64 text) ── */
+          .qr-row { padding: 10px 0; border-bottom: 1px solid #f4e6ee; text-align: center; }
+          .qr-row .k { color: #9b4470; font-size: 13px; margin-bottom: 10px; display: block; text-align: left; }
+          .qr-row img { width: 100%; max-width: 220px; border-radius: 12px; border: 1px solid #f4e6ee; padding: 8px; background: #fff; }
+
           /* ── Small phones (≤360px) — tighten spacing so nothing feels cramped ── */
           @media (max-width: 360px) {
             .page { padding: 14px; }
@@ -629,6 +655,12 @@ function ExtraInfo({ entries }) {
       <div className="info-list">
         {entries.map(([k, v]) => {
           const label = FIELD_LABELS[k] || humanizeKey(k)
+
+          if (SPECIAL_RENDER_KEYS.has(k) && typeof v === 'string' && v) {
+            if (k === 'payUrl') return <PayUrlRow key={k} label={label} url={v} />
+            if (k === 'qrCodeImage') return <QrImageRow key={k} label={label} src={v} />
+          }
+
           const display = formatValue(k, v)
           if (display === null) return null
           return (
@@ -643,6 +675,51 @@ function ExtraInfo({ entries }) {
         })}
       </div>
     </details>
+  )
+}
+
+// Link thanh toán (payUrl) -> hiện dạng 2 nút bấm thay vì chuỗi URL dài lê thê.
+function PayUrlRow({ label, url }) {
+  const [copied, setCopied] = useState(false)
+  const timerRef = useRef(null)
+
+  useEffect(() => () => clearTimeout(timerRef.current), [])
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => setCopied(false), 1400)
+    } catch (e) {
+      console.error('Không sao chép được:', e)
+    }
+  }
+
+  return (
+    <div className="url-row">
+      <span className="k">{label}</span>
+      <div className="url-actions">
+        <button type="button" className={`url-btn${copied ? ' copied' : ''}`} onClick={handleCopy}>
+          {copied ? <IconCheck /> : <IconCopy />} {copied ? 'Đã sao chép' : 'Sao chép URL'}
+        </button>
+        <a className="url-btn open" href={url} target="_blank" rel="noopener noreferrer">
+          Mở link ↗
+        </a>
+      </div>
+    </div>
+  )
+}
+
+// Mã QR (qrCodeImage) -> chuỗi giá trị chính là dữ liệu ảnh (base64), hiển thị
+// trực tiếp thành ảnh QR để khách quét chuyển khoản P2P thay vì hiện text thô.
+function QrImageRow({ label, src }) {
+  const imgSrc = src.startsWith('data:') ? src : `data:image/png;base64,${src}`
+  return (
+    <div className="qr-row">
+      <span className="k">{label}</span>
+      <img src={imgSrc} alt="QR thanh toán" />
+    </div>
   )
 }
 
