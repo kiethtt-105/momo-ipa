@@ -374,25 +374,81 @@ function DateRangePicker({ dateFrom, setDateFrom, dateTo, setDateTo, setActivePr
 let __floatWinTopZ = 300
 function bringFloatWinToFront() { return ++__floatWinTopZ }
 
-
-let __floatWinCascade = 0
-function nextCascadeOffset() {
-  __floatWinCascade = (__floatWinCascade + 1) % 6
-  return { x: __floatWinCascade * 26, y: __floatWinCascade * 22 }
-}
-
+// Tối đa 3 cửa sổ nổi được MỞ (không tính đang thu nhỏ) cùng lúc trên màn
+// hình — mở thêm cửa sổ thứ 4 sẽ tự động thu nhỏ cửa sổ cũ nhất (mở lâu nhất
+// mà chưa bị thu nhỏ) để nhường chỗ, thay vì chồng lấp tùm lum không kiểm soát.
+const MAX_OPEN_FLOAT_WINS = 3
+// Vị trí lệch cố định cho từng "slot" (0, 1, 2) — thay cho cascade cộng dồn vô
+// hạn kiểu cũ (nhảy lung tung tuỳ theo đã mở bao nhiêu cửa sổ từ đầu phiên).
+// Với tối đa 3 slot, vị trí luôn có thể đoán trước: cửa sổ thứ N (N ≤ 3) luôn
+// rơi đúng vào slot N, không phụ thuộc lịch sử mở/đóng trước đó.
+const FLOAT_WIN_SLOT_OFFSETS = [{ x: 0, y: 0 }, { x: 36, y: 36 }, { x: 72, y: 72 }]
 
 const __floatWinRegistry  = new Map()
+const __floatWinOrder     = [] // thứ tự "hoạt động gần nhất" — cũ nhất ở đầu mảng
 const __floatWinListeners = new Set()
 function __notifyFloatWin() { __floatWinListeners.forEach(fn => fn()) }
-function registerFloatWin(id, meta) { __floatWinRegistry.set(id, meta); __notifyFloatWin() }
+
+function registerFloatWin(id, meta) {
+  __floatWinRegistry.set(id, meta)
+  __floatWinOrder.push(id)
+  __notifyFloatWin()
+}
 function updateFloatWin(id, patch) {
   const cur = __floatWinRegistry.get(id)
   if (!cur) return
   __floatWinRegistry.set(id, { ...cur, ...patch })
   __notifyFloatWin()
 }
-function unregisterFloatWin(id) { __floatWinRegistry.delete(id); __notifyFloatWin() }
+function unregisterFloatWin(id) {
+  __floatWinRegistry.delete(id)
+  const idx = __floatWinOrder.indexOf(id)
+  if (idx !== -1) __floatWinOrder.splice(idx, 1)
+  __notifyFloatWin()
+}
+
+// Đánh dấu 1 cửa sổ vừa "hoạt động" (vừa mở / vừa khôi phục từ thu nhỏ) —
+// đưa về cuối hàng đợi, để nếu sau này cần thu nhỏ bớt thì luôn nhắm vào cửa
+// sổ ÍT hoạt động gần đây nhất trước, không phải cửa sổ vừa được người dùng
+// vừa mở/khôi phục ngay trước đó.
+function markFloatWinActive(id) {
+  const idx = __floatWinOrder.indexOf(id)
+  if (idx !== -1) __floatWinOrder.splice(idx, 1)
+  __floatWinOrder.push(id)
+}
+
+// Đếm số cửa sổ đang thực sự mở (không tính đang thu nhỏ), không tính chính
+// cửa sổ có id = excludeId (dùng khi tính slot cho 1 cửa sổ sắp mở, trước khi
+// nó được đăng ký vào registry).
+function countOpenFloatWins(excludeId) {
+  let n = 0
+  for (const [id, meta] of __floatWinRegistry) {
+    if (id !== excludeId && meta && !meta.minimized) n++
+  }
+  return n
+}
+
+// Nếu đang có nhiều hơn MAX_OPEN_FLOAT_WINS cửa sổ mở, tự thu nhỏ bớt các cửa
+// sổ cũ nhất (theo __floatWinOrder) cho tới khi vừa đủ 3 — luôn giữ lại
+// activeId (cửa sổ vừa mở/khôi phục) dù nó có đứng đầu hàng đợi hay không.
+function enforceMaxOpenFloatWins(activeId) {
+  const openIds = __floatWinOrder.filter(id => {
+    const meta = __floatWinRegistry.get(id)
+    return meta && !meta.minimized
+  })
+  let excess = openIds.length - MAX_OPEN_FLOAT_WINS
+  if (excess <= 0) return
+  for (const id of openIds) {
+    if (excess <= 0) break
+    if (id === activeId) continue
+    const meta = __floatWinRegistry.get(id)
+    if (meta && typeof meta.onMinimize === 'function') {
+      meta.onMinimize()
+      excess--
+    }
+  }
+}
+
 let __floatWinIdSeq = 0
 function useFloatWinList() {
   const [, forceTick] = useState(0)
@@ -403,6 +459,7 @@ function useFloatWinList() {
   }, [])
   return Array.from(__floatWinRegistry.entries()).map(([id, meta]) => ({ id, ...meta }))
 }
+
 
 
 function MinimizedChips({ wins }) {
@@ -483,13 +540,19 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
   const [minimized, setMinimized] = useState(false)
   const [maximized, setMaximized] = useState(false)
   const dragState  = useRef({ startX: 0, startY: 0, origX: 0, origY: 0 })
-  const cascadeRef = useRef(null)
+  const slotRef    = useRef(null)
   const prevGeom   = useRef(null) // { pos } trước khi phóng to, để khôi phục lại
   const winId      = useRef(null)
-  
-  if (cascadeRef.current === null) cascadeRef.current = cascade ? nextCascadeOffset() : { x: 0, y: 0 }
-  if (winId.current === null) winId.current = `fw-${++__floatWinIdSeq}`
 
+  if (winId.current === null) winId.current = `fw-${++__floatWinIdSeq}`
+  // Slot được tính 1 LẦN DUY NHẤT lúc mở, dựa trên số cửa sổ đang mở tại thời
+  // điểm đó (0, 1 hoặc 2) — không cộng dồn vô hạn theo lịch sử cả phiên như
+  // cascade cũ, nên vị trí luôn nhất quán, dễ đoán, không còn cảm giác "nhảy
+  // tùm lum" mỗi lần bấm mở 1 giao dịch khác.
+  if (slotRef.current === null) {
+    const slotIndex = cascade ? Math.min(countOpenFloatWins(winId.current), FLOAT_WIN_SLOT_OFFSETS.length - 1) : 0
+    slotRef.current = FLOAT_WIN_SLOT_OFFSETS[slotIndex]
+  }
 
   useEffect(() => {
     const w = typeof window !== 'undefined' ? window.innerWidth  : 1200
@@ -501,23 +564,33 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
     // đỉnh màn hình để phần đầu (trạng thái, số tiền) luôn hiện ngay, tránh
     // bị khuất phía trên; vẫn còn khoảng trống nhỏ để không dính sát viền.
     const TOP_MARGIN = 20
-    const baseY = TOP_MARGIN
-    setPos({ x: baseX + cascadeRef.current.x, y: Math.max(TOP_MARGIN, baseY + cascadeRef.current.y) })
+    setPos({ x: baseX + slotRef.current.x, y: TOP_MARGIN + slotRef.current.y })
     setZ(bringFloatWinToFront())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Đăng ký cửa sổ vào registry chung khi mount, gỡ khi đóng hẳn — đây là
-  // "nguồn sự thật" để FloatingWinDock biết cửa sổ nào đang bị thu nhỏ.
+  // "nguồn sự thật" để FloatingWinDock biết cửa sổ nào đang bị thu nhỏ, đồng
+  // thời cũng là nơi ép giới hạn tối đa MAX_OPEN_FLOAT_WINS cửa sổ mở cùng lúc.
   useEffect(() => {
     registerFloatWin(winId.current, {
       label: taskbarLabel || 'Cửa sổ', iconBg, iconColor, minimized: false,
       onRestore: () => { setMinimized(false); setZ(bringFloatWinToFront()) },
+      onMinimize: () => setMinimized(true),
     })
     return () => unregisterFloatWin(winId.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  useEffect(() => { updateFloatWin(winId.current, { minimized }) }, [minimized])
+  useEffect(() => {
+    updateFloatWin(winId.current, { minimized })
+    // Vừa mở lần đầu hoặc vừa khôi phục từ thu nhỏ → đánh dấu hoạt động gần
+    // nhất, rồi kiểm tra: nếu giờ có quá 3 cửa sổ đang mở, tự thu nhỏ bớt cửa
+    // sổ cũ nhất (không phải cửa sổ này) để nhường chỗ.
+    if (!minimized) {
+      markFloatWinActive(winId.current)
+      enforceMaxOpenFloatWins(winId.current)
+    }
+  }, [minimized])
 
   function clamp(x, y) {
     const w = typeof window !== 'undefined' ? window.innerWidth  : 1200
