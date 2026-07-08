@@ -69,6 +69,7 @@ function encryptPaymentCode(code) {
 }
 
 export default async function handler(req, res) {
+  console.log('[pos-charge] ==> Nhận request, method:', req.method, '| query:', JSON.stringify(req.query))
   // Chấp nhận cả GET (Shortcut dùng query string, đơn giản nhất) lẫn POST
   // (JSON body, dùng khi gọi từ trang admin hoặc script khác).
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -78,26 +79,34 @@ export default async function handler(req, res) {
 }
 
 async function handlePosCharge(req, res) {
+  console.log('[pos-charge] Bước 1: bắt đầu xử lý')
+
   // Chỉ chấp nhận key đúng — không còn fallback session admin. Sai/thiếu
   // key thì từ chối ngay, không có nhánh nào phải chờ/verify gì thêm.
   const shortcutOk = isValidShortcutKey(req)
+  console.log('[pos-charge] Bước 2: check key ->', shortcutOk)
   if (!shortcutOk) {
+    console.log('[pos-charge] Bước 2b: SAI/THIẾU KEY -> dừng ở đây, trả 401')
     return res.status(401).json({ error: 'Sai hoặc thiếu key' })
   }
 
   if (!PARTNER_CODE || !ACCESS_KEY || !SECRET_KEY) {
-    console.error('[pos-charge] Thiếu env: MOMO_PARTNER_CODE / MOMO_ACCESS_KEY / MOMO_SECRET_KEY')
+    console.error('[pos-charge] Bước 3: THIẾU ENV MOMO_PARTNER_CODE/MOMO_ACCESS_KEY/MOMO_SECRET_KEY -> dừng ở đây')
     return res.status(500).json({ error: 'Server thiếu cấu hình MoMo (kiểm tra biến môi trường)' })
   }
+  console.log('[pos-charge] Bước 3: env MoMo OK')
 
   // GET → lấy từ query string. POST → lấy từ JSON body. Cùng field name
   // để Shortcut chỉ cần đổi phương thức mà không phải đổi tên tham số.
   const params = req.method === 'GET' ? req.query : (req.body || {})
+  console.log('[pos-charge] Bước 4: params nhận được =', JSON.stringify(params))
   let { orderId: rawOrderId, amount, orderInfo: rawOrderInfo, paymentCode: rawPaymentCode } = params
 
   if (!amount || !rawPaymentCode) {
+    console.log('[pos-charge] Bước 4b: THIẾU amount hoặc paymentCode -> dừng ở đây')
     return res.status(400).json({ error: 'Thiếu thông tin bắt buộc: amount, paymentCode' })
   }
+  console.log('[pos-charge] Bước 4b: amount & paymentCode OK')
 
   // orderId không bắt buộc — nếu Shortcut không truyền, tự sinh giống hệt
   // create-p2p.js. Sanitize để loại ký tự lạ nếu Shortcut lỡ dán nhầm gì
@@ -110,16 +119,21 @@ async function handlePosCharge(req, res) {
   } else {
     orderId = `iPOS${Date.now()}${Math.random().toString(36).slice(2, 6)}`
   }
+  console.log('[pos-charge] Bước 5: orderId =', orderId)
 
   const paymentCode = String(rawPaymentCode).trim()
   if (!/^(MM|mm)?\d{18}$/.test(paymentCode)) {
+    console.log('[pos-charge] Bước 6: paymentCode KHÔNG HỢP LỆ -> dừng ở đây. Nhận:', paymentCode)
     return res.status(400).json({ error: 'Mã thanh toán không hợp lệ (18 chữ số, có thể có MM/mm)' })
   }
+  console.log('[pos-charge] Bước 6: paymentCode hợp lệ')
 
   const amt = parseInt(amount)
   if (isNaN(amt) || amt < 1000 || amt > 10_000_000) {
+    console.log('[pos-charge] Bước 7: amount KHÔNG HỢP LỆ -> dừng ở đây. Nhận:', amount)
     return res.status(400).json({ error: 'Số tiền không hợp lệ (1.000 – 10.000.000 ₫)' })
   }
+  console.log('[pos-charge] Bước 7: amount hợp lệ =', amt)
 
   // Cửa hàng: chọn ngay trên Shortcut (rawStoreId), nếu không truyền thì
   // dùng cửa hàng mặc định (giống hệt create-p2p.js / scan.js). Lấy thêm
@@ -129,6 +143,7 @@ async function handlePosCharge(req, res) {
   const rawStoreId = (params.storeId || '').toString().trim()
   const store = resolveStore(rawStoreId)
   const { id: storeId, name: storeName, partnerName: storePartnerName } = store
+  console.log('[pos-charge] Bước 8: store resolved =', JSON.stringify(store))
 
   // Nội dung thanh toán: nếu Shortcut để trống/không đổi (rỗng hoặc null)
   // → tự dùng mặc định "Thanh Toán {orderId} - {tên cửa hàng}" để admin
@@ -139,12 +154,14 @@ async function handlePosCharge(req, res) {
   if (!orderInfo || orderInfo.toLowerCase() === 'null') {
     orderInfo = storeName ? `Thanh Toán ${orderId} - ${storeName}` : `Thanh Toán ${orderId}`
   }
+  console.log('[pos-charge] Bước 8b: orderInfo =', orderInfo)
 
   let encryptedCode
   try {
     encryptedCode = encryptPaymentCode(paymentCode)
+    console.log('[pos-charge] Bước 9: RSA encrypt OK, độ dài =', encryptedCode.length)
   } catch (err) {
-    console.error('[pos-charge] RSA Encrypt Error:', err.message)
+    console.error('[pos-charge] Bước 9: RSA ENCRYPT LỖI -> dừng ở đây:', err.message)
     return res.status(500).json({ error: 'Lỗi mã hóa mã thanh toán' })
   }
 
@@ -182,6 +199,7 @@ async function handlePosCharge(req, res) {
   const now = new Date().toISOString()
 
   try {
+    console.log('[pos-charge] Bước 10: ghi Redis PENDING...')
     await redis.hset('momo:orders', {
       [orderId]: JSON.stringify({
         orderId,
@@ -198,20 +216,28 @@ async function handlePosCharge(req, res) {
         submittedCode: paymentCode,
       }),
     })
-    await markOrderOpen(redis, orderId, Date.now())
+    console.log('[pos-charge] Bước 10: ghi Redis PENDING xong')
 
+    await markOrderOpen(redis, orderId, Date.now())
+    console.log('[pos-charge] Bước 11: markOrderOpen xong')
+
+    console.log('[pos-charge] Bước 12: gọi MoMo...')
     const momoRes = await fetch(POS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(15000),
     })
+    console.log('[pos-charge] Bước 12: MoMo trả HTTP status =', momoRes.status)
 
     const rawText = await momoRes.text()
+    console.log('[pos-charge] Bước 13: đọc raw text xong, độ dài =', rawText.length)
     let data
     try {
       data = JSON.parse(rawText)
+      console.log('[pos-charge] Bước 13: parse JSON OK, resultCode =', data.resultCode)
     } catch {
+      console.error('[pos-charge] Bước 13: MoMo trả KHÔNG PHẢI JSON -> dừng ở đây:', rawText.slice(0, 500))
       await redis.hset('momo:orders', {
         [orderId]: JSON.stringify({
           orderId, amount: amt, orderInfo,
@@ -247,9 +273,9 @@ async function handlePosCharge(req, res) {
     await markOrderClosed(redis, orderId)
 
     console.log(
-      `[pos-charge] MoMo response: ${orderId}`,
-      `resultCode: ${data.resultCode}`,
-      `message: ${data.message}`
+      `[pos-charge] Bước 14: HOÀN TẤT, trả response về Shortcut. orderId=${orderId}`,
+      `resultCode=${data.resultCode}`,
+      `message=${data.message}`
     )
 
     // Trả nguyên `data` (resultCode/message gốc từ MoMo) để Shortcut tự
@@ -258,7 +284,7 @@ async function handlePosCharge(req, res) {
     return res.status(200).json(data)
 
   } catch (err) {
-    console.error('[pos-charge] Server Error:', err)
+    console.error('[pos-charge] LỖI Ở NHÁNH TRY/CATCH CHÍNH -> dừng ở đây:', err)
     const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError'
     try {
       await redis.hset('momo:orders', {
