@@ -1,5 +1,4 @@
-// pages/admin-dashboard.js — REBUILT
-// Logic fix: scoped = date+search filtered (for stats). filtered = scoped + status filter (for table).
+// pages/admin-dashboard.js 
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
@@ -23,10 +22,7 @@ const FILTERS = [
   { key: 'EXPIRED', label: 'Hết hạn'   },
 ]
 
-// Trang giờ chỉ còn 1 khu vực nội dung duy nhất (Lịch sử giao dịch) nên sidebar
-// không cần menu điều hướng để chọn mục nữa — Lịch sử giao dịch luôn hiển thị.
-// Nút "Tra cứu giao dịch" đã chuyển thành 1 thanh cố định ở mép dưới màn hình
-// (xem LookupBar), luôn hiện sẵn để bấm vào bất kỳ lúc nào.
+
 const PAGE_TITLE = 'Lịch sử giao dịch'
 
 function openCreateTransactionPopup() {
@@ -82,11 +78,7 @@ const normalizeStatus = (order) => {
   return { ...order, status }
 }
 
-// Bảng resultCode giờ dùng chung từ lib/momoResultCodes.js (đầy đủ theo tài
-// liệu chính thức MoMo + phân loại merchant/system/user/pending) — bỏ bảng
-// cục bộ cũ ở đây vì thiếu vài mã và có mã sai (23/24/26/29/4010/4011 không
-// có trong tài liệu chính thức, trong khi các mã thật như 43/45/47/1080/
-// 1081/1088/2019/4002 lại bị thiếu).
+
 const getResultDesc = code => describeResultCode(code).vi
 const getResultInfo = code => describeResultCode(code)
 
@@ -101,10 +93,7 @@ const RESULT_CATEGORY_COLOR = {
   unknown:  '#6b7280',
 }
 
-// ─── TOP BAR (thay cho sidebar đã bỏ) ──────────────────────────────────────
-// Trang chỉ còn 1 khu vực nội dung duy nhất (Lịch sử giao dịch) nên không cần
-// sidebar/menu điều hướng nữa — mọi thứ (logo, trạng thái đồng bộ, số đơn
-// đang chờ, nút đăng xuất) gộp vào 1 thanh ngang cố định trên cùng.
+
 const TopBar = memo(function TopBar({ pendingCount, fetching, lastSync, logout }) {
   return (
     <header className="sticky inset-x-0 top-0 z-[200] flex flex-shrink-0 items-center gap-4 border-b border-[rgba(174,0,112,0.08)] bg-white/90 px-6 py-3.5 shadow-[0_1px_16px_rgba(174,0,112,0.05)] backdrop-blur-[20px] max-md:px-4 max-md:py-3">
@@ -381,31 +370,18 @@ function DateRangePicker({ dateFrom, setDateFrom, dateTo, setDateTo, setActivePr
   )
 }
 
-// ─── FLOATING WINDOW (cửa sổ nổi, kéo-thả được) ────────────────────────────
-// Thay cho modal cũ (nền tối full-screen chặn thao tác) — giờ mỗi popup
-// (Chi tiết / Tra cứu / Xác nhận) là 1 "cửa sổ" nổi lơ lửng trên dashboard,
-// đổ bóng mềm kiểu bong bóng, tự nâng lên trên (bring-to-front) khi bấm vào,
-// và có thể kéo đi bất kỳ đâu qua thanh header — giống hệt tinh thần cửa sổ
-// nổi đang xây ở create-transaction.js, áp dụng lại cho admin-dashboard.js.
+
 let __floatWinTopZ = 300
 function bringFloatWinToFront() { return ++__floatWinTopZ }
 
-// Mỗi lần có cửa sổ mới mở, lệch nhẹ vị trí so với cửa sổ trước để tránh
-// chồng khít 100% lên nhau (hiệu ứng "xếp chồng" như cửa sổ thật).
+
 let __floatWinCascade = 0
 function nextCascadeOffset() {
   __floatWinCascade = (__floatWinCascade + 1) % 6
   return { x: __floatWinCascade * 26, y: __floatWinCascade * 22 }
 }
 
-// ─── WINDOW REGISTRY (hệ đa cửa sổ thật) ───────────────────────────────────
-// Sổ đăng ký toàn cục, độc lập với cây React của từng FloatingWindow — mỗi
-// cửa sổ tự "đăng ký" mình khi mount và "gỡ đăng ký" khi đóng hẳn. Khi 1 cửa
-// sổ bấm "thu nhỏ", nó chỉ cập nhật cờ minimized trong registry (chứ không
-// unmount), rồi FloatingWinDock (thanh dock cố định dưới màn hình) render lại
-// theo registry này để hiện icon "khôi phục" cho từng cửa sổ đang thu nhỏ.
-// Nhờ tách registry ra ngoài, nhiều cửa sổ (Chi tiết / Tra cứu / Xác nhận /
-// Xác nhận xoá...) có thể tồn tại song song, độc lập, đúng nghĩa multi-window.
+
 const __floatWinRegistry  = new Map()
 const __floatWinListeners = new Set()
 function __notifyFloatWin() { __floatWinListeners.forEach(fn => fn()) }
@@ -428,13 +404,7 @@ function useFloatWinList() {
   return Array.from(__floatWinRegistry.entries()).map(([id, meta]) => ({ id, ...meta }))
 }
 
-// Trước đây dock các cửa sổ thu nhỏ nằm ở 1 thanh RIÊNG, nổi phía trên thanh
-// LookupBar (bottom-[76px]) → tạo thành 2 hàng chồng lên nhau, và vì bảng chỉ
-// chừa padding-bottom đúng bằng chiều cao của LookupBar nên hàng dock này đè
-// lên hàng cuối cùng của bảng, che mất thông tin.
-// => Gộp chung vào ĐÚNG 1 HÀNG duy nhất với LookupBar (xem bên dưới), không
-// còn là 1 lớp nổi tách biệt nữa. Giờ chỉ trả về danh sách chip để LookupBar
-// tự render ngay trong hàng của nó.
+
 function MinimizedChips({ wins }) {
   if (!wins.length) return null
   return (
@@ -457,16 +427,7 @@ function MinimizedChips({ wins }) {
   )
 }
 
-// ─── LOOKUP BAR (thanh cố định ở đáy màn hình) ──────────────────────────────
-// Luôn hiện sẵn, không cần bấm vào bất kỳ menu nào trước.
-// Giờ gộp thêm 2 thứ vào cùng 1 thanh ngang này:
-//   · Các tab lọc trạng thái (Tất cả/Thành công/Chờ xử lý/Thất bại/Hết hạn) —
-//     trước đây nằm ở đầu trang (HistorySection), giờ đưa xuống đây, ngang
-//     hàng với 2 nút hành động.
-//   · Nút "Tạo giao dịch" (mở /admin/create-transaction ở tab mới) — đứng
-//     cạnh nút "Tra cứu giao dịch" đã có sẵn.
-// Trên màn hình hẹp, dãy tab lọc scroll ngang riêng, 2 nút luôn cố định bên
-// phải (flex-shrink-0) để không bị đẩy khuất.
+
 function LookupBar({ onOpenLookup, onOpenCreate, filter, setFilter, counts }) {
   // Danh sách cửa sổ đang thu nhỏ — hiện chung NGAY TRONG hàng này (không còn
   // là 1 thanh dock nổi riêng phía trên nữa), để không đè lên bảng phía trên.
@@ -525,14 +486,11 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
   const cascadeRef = useRef(null)
   const prevGeom   = useRef(null) // { pos } trước khi phóng to, để khôi phục lại
   const winId      = useRef(null)
-  // cascade=false (dùng cho cửa sổ Chi tiết) → luôn canh đúng giữa màn hình,
-  // không lệch theo hiệu ứng xếp chồng, để cửa sổ không trôi dần xuống dưới/
-  // phải qua mỗi lần mở (gây cảm giác "mất chữ" dù phía trên còn thừa chỗ trống).
+  
   if (cascadeRef.current === null) cascadeRef.current = cascade ? nextCascadeOffset() : { x: 0, y: 0 }
   if (winId.current === null) winId.current = `fw-${++__floatWinIdSeq}`
 
-  // Canh giữa màn hình lúc mount (1 lần), cộng thêm lệch cascade để nhiều
-  // cửa sổ mở cùng lúc không đè khít lên nhau.
+
   useEffect(() => {
     const w = typeof window !== 'undefined' ? window.innerWidth  : 1200
     const h = typeof window !== 'undefined' ? window.innerHeight : 800
@@ -903,10 +861,7 @@ function ConfirmModal({ orderId, amount, loading, result, error, onConfirm, onCa
 }
 
 
-// ─── LOGOUT CONFIRM MODAL ───────────────────────────────────────────────────
-// Thay cho window.confirm() gốc của trình duyệt (xấu, không đồng bộ giao diện) —
-// giờ dùng đúng kiểu cửa sổ nổi (FloatingWindow) như các popup xác nhận khác
-// trong trang (Xác nhận xoá, Xác nhận 9000...).
+
 function LogoutConfirmModal({ onConfirm, onClose }) {
   return (
     <FloatingWindow
@@ -938,11 +893,7 @@ function LogoutConfirmModal({ onConfirm, onClose }) {
   )
 }
 
-// ─── DELETE CONFIRM MODAL (xác nhận mật khẩu trước khi xoá) ────────────────
-// Thay cho window.confirm() cũ — giờ xoá đơn (dù 1 đơn hay xoá hàng loạt) đều
-// phải nhập lại mật khẩu quản trị để xác nhận, tránh bấm nhầm gây mất dữ liệu
-// không thể hoàn tác. Mật khẩu được xác thực qua endpoint /api/admin/login
-// có sẵn (cùng cơ chế với màn đăng nhập), không tự so sánh chuỗi ở client.
+
 function DeleteConfirmModal({ count, password, setPassword, checking, error, onConfirm, onClose }) {
   return (
     <FloatingWindow
@@ -989,17 +940,7 @@ function DeleteConfirmModal({ count, password, setPassword, checking, error, onC
   )
 }
 
-// ─── COL FILTER BAR ────────────────────────────────────────────────────────
-// Trước đây đây là 1 nút "Bộ lọc" mở popover nổi lên trên — dù đã sửa z-index,
-// nhìn vẫn rối vì nó che mất nội dung phía dưới mỗi lần mở. Đổi hẳn cách làm:
-// bỏ popover, đưa thẳng các select (Hình thức / Loại đơn / Result / Giờ) ra
-// thành 1 hàng gọn, luôn hiển thị — dùng dropdown gốc của trình duyệt nên
-// không bao giờ đè lên phần tử khác của trang, không cần bấm mở/đóng gì cả.
-// Nhãn hiển thị cho các giá trị "source" thô lưu trong DB (tên route tạo đơn) —
-// trước đây hiện thẳng ra chuỗi kỹ thuật như "admin-cancelled", "manual-lookup-
-// reconciled" trong dropdown, rất khó đọc. Có map sẵn cho các nguồn đã biết,
-// nguồn nào chưa có trong map (phòng khi thêm route mới sau này) sẽ tự viết
-// hoa từng chữ + thay gạch ngang bằng khoảng trắng thay vì hiện thô.
+
 const SOURCE_LABELS = {
   'pos':                      'POS / Scan',
   'create-p2p':                'P2P / QR',
@@ -1103,11 +1044,7 @@ function ColFilterBar({ colFilters, setColFilters, colFilterOptions, filtered })
         />
       )}
 
-      {/* Cửa hàng — trang này tạo giao dịch được cho nhiều shop khác nhau,
-          nên cần lọc lại theo tên cửa hàng khi cần xem riêng 1 shop.
-          Chỉ hiện khi có ít nhất 1 đơn đã có storeName trong khoảng đang xem
-          (những đơn cũ / tạo qua POS-scan hiện chưa lưu storeName sẽ dần có
-          khi phần lưu DB được bổ sung sau). */}
+
       {colFilterOptions.store.length > 0 && (
         <FilterDropdown
           active={!!colFilters.store}
@@ -1185,14 +1122,7 @@ function HistorySection({
         </p>
       </div>
 
-      {/* Thanh lọc — tách rõ 2 tầng:
-          · Lọc cơ bản (khoảng ngày + tìm kiếm) — luôn hiện, dùng nhiều nhất.
-          · Lọc nâng cao (hình thức/loại đơn/result/giờ) — ẨN mặc định, chỉ
-            hiện khi bấm nút "Lọc nâng cao", cho gọn mắt hơn bản cũ (luôn hiện
-            hết mọi bộ lọc cùng lúc kể cả khi không dùng tới).
-          Toàn bộ khối này pause polling khi có tương tác (mousedown/focus),
-          để tránh việc tự tải lại giữa lúc đang mở 1 dropdown làm số lượng/
-          tuỳ chọn trong <select> đổi ngay dưới con trỏ → bấm không kịp. */}
+
       <div
         className="relative z-20 mb-5 rounded-2xl border border-white/70 bg-white/88 shadow-[0_2px_20px_rgba(174,0,112,0.04)] backdrop-blur-[12px]"
         onMouseDownCapture={pausePolling}
@@ -1244,12 +1174,6 @@ function HistorySection({
             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" className={`transition-transform duration-200 ${advancedOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
           </button>
 
-          {/* Không còn nút "Cập nhật" thủ công — trạng thái các giao dịch đang
-              chờ xử lý được tự động đối chiếu lại với MoMo mỗi 1 giây (cùng
-              nhịp với việc tự tải lại danh sách), chỉ hiện 1 chấm nhỏ báo đang
-              quét để người dùng yên tâm là hệ thống vẫn đang tự cập nhật.
-              Khi polling tạm dừng do đang chỉnh bộ lọc thì thay bằng 1 nhãn
-              xám nhạt, tự biến mất và chạy lại sau khi ngừng thao tác. */}
           {pollPaused ? (
             <span className="flex h-[33px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border border-[rgba(107,114,128,0.15)] bg-[#f9fafb] px-3 text-[12.5px] font-semibold text-[#9ca3af]">
               <span className="h-[6px] w-[6px] flex-shrink-0 rounded-full bg-[#d1d5db]" />
