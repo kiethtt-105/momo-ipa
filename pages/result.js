@@ -45,11 +45,7 @@ async function fetchFullInfo(query, { includeQuery = true } = {}) {
   }
 
   // credentials mặc định của fetch same-origin đã tự gửi kèm cookie phiên (nếu có).
-  const queryPromise = fetch('/api/momo/query', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ orderId }),
-  })
+  const queryPromise = fetch(`/api/momo/query?orderId=${encodeURIComponent(orderId)}`)
     .then(r => (r.ok ? r.json() : null)) // 401 -> null, im lặng bỏ qua
     .catch(() => null)
 

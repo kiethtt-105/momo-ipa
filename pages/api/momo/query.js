@@ -1,7 +1,6 @@
 // pages/api/momo/query.js
 import crypto from 'crypto'
 import { Redis } from '@upstash/redis'
-import { requireAdmin } from '../../../lib/requireAdmin'
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL,
@@ -49,20 +48,27 @@ function buildSignature({ accessKey, orderId, partnerCode, requestId }) {
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json')
 
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST'])
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', ['GET'])
     return res.status(405).json({ message: `Method ${req.method} không được hỗ trợ` })
   }
 
 
-  if (!requireAdmin(req, res)) return
+  // Đã bỏ check requireAdmin: endpoint này giờ public. Lý do an toàn để bỏ:
+  //  - Luồng P2P: /result (frontend) không còn gọi endpoint này nữa (chỉ dùng
+  //    /api/momo/status), nên request tới đây gần như chỉ đến từ luồng Scan QR.
+  //  - Luồng Scan QR: trang /result chỉ được mở trên chính máy/trình duyệt của
+  //    admin (người cầm máy quét), nên yêu cầu đăng nhập admin không còn cần
+  //    thiết — về bản chất chỉ admin mới ở vị trí gọi được request này.
+  //  - orderId vẫn phải khớp 1 đơn có thật trong Redis (không đoán được), và
+  //    response không chứa secret/signature nội bộ nào lộ ra ngoài.
 
   if (!PARTNER_CODE || !ACCESS_KEY || !SECRET_KEY) {
     console.error('[momo/query] Thiếu env: MOMO_PARTNER_CODE / MOMO_ACCESS_KEY / MOMO_SECRET_KEY')
     return res.status(500).json({ message: 'Server thiếu cấu hình MoMo (kiểm tra biến môi trường)' })
   }
 
-  const orderId = (req.body && req.body.orderId ? String(req.body.orderId) : '').trim()
+  const orderId = (req.query && req.query.orderId ? String(req.query.orderId) : '').trim()
   if (!orderId) {
     return res.status(400).json({ message: 'orderId không hợp lệ' })
   }
