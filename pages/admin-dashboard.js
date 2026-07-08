@@ -717,8 +717,12 @@ function DetailModal({ order: o, checking, onClose, onDelete, onQuery, onConfirm
         <Row label="Mã đơn hàng"   value={o.orderId}   mono copy={() => copy(o.orderId)} />
         <Row label="Nội dung"       value={o.orderInfo || '—'} />
         <Row label="Cửa hàng"       value={o.storeName || '—'} />
+        <Row label="Mã cửa hàng"    value={o.storeId || '—'} mono copy={o.storeId ? () => copy(o.storeId) : undefined} />
+        <Row label="Đối tác"        value={o.partnerName || '—'} />
         <Row label="Số tiền"        value={`${fmt(o.amount)} ₫`} />
         <Row label="Hình thức"      value={o.payType || (o.orderId?.startsWith('POS')||o.orderId?.startsWith('iPOS')?'POS':'P2P')} />
+        <Row label="Loại đơn"       value={o.source ? sourceLabel(o.source) : '—'} />
+        <Row label="Phương thức TT" value={o.paymentOption || '—'} />
         <Row label="Mã GD MoMo"     value={o.transId || '—'} mono copy={() => copy(o.transId)} />
         <Row label="Result Code"    value={o.resultCode !== undefined
           ? (() => { const info = getResultInfo(o.resultCode); const color = RESULT_CATEGORY_COLOR[info.category]
@@ -747,7 +751,7 @@ function DetailModal({ order: o, checking, onClose, onDelete, onQuery, onConfirm
         </Section>
       )}
 
-      {o.payUrl && (
+      {(o.payUrl || o.deeplink || o.qrCodeUrl) && (
         <Section title="Thanh toán nhanh (QR / Link)">
           <div className="flex flex-col items-center gap-3 px-1 py-2 sm:flex-row sm:items-start">
             {o.qrCodeImage && (
@@ -758,28 +762,48 @@ function DetailModal({ order: o, checking, onClose, onDelete, onQuery, onConfirm
               />
             )}
             <div className="flex w-full flex-1 flex-col gap-2">
-              <div className="break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 font-mono text-[11.5px] text-[#374151]">
-                {o.payUrl}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <a
-                  // Text/box phía trên vẫn hiện payUrl đầy đủ cho admin xem —
-                  // chỉ nút bấm "mở" này đi qua status.js?open=1 để đồng bộ với
-                  // hành vi ẩn URL bên trang create-transaction.js.
-                  href={`/api/momo/status?orderId=${encodeURIComponent(o.orderId)}&open=1`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-[7px] rounded-[9px] border border-[rgba(174,0,112,0.25)] bg-[#fff0f7] px-3.5 py-2 text-[13px] font-bold text-[#ae0070] transition-all hover:bg-[#ae0070] hover:text-white"
-                >
-                  Mở link thanh toán
-                </a>
-                <button
-                  className="inline-flex items-center gap-[7px] rounded-[9px] border border-[#e5e7eb] bg-white px-3.5 py-2 text-[13px] font-bold text-[#374151] transition-all hover:bg-[#f3f4f6]"
-                  onClick={() => copy(o.payUrl)}
-                >
-                  Copy link
-                </button>
-              </div>
+              {o.payUrl && (
+                <>
+                  <div className="break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 font-mono text-[11.5px] text-[#374151]">
+                    {o.payUrl}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      // Text/box phía trên vẫn hiện payUrl đầy đủ cho admin xem —
+                      // chỉ nút bấm "mở" này đi qua status.js?open=1 để đồng bộ với
+                      // hành vi ẩn URL bên trang create-transaction.js.
+                      href={`/api/momo/status?orderId=${encodeURIComponent(o.orderId)}&open=1`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-[7px] rounded-[9px] border border-[rgba(174,0,112,0.25)] bg-[#fff0f7] px-3.5 py-2 text-[13px] font-bold text-[#ae0070] transition-all hover:bg-[#ae0070] hover:text-white"
+                    >
+                      Mở link thanh toán
+                    </a>
+                    <button
+                      className="inline-flex items-center gap-[7px] rounded-[9px] border border-[#e5e7eb] bg-white px-3.5 py-2 text-[13px] font-bold text-[#374151] transition-all hover:bg-[#f3f4f6]"
+                      onClick={() => copy(o.payUrl)}
+                    >
+                      Copy link
+                    </button>
+                  </div>
+                </>
+              )}
+              {o.deeplink && (
+                <div className="mt-1 flex items-center gap-1.5 break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 font-mono text-[11.5px] text-[#374151]">
+                  <span className="flex-1">{o.deeplink}</span>
+                  <button className="flex-shrink-0 rounded p-0.5 text-[#9ca3af] transition-colors hover:text-[#ae0070]" onClick={() => copy(o.deeplink)} title="Copy deeplink">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  </button>
+                </div>
+              )}
+              {o.qrCodeUrl && (
+                <div className="mt-1 flex items-center gap-1.5 break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 font-mono text-[11.5px] text-[#374151]">
+                  <span className="flex-1">{o.qrCodeUrl}</span>
+                  <button className="flex-shrink-0 rounded p-0.5 text-[#9ca3af] transition-colors hover:text-[#ae0070]" onClick={() => copy(o.qrCodeUrl)} title="Copy qrCodeUrl">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </Section>
