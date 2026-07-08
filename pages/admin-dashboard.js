@@ -493,12 +493,16 @@ function FloatingWindow({ title, subtitle, icon, iconBg = '#fff0f7', iconColor =
 
   useEffect(() => {
     const w = typeof window !== 'undefined' ? window.innerWidth  : 1200
-    const h = typeof window !== 'undefined' ? window.innerHeight : 800
     const winW = Math.min(width, w - 32)
-    const estH = Math.min(h * 0.85, 640)
     const baseX = Math.max(16, (w - winW) / 2)
-    const baseY = Math.max(16, (h - estH) / 2)
-    setPos({ x: baseX + cascadeRef.current.x, y: baseY + cascadeRef.current.y })
+    // Luôn mở sát mép trên (không còn canh giữa theo chiều dọc) — mở ở giữa
+    // màn hình dễ đè lên đúng vùng dữ liệu (thẻ thống kê / hàng đầu bảng) mà
+    // người dùng vừa bấm vào, phải cuộn lên mới thấy tiêu đề cửa sổ. Neo gần
+    // đỉnh màn hình để phần đầu (trạng thái, số tiền) luôn hiện ngay, tránh
+    // bị khuất phía trên; vẫn còn khoảng trống nhỏ để không dính sát viền.
+    const TOP_MARGIN = 20
+    const baseY = TOP_MARGIN
+    setPos({ x: baseX + cascadeRef.current.x, y: Math.max(TOP_MARGIN, baseY + cascadeRef.current.y) })
     setZ(bringFloatWinToFront())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
