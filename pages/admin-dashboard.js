@@ -905,11 +905,46 @@ function DetailModal({ order: o, checking, onClose, onDelete, onQuery, onConfirm
         </Section>
       )}
 
-      <Section title="Raw Data (toàn bộ dữ liệu đơn hàng)">
-        <div className="max-h-[240px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">
-          {JSON.stringify(o, null, 2)}
-        </div>
-      </Section>
+      {(() => {
+        // Mọi field đã có Row/Section riêng ở trên (để không hiển thị trùng lặp).
+        const SHOWN_KEYS = new Set([
+          'orderId', 'orderInfo', 'storeName', 'storeId', 'partnerName',
+          'amount', 'payType', 'source', 'paymentOption', 'transId',
+          'resultCode', 'message', 'createdAt', 'paidAt', 'responseTime',
+          'payUrl', 'deeplink', 'qrCodeUrl', 'qrCodeImage',
+          'requestId', 'partnerCode', 'orderGroupId', 'status', 'extraData',
+        ])
+        const restKeys = Object.keys(o).filter(k => !SHOWN_KEYS.has(k))
+        if (restKeys.length === 0) return null
+
+        const formatVal = (key, value) => {
+          if (value === null || value === undefined || value === '') return '—'
+          if (typeof value === 'boolean') return value ? 'Có' : 'Không'
+          if (typeof value === 'object') return JSON.stringify(value)
+          const looksLikeDate = /At$|Time$/i.test(key) && !isNaN(Date.parse(value))
+          if (looksLikeDate) return fmtDate(value)
+          return String(value)
+        }
+
+        return (
+          <Section title="Dữ liệu khác (tất cả field còn lại)">
+            {restKeys.map(key => {
+              const value = o[key]
+              const display = formatVal(key, value)
+              const isUrl = typeof value === 'string' && value.startsWith('http')
+              return (
+                <Row
+                  key={key}
+                  label={key}
+                  mono={typeof value === 'object' || isUrl}
+                  copy={value !== null && value !== undefined && value !== '' ? () => copy(typeof value === 'object' ? JSON.stringify(value) : value) : undefined}
+                  value={display}
+                />
+              )
+            })}
+          </Section>
+        )
+      })()}
     </FloatingWindow>
   )
 }
@@ -1619,9 +1654,41 @@ function LookupWindow({ win, onQuery, onClose }) {
             <Row label="responseTime"  value={win.result.responseTime ? fmtMs(win.result.responseTime) : '—'} />
           </Section>
 
-          <Section title="Raw Response">
-            <div className="mb-4 max-h-[200px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">{JSON.stringify(win.result, null, 2)}</div>
-          </Section>
+          {(() => {
+            const SHOWN_KEYS = new Set([
+              'orderId', 'requestId', 'transId', 'partnerCode',
+              'amount', 'payType', 'paymentOption', 'responseTime',
+              'resultCode', 'message', '_reconciled', '_previousStatus', '_newStatus',
+            ])
+            const restKeys = Object.keys(win.result).filter(k => !SHOWN_KEYS.has(k))
+            if (restKeys.length === 0) return null
+
+            const formatVal = (key, value) => {
+              if (value === null || value === undefined || value === '') return '—'
+              if (typeof value === 'boolean') return value ? 'Có' : 'Không'
+              if (typeof value === 'object') return JSON.stringify(value)
+              const looksLikeDate = /At$|Time$/i.test(key) && !isNaN(Date.parse(value))
+              if (looksLikeDate) return fmtDate(value)
+              return String(value)
+            }
+
+            return (
+              <Section title="Dữ liệu khác (tất cả field còn lại)">
+                {restKeys.map(key => {
+                  const value = win.result[key]
+                  return (
+                    <Row
+                      key={key}
+                      label={key}
+                      mono={typeof value === 'object'}
+                      copy={value !== null && value !== undefined && value !== '' ? () => copy(typeof value === 'object' ? JSON.stringify(value) : value) : undefined}
+                      value={formatVal(key, value)}
+                    />
+                  )
+                })}
+              </Section>
+            )
+          })()}
         </>
       )}
     </FloatingWindow>
@@ -1643,7 +1710,7 @@ export default function AdminDashboardPage() {
   const [fetching,        setFetching]        = useState(false)
   const [reconcilingAll,  setReconcilingAll]  = useState(false)
   const [lastSync,        setLastSync]        = useState(null)
-  const [filter,          setFilter]          = useState('ALL')
+  const [filter,          setFilter]          = useState('PAID')
   const [search,          setSearch]          = useState('')
   // Mặc định xem giao dịch HÔM NAY khi vào trang (trước đây mặc định "Tuần này").
   const [dateFrom,        setDateFrom]        = useState(() => DATE_PRESETS.find(p=>p.key==='today').range()[0])
