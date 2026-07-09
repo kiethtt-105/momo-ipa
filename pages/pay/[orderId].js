@@ -39,8 +39,16 @@ export async function getServerSideProps({ params }) {
   let order
   try {
     const raw = await redis.hget('momo:orders', orderId)
-    if (!raw) return { notFound: true }
+    if (!raw) {
+      console.warn('[pay/orderId] SSR: không tìm thấy đơn trong Redis', { orderId })
+      return { notFound: true }
+    }
     order = typeof raw === 'string' ? JSON.parse(raw) : raw
+    console.log('[pay/orderId] SSR: đã lấy đơn từ Redis', {
+      orderId,
+      status: order.status,
+      amount: order.amount,
+    })
   } catch (err) {
     console.error('[pay/orderId] getServerSideProps lỗi:', err)
     return {
@@ -100,18 +108,54 @@ function statusLabel(status) {
 }
 
 // Ô thông tin có nút sao chép — dùng chung cho ngân hàng / STK / số tiền / nội dung.
-function CopyField({ label, value }) {
+// `copyValue` là giá trị THỰC SỰ sẽ được chép vào clipboard, có thể khác với
+// `value` hiển thị (vd: hiển thị "1.454 đ" nhưng chép số thô "1454" để dán
+// vào app ngân hàng không bị lỗi định dạng).
+async function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch (err) {
+      console.warn('[pay/orderId] navigator.clipboard lỗi, thử fallback execCommand', err)
+    }
+  }
+  // Fallback cho webview trong app MoMo/Zalo/Facebook — các webview này
+  // thường không cấp quyền Clipboard API dù đang chạy trên HTTPS.
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.focus()
+    textarea.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    return ok
+  } catch (err) {
+    console.error('[pay/orderId] Fallback copy cũng lỗi', err)
+    return false
+  }
+}
+
+function CopyField({ label, value, copyValue, mono = true }) {
   const [copied, setCopied] = useState(false)
+  const [failed, setFailed] = useState(false)
   if (!value) return null
 
   async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(String(value))
+    const text = String(copyValue ?? value)
+    const ok = await copyToClipboard(text)
+    if (ok) {
+      console.log('[pay/orderId] Đã sao chép', { label })
+      setFailed(false)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // Trình duyệt chặn clipboard (hiếm, thường do không phải HTTPS hoặc
-      // thiếu permission) — bỏ qua, người dùng vẫn tự bôi đen copy được.
+    } else {
+      console.warn('[pay/orderId] Không sao chép được (clipboard bị chặn)', { label })
+      setFailed(true)
+      setTimeout(() => setFailed(false), 2000)
     }
   }
 
@@ -134,7 +178,7 @@ function CopyField({ label, value }) {
           style={{
             fontSize: 15,
             fontWeight: 600,
-            fontFamily: '"JetBrains Mono", monospace',
+            fontFamily: mono ? '"JetBrains Mono", monospace' : 'inherit',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -155,12 +199,120 @@ function CopyField({ label, value }) {
           fontSize: 13,
           fontWeight: 600,
           cursor: 'pointer',
-          background: copied ? '#22c55e' : '#111',
+          background: failed ? '#dc2626' : copied ? '#22c55e' : '#111',
           color: '#fff',
           transition: 'background 0.15s',
         }}
       >
-        {copied ? 'Đã chép' : 'Sao chép'}
+        {failed ? 'Lỗi, thử lại' : copied ? 'Đã chép' : 'Sao chép'}
+      </button>
+    </div>
+  )
+}
+
+// ==== Phiếu chuyển khoản ====
+// Trình bày lại toàn bộ khối thông tin ngân hàng dưới dạng "biên lai" —
+// chịu được dữ liệu thiếu (bank null, accountNumber rỗng...) và tách riêng
+// giá trị hiển thị / giá trị copy cho trường số tiền.
+function BankTransferSlip({ payInfo }) {
+  if (!payInfo) return null
+
+  const bank = payInfo.bank || {}
+  const bankLabel = bank.fullName || bank.name || 'Ngân hàng'
+  const bankCode = bank.code || bank.bin || '—'
+  const initials = (bank.code || bank.name || '??').slice(0, 2).toUpperCase()
+
+  const rawAmount = payInfo.amount != null ? String(payInfo.amount).replace(/[^\d]/g, '') : ''
+  const displayAmount = rawAmount ? formatVnd(rawAmount) : null
+
+  const fullSlipText = [
+    `Ngân hàng: ${bankLabel}${bank.code ? ` (${bank.code})` : ''}`,
+    payInfo.accountNumber ? `Số tài khoản: ${payInfo.accountNumber}` : null,
+    displayAmount ? `Số tiền: ${displayAmount}` : null,
+    payInfo.content ? `Nội dung: ${payInfo.content}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  const [copiedAll, setCopiedAll] = useState(false)
+
+  async function handleCopyAll() {
+    const ok = await copyToClipboard(fullSlipText)
+    if (ok) {
+      console.log('[pay/orderId] Đã sao chép toàn bộ phiếu chuyển khoản')
+      setCopiedAll(true)
+      setTimeout(() => setCopiedAll(false), 1500)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        border: '1px dashed #d1d5db',
+        borderRadius: 14,
+        padding: '16px 16px 14px',
+        marginBottom: 4,
+        background: '#fcfcfd',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          marginBottom: 14,
+          paddingBottom: 12,
+          borderBottom: '1px dashed #e5e7eb',
+        }}
+      >
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            background: '#0ea5a4',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 13,
+            fontWeight: 800,
+            flexShrink: 0,
+          }}
+        >
+          {initials}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>{bankLabel}</div>
+          <div style={{ fontSize: 12, color: '#9ca3af' }}>Mã ngân hàng: {bankCode}</div>
+        </div>
+      </div>
+
+      <CopyField label="Số tài khoản" value={payInfo.accountNumber} />
+      {displayAmount && (
+        <CopyField label="Số tiền" value={displayAmount} copyValue={rawAmount} />
+      )}
+      <CopyField label="Nội dung chuyển khoản" value={payInfo.content} />
+
+      <button
+        type="button"
+        onClick={handleCopyAll}
+        style={{
+          display: 'block',
+          width: '100%',
+          textAlign: 'center',
+          background: 'transparent',
+          border: '1px solid #0ea5a4',
+          color: copiedAll ? '#0ea5a4' : '#0ea5a4',
+          fontWeight: 700,
+          fontSize: 13,
+          padding: '9px 0',
+          borderRadius: 9,
+          cursor: 'pointer',
+          marginTop: 4,
+        }}
+      >
+        {copiedAll ? '✓ Đã sao chép toàn bộ' : 'Sao chép tất cả thông tin'}
       </button>
     </div>
   )
@@ -188,7 +340,9 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
   function goToResult(orderId) {
     if (redirectRef.current) return // tránh điều hướng 2 lần
     redirectRef.current = true
+    console.log('[pay/orderId] Chuẩn bị chuyển sang /result', { orderId })
     setTimeout(() => {
+      console.log('[pay/orderId] Đang chuyển sang /result', { orderId })
       router.replace(`/result?orderId=${encodeURIComponent(orderId)}`)
     }, 1200)
   }
@@ -198,6 +352,9 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
   // để bắt sự kiện chuyển trạng thái nữa, nên phải điều hướng ngay ở đây.
   useEffect(() => {
     if (initialOrder && initialOrder.status === 'PAID') {
+      console.log('[pay/orderId] Đơn đã PAID sẵn từ SSR, chuyển thẳng sang /result', {
+        orderId: initialOrder.orderId,
+      })
       goToResult(initialOrder.orderId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -235,12 +392,20 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
     async function loadPayInfo() {
       setLoadingPayInfo(true)
       setPayInfoError('')
+      console.log('[pay/orderId] Gọi vietqr-pay lấy thông tin chuyển khoản', {
+        orderId: initialOrder.orderId,
+      })
       try {
         const r = await fetch(`/api/momo/vietqr-pay?orderId=${encodeURIComponent(initialOrder.orderId)}`)
         const data = await r.json()
         if (!r.ok) throw new Error(data.error || 'Không lấy được thông tin chuyển khoản')
+        console.log('[pay/orderId] Đã lấy thông tin chuyển khoản', {
+          orderId: initialOrder.orderId,
+          bank: data.bank?.code,
+        })
         if (!cancelled) setPayInfo(data)
       } catch (err) {
+        console.error('[pay/orderId] Lỗi lấy vietqr-pay', { orderId: initialOrder.orderId, err })
         if (!cancelled) setPayInfoError(err.message || 'Có lỗi xảy ra, thử lại sau')
       } finally {
         if (!cancelled) setLoadingPayInfo(false)
@@ -263,12 +428,27 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
     // nút, không set lỗi ra UI — lỗi tạm thời cứ để lần poll 1s sau tự thử
     // lại). silent = false khi khách chủ động bấm nút "Kiểm tra giao dịch".
     async function checkStatus({ silent } = { silent: true }) {
+      console.log('[pay/orderId] Poll status', { orderId: initialOrder.orderId, silent })
       try {
         const r = await fetch(`/api/momo/status?orderId=${encodeURIComponent(initialOrder.orderId)}`)
         const data = await r.json()
-        if (!r.ok) return false // lỗi tạm thời, thử lại ở lần poll/bấm sau
+        if (!r.ok) {
+          console.warn('[pay/orderId] Poll status trả về lỗi HTTP', {
+            orderId: initialOrder.orderId,
+            httpStatus: r.status,
+          })
+          return false // lỗi tạm thời, thử lại ở lần poll/bấm sau
+        }
+        console.log('[pay/orderId] Poll status kết quả', {
+          orderId: initialOrder.orderId,
+          status: data.status,
+        })
         setOrder((prev) => ({ ...prev, ...data }))
         if (TERMINAL_STATUSES.includes(data.status)) {
+          console.log('[pay/orderId] Đơn đã có kết luận cuối, dừng poll', {
+            orderId: initialOrder.orderId,
+            status: data.status,
+          })
           clearInterval(pollRef.current)
           // Thanh toán thành công -> trả khách về trang /result để xem kết
           // quả đầy đủ. FAILED/EXPIRED vẫn ở lại trang /pay như cũ vì khách
@@ -278,10 +458,11 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
           }
         }
         return true
-      } catch {
+      } catch (err) {
         // Lỗi mạng tạm thời (kể cả khi server đang nghẽn) — bỏ qua, vòng
         // poll 1s tự thử lại; nếu khách vừa bấm nút thủ công thì coi như
         // lần bấm đó không lấy được gì, khách có thể bấm lại.
+        console.error('[pay/orderId] Poll status lỗi mạng', { orderId: initialOrder.orderId, err })
         return false
       }
     }
@@ -300,6 +481,9 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
   // động bấm nút này để ép kiểm tra ngay lập tức thay vì ngồi chờ.
   async function handleManualCheck() {
     if (manualChecking || !checkStatusRef.current) return
+    console.log('[pay/orderId] Khách bấm nút kiểm tra giao dịch thủ công', {
+      orderId: initialOrder?.orderId,
+    })
     setManualChecking(true)
     try {
       await checkStatusRef.current({ silent: false })
