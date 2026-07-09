@@ -215,6 +215,11 @@ function CopyField({ label, value, copyValue, mono = true }) {
 // chịu được dữ liệu thiếu (bank null, accountNumber rỗng...) và tách riêng
 // giá trị hiển thị / giá trị copy cho trường số tiền.
 function BankTransferSlip({ payInfo }) {
+  // Hook phải gọi TRƯỚC mọi early return (Rules of Hooks) — bản trước gọi
+  // useState sau `if (!payInfo) return null` nên khi payInfo chuyển từ
+  // null -> có dữ liệu, React sẽ crash "Rendered fewer hooks than expected".
+  const [copiedAll, setCopiedAll] = useState(false)
+
   if (!payInfo) return null
 
   const bank = payInfo.bank || {}
@@ -233,8 +238,6 @@ function BankTransferSlip({ payInfo }) {
   ]
     .filter(Boolean)
     .join('\n')
-
-  const [copiedAll, setCopiedAll] = useState(false)
 
   async function handleCopyAll() {
     const ok = await copyToClipboard(fullSlipText)
@@ -326,6 +329,9 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
   const [loadingPayInfo, setLoadingPayInfo] = useState(true)
   const [remainingMs, setRemainingMs] = useState(null)
   const [manualChecking, setManualChecking] = useState(false)
+  // Tăng token này để ép effect lấy vietqr-pay chạy lại (dùng cho nút "Thử
+  // lại" khi lần gọi trước bị lỗi hoặc quá thời gian chờ).
+  const [payInfoRetryToken, setPayInfoRetryToken] = useState(0)
   const pollRef = useRef(null)
   const redirectRef = useRef(null)
   // Dùng chung 1 hàm check status cho cả vòng poll tự động lẫn nút bấm thủ
@@ -388,15 +394,25 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
   useEffect(() => {
     if (!initialOrder) return
     let cancelled = false
+    const controller = new AbortController()
+    // vietqr-pay kéo theo cả Puppeteer (qua qr-extract) nên có thể chậm,
+    // nhưng không được để khách kẹt ở "Đang tải..." vô thời hạn nếu route bị
+    // treo/nghẽn — 45s là dưới maxDuration=60s của route để luôn có phản hồi
+    // rõ ràng (thành công hoặc lỗi) thay vì chờ vô ích.
+    const timeoutId = setTimeout(() => controller.abort(), 45000)
 
     async function loadPayInfo() {
       setLoadingPayInfo(true)
       setPayInfoError('')
       console.log('[pay/orderId] Gọi vietqr-pay lấy thông tin chuyển khoản', {
         orderId: initialOrder.orderId,
+        retry: payInfoRetryToken,
       })
       try {
-        const r = await fetch(`/api/momo/vietqr-pay?orderId=${encodeURIComponent(initialOrder.orderId)}`)
+        const r = await fetch(
+          `/api/momo/vietqr-pay?orderId=${encodeURIComponent(initialOrder.orderId)}`,
+          { signal: controller.signal }
+        )
         const data = await r.json()
         if (!r.ok) throw new Error(data.error || 'Không lấy được thông tin chuyển khoản')
         console.log('[pay/orderId] Đã lấy thông tin chuyển khoản', {
@@ -406,8 +422,15 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
         if (!cancelled) setPayInfo(data)
       } catch (err) {
         console.error('[pay/orderId] Lỗi lấy vietqr-pay', { orderId: initialOrder.orderId, err })
-        if (!cancelled) setPayInfoError(err.message || 'Có lỗi xảy ra, thử lại sau')
+        if (!cancelled) {
+          const msg =
+            err.name === 'AbortError'
+              ? 'Lấy thông tin chuyển khoản quá lâu, vui lòng thử lại.'
+              : err.message || 'Có lỗi xảy ra, thử lại sau'
+          setPayInfoError(msg)
+        }
       } finally {
+        clearTimeout(timeoutId)
         if (!cancelled) setLoadingPayInfo(false)
       }
     }
@@ -415,8 +438,10 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
     loadPayInfo()
     return () => {
       cancelled = true
+      controller.abort()
+      clearTimeout(timeoutId)
     }
-  }, [initialOrder])
+  }, [initialOrder, payInfoRetryToken])
 
   // 2) Poll trạng thái đơn hàng mỗi 1s (route nhẹ, tự verify với MoMo khi
   // gần hết hạn) — tự dừng khi đơn đã có kết luận cuối.
@@ -621,15 +646,31 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
                 </div>
               )}
               {!loadingPayInfo && payInfoError && (
-                <div className={styles.errorBanner}>{payInfoError}</div>
+                <div className={styles.errorBanner} style={{ marginBottom: 12 }}>
+                  <div style={{ marginBottom: 8 }}>{payInfoError}</div>
+                  <button
+                    type="button"
+                    onClick={() => setPayInfoRetryToken((t) => t + 1)}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'center',
+                      background: 'transparent',
+                      border: '1px solid #dc2626',
+                      color: '#dc2626',
+                      fontWeight: 700,
+                      fontSize: 13,
+                      padding: '8px 0',
+                      borderRadius: 9,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Thử lại
+                  </button>
+                </div>
               )}
               {!loadingPayInfo && !payInfoError && payInfo && (
-                <>
-                  <CopyField label="Ngân hàng" value={payInfo.bank?.fullName || payInfo.bank?.name} />
-                  <CopyField label="Số tài khoản" value={payInfo.accountNumber} />
-                  <CopyField label="Số tiền" value={payInfo.amount ? formatVnd(payInfo.amount) : null} />
-                  <CopyField label="Nội dung chuyển khoản" value={payInfo.content} />
-                </>
+                <BankTransferSlip payInfo={payInfo} />
               )}
             </div>
           </>
