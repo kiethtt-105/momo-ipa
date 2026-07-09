@@ -1032,15 +1032,17 @@ function DeleteConfirmModal({ count, password, setPassword, checking, error, onC
         <p className="mb-3 text-[13px] text-[#374151]">
           Bạn sắp xoá vĩnh viễn <strong>{count}</strong> giao dịch khỏi hệ thống. Vui lòng nhập mật khẩu quản trị để xác nhận.
         </p>
-        <input
-          type="password" autoFocus value={password}
-          onChange={e => setPassword(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && password && !checking && onConfirm()}
-          placeholder="Mật khẩu quản trị..."
-          className={`w-full rounded-xl border-[1.5px] bg-[rgba(245,237,242,0.5)] px-4 py-[11px] font-[Inter,sans-serif] text-[14px] text-[#111827] transition-all focus:border-[#ae0070] focus:bg-white focus:shadow-[0_0_0_4px_rgba(174,0,112,0.07)] ${
-            error ? 'border-[#dc2626] bg-[#fff5f5]' : 'border-[rgba(174,0,112,0.15)]'
-          }`}
-        />
+        <form onSubmit={e => { e.preventDefault(); password && !checking && onConfirm() }}>
+          <input
+            type="password" autoFocus value={password}
+            inputMode="numeric" pattern="[0-9]*" autoComplete="current-password"
+            onChange={e => setPassword(e.target.value)}
+            placeholder="Mật khẩu quản trị..."
+            className={`w-full rounded-xl border-[1.5px] bg-[rgba(245,237,242,0.5)] px-4 py-[11px] font-[Inter,sans-serif] text-[14px] text-[#111827] transition-all focus:border-[#ae0070] focus:bg-white focus:shadow-[0_0_0_4px_rgba(174,0,112,0.07)] ${
+              error ? 'border-[#dc2626] bg-[#fff5f5]' : 'border-[rgba(174,0,112,0.15)]'
+            }`}
+          />
+        </form>
         {error && <p className="mt-2 text-[12.5px] font-semibold text-[#dc2626]">⚠ Mật khẩu không chính xác</p>}
       </div>
     </FloatingWindow>
@@ -2063,24 +2065,27 @@ export default function AdminDashboardPage() {
               <img src="/Main.png" alt="Logo" className="h-11 w-11 object-contain" />
             </div>
             <h1 className="mb-5 text-[22px] font-extrabold tracking-[-0.5px] text-[#111827]">Nhập mật khẩu để tiếp tục</h1>
-            <div className="text-left">
+            <form
+              className="text-left"
+              onSubmit={e => { e.preventDefault(); login() }}
+            >
               <input
                 type="password" value={password} autoFocus
+                inputMode="numeric" pattern="[0-9]*" autoComplete="current-password"
                 onChange={e => { setPassword(e.target.value); setPwError(false) }}
-                onKeyDown={e => e.key==='Enter' && login()}
                 placeholder="Mật khẩu..."
                 className={`mb-3 w-full rounded-xl border-[1.5px] bg-[rgba(245,237,242,0.5)] px-4 py-[13px] font-[Inter,sans-serif] text-[15px] text-[#111827] transition-all focus:border-[#ae0070] focus:bg-white focus:shadow-[0_0_0_4px_rgba(174,0,112,0.07)] ${
                   pwError ? 'border-[#dc2626] bg-[#fff5f5]' : 'border-[rgba(174,0,112,0.15)]'
                 }`}
               />
-            </div>
-            {pwError && <p className="mb-[14px] text-[13px] font-semibold text-[#dc2626]">⚠ Mật khẩu không chính xác</p>}
-            <button
-              className="w-full rounded-xl bg-[#ae0070] py-[13px] font-[Inter,sans-serif] text-[15px] font-bold text-white shadow-[0_6px_20px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-px hover:bg-[#91005d] hover:shadow-[0_8px_24px_rgba(174,0,112,0.25)]"
-              onClick={login}
-            >
-              Đăng nhập
-            </button>
+              {pwError && <p className="mb-[14px] text-[13px] font-semibold text-[#dc2626]">⚠ Mật khẩu không chính xác</p>}
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-[#ae0070] py-[13px] font-[Inter,sans-serif] text-[15px] font-bold text-white shadow-[0_6px_20px_rgba(174,0,112,0.2)] transition-all hover:-translate-y-px hover:bg-[#91005d] hover:shadow-[0_8px_24px_rgba(174,0,112,0.25)]"
+              >
+                Đăng nhập
+              </button>
+            </form>
           </div>
         </div>
       </div>
