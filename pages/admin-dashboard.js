@@ -1815,11 +1815,7 @@ export default function AdminDashboardPage() {
         while (idx < targets.length) {
           const orderId = targets[idx++]
           try {
-            const res  = await fetch('/api/momo/query', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ orderId }),
-            })
+            const res  = await fetch(`/api/momo/query?orderId=${encodeURIComponent(orderId)}`)
             const data = await res.json().catch(() => null)
             if (data?._reconciled) reconciled += 1
           } catch (err) {
@@ -1888,7 +1884,7 @@ export default function AdminDashboardPage() {
     if (!orderId) return
     updateQueryWindow(id, { orderId, loading: true, result: null, error: null })
     try {
-      const res  = await fetch('/api/momo/query', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ orderId }) })
+      const res  = await fetch(`/api/momo/query?orderId=${encodeURIComponent(orderId)}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`)
       updateQueryWindow(id, { loading: false, result: data })
@@ -1912,11 +1908,7 @@ export default function AdminDashboardPage() {
     const id = `dw-${++detailWinSeq.current}`
     setDetailWindows(ws => [...ws, { id, orderId, checking: true }])
     try {
-      const res  = await fetch('/api/momo/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId }),
-      })
+      const res  = await fetch(`/api/momo/query?orderId=${encodeURIComponent(orderId)}`)
       const data = await res.json().catch(() => null)
       if (data?._reconciled) await fetchOrders({ force: true })
     } catch (err) {
