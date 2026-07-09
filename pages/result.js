@@ -90,15 +90,24 @@ const PAY_TYPE_LABEL = {
 
 // Các field đã được hiển thị "trang trọng" riêng ở phần trên của thẻ kết quả —
 // không lặp lại chúng ở khu vực "Thông tin chi tiết" bên dưới.
-const CURATED_KEYS = new Set(['orderId', 'orderInfo', 'transId', 'payType', 'amount', 'message', 'resultCode', 'paidAt'])
+// Cố tình BỎ orderInfo/transId khỏi đây — đẩy 2 field này xuống khu vực
+// "Thông tin chi tiết" (xổ xuống) để phần đầu thẻ chỉ còn đúng những gì
+// khách cần liếc qua là hiểu kết quả, gọn cho màn hình điện thoại.
+const CURATED_KEYS = new Set(['orderId', 'payType', 'amount', 'message', 'resultCode', 'paidAt'])
 
-// Không bao giờ hiển thị các field nhạy cảm / nội bộ này ra UI.
-const HIDDEN_KEYS = new Set(['signature', 'accessKey', 'secretKey', 'partnerAccessToken', 'raw', 'lang', 'ipnUrl', 'redirectUrl'])
+// Không bao giờ hiển thị các field nhạy cảm / nội bộ / gây rối mắt này ra UI —
+// khách không cần và cũng không hiểu các field mang tính vận hành nội bộ.
+const HIDDEN_KEYS = new Set([
+  'signature', 'accessKey', 'secretKey', 'partnerAccessToken', 'raw', 'lang', 'ipnUrl', 'redirectUrl',
+  'storeId', 'storeName', 'terminalId', 'merchantName', 'requestId', 'responseTime',
+  'lastCheckedAt', 'source', 'paymentOption', 'orderType', 'extraData', 'partnerCode', 'createdAt',
+])
 
-// Luồng P2P: khách và admin xem GIỐNG NHAU, chỉ hiện field thật sự cần thiết
-// cho 1 đơn (không hiện field nội bộ như storeId, terminalId, merchantName,
-// requestId, partnerCode... dù ai đang xem đi nữa).
-const P2P_EXTRA_ALLOWED_KEYS = new Set(['payUrl', 'qrCodeImage', 'status', 'createdAt', 'source'])
+// Luồng P2P (chuyển khoản): khách và admin xem GIỐNG NHAU, chỉ hiện field
+// thật sự cần thiết khi khách đang chờ chuyển khoản — QR để quét và link
+// thanh toán dự phòng. Bỏ hẳn status/createdAt/source khỏi phần khách thấy
+// vì trạng thái đã được thể hiện bằng UI (icon + màu + tiêu đề) rồi.
+const P2P_EXTRA_ALLOWED_KEYS = new Set(['payUrl', 'qrCodeImage'])
 
 const TIME_KEYS = new Set(['responseTime', 'paidAt', 'createdAt', 'updatedAt', 'requestTime', 'transDate', 'payDate'])
 
@@ -540,8 +549,6 @@ export default function ResultPage() {
 
                 <div className="info-list">
                   {info?.orderId && <InfoRow k="Mã đơn hàng" v={info.orderId} mono copyable />}
-                  {info?.orderInfo && <InfoRow k="Nội dung" v={info.orderInfo} />}
-                  {info?.transId && <InfoRow k="Mã giao dịch MoMo" v={String(info.transId)} mono copyable />}
                   {info?.payType && <InfoRow k="Hình thức" v={PAY_TYPE_LABEL[info.payType] || info.payType} />}
                   {info?.paidAt && <InfoRow k="Thời gian" v={fmtTime(info.paidAt)} />}
                 </div>
@@ -571,7 +578,6 @@ export default function ResultPage() {
 
                 <div className="info-list">
                   {info?.orderId && <InfoRow k="Mã đơn hàng" v={info.orderId} mono copyable />}
-                  {info?.orderInfo && <InfoRow k="Nội dung" v={info.orderInfo} />}
                   {info?.amount > 0 && <InfoRow k="Số tiền" v={`${fmt(info.amount)} ₫`} />}
                   {info?.payType && <InfoRow k="Hình thức" v={PAY_TYPE_LABEL[info.payType] || info.payType} />}
                 </div>
