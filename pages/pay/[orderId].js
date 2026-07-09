@@ -258,9 +258,33 @@ export default function PayPage({ order: initialOrder, loadError }) {
                 alt="Mã QR thanh toán"
               />
             </div>
-            <div className={styles.qrSub} style={{ textAlign: 'center', marginBottom: 20 }}>
+            <div className={styles.qrSub} style={{ textAlign: 'center', marginBottom: 12 }}>
               Mở app MoMo hoặc app ngân hàng bất kỳ hỗ trợ VietQR để quét
             </div>
+
+            {/* Dành cho khách đang xem trang này TRÊN ĐIỆN THOẠI (đã có sẵn
+                app MoMo) — bấm thẳng vào deeplink thay vì phải quét QR.
+                Tận dụng route /api/momo/status?open=1 đã có sẵn: route này
+                tự tra Redis lấy deeplink/payUrl rồi redirect, đồng thời ẩn
+                luôn link MoMo thật (dài, lộ thông tin) khỏi thanh địa chỉ
+                cho tới lúc bấm. */}
+            <a
+              href={`/api/momo/status?orderId=${encodeURIComponent(order.orderId)}&open=1`}
+              style={{
+                display: 'block',
+                textAlign: 'center',
+                background: '#d82d8b',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: 15,
+                padding: '12px 0',
+                borderRadius: 10,
+                textDecoration: 'none',
+                marginBottom: 20,
+              }}
+            >
+              Tiếp tục với App MoMo
+            </a>
 
             <div>
               {loadingPayInfo && (
