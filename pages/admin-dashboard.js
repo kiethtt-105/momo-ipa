@@ -204,6 +204,11 @@ const OrderCard = memo(function OrderCard({ o, selected, onToggle, onOpenDetail,
           {o.storeName && <div className="mt-0.5 truncate text-[11px] font-medium text-[#9ca3af]">🏪 {o.storeName}</div>}
           <div className="mt-0.5 font-mono text-[11px] text-[#9ca3af]">{o.orderId}</div>
           <div className="mt-0.5 text-[11px] text-[#9ca3af]">{fmtDate(o.createdAt)}</div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {o.source && <span className="rounded-md bg-black/[0.05] px-[7px] py-[2px] text-[10.5px] font-semibold text-[#6b7280]">{sourceLabel(o.source)}</span>}
+            {o.paymentOption && <span className="rounded-md bg-black/[0.05] px-[7px] py-[2px] text-[10.5px] font-semibold text-[#6b7280]">{o.paymentOption}</span>}
+          </div>
+          {o.message && <div className="mt-0.5 truncate text-[11px] text-[#9ca3af]" title={o.message}>{o.message}</div>}
         </div>
         <div className="flex flex-shrink-0 items-center gap-1" onClick={e => e.stopPropagation()}>
           <button
@@ -899,6 +904,12 @@ function DetailModal({ order: o, checking, onClose, onDelete, onQuery, onConfirm
           <Row label="orderGroupId" value={o.orderGroupId || '—'} mono />
         </Section>
       )}
+
+      <Section title="Raw Data (toàn bộ dữ liệu đơn hàng)">
+        <div className="max-h-[240px] overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3 font-mono text-[11.5px] text-[#374151]">
+          {JSON.stringify(o, null, 2)}
+        </div>
+      </Section>
     </FloatingWindow>
   )
 }
@@ -1334,11 +1345,12 @@ function HistorySection({
           <>
             {/* Desktop table ≥1024px */}
             <div className="hidden max-h-[65vh] overflow-auto lg:block">
-              <table className="w-full min-w-[980px] table-auto border-collapse text-[13.5px]">
+              <table className="w-full min-w-[1400px] table-auto border-collapse text-[13.5px]">
                 <colgroup>
                   <col className="w-[36px]" /><col className="w-[110px]" /><col className="w-[90px]" />
-                  <col className="w-[130px]" /><col className="w-[22%]"  /><col className="w-[110px]" />
-                  <col className="w-[110px]" /><col className="w-[70px]" /><col className="w-[70px]" /><col className="w-[80px]" />
+                  <col className="w-[130px]" /><col className="w-[18%]"  /><col className="w-[100px]" />
+                  <col className="w-[100px]" /><col className="w-[90px]" /><col className="w-[70px]" /><col className="w-[70px]" />
+                  <col className="w-[100px]" /><col className="w-[110px]" /><col className="w-[16%]" /><col className="w-[80px]" />
                 </colgroup>
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-[#f5edf2]">
@@ -1356,6 +1368,10 @@ function HistorySection({
                     <SortableTh label="Mã GD MoMo" sortKey="transId"    currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <SortableTh label="Hình thức" sortKey="payType" currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
                     <SortableTh label="Result"     sortKey="resultCode" currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                    <SortableTh label="Loại đơn"    sortKey="source"     currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                    <SortableTh label="Phương thức TT" sortKey="paymentOption" currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                    <SortableTh label="Cửa hàng"    sortKey="storeName"  currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                    <th className="whitespace-nowrap border-b border-[rgba(174,0,112,0.08)] px-4 py-[13px] text-left text-[11px] font-bold uppercase tracking-wide text-[#6b7280]">Thông điệp</th>
                     <th className="whitespace-nowrap border-b border-[rgba(174,0,112,0.08)] px-4 py-[13px] text-center text-[11px] font-bold uppercase tracking-wide text-[#6b7280]">Thao tác</th>
                   </tr>
                 </thead>
@@ -1399,6 +1415,18 @@ function HistorySection({
                           {o.resultCode !== undefined
                             ? <span className="font-mono text-[13px] font-bold" style={{ color: o.resultCode===0?'#16a34a':'#dc2626' }}>{o.resultCode===0?'✓ 0':`✗ ${o.resultCode}`}</span>
                             : <span className="text-[#9ca3af]">—</span>}
+                        </td>
+                        <td className="px-4 py-3.5 align-middle text-xs text-[#6b7280]">
+                          {o.source ? sourceLabel(o.source) : '—'}
+                        </td>
+                        <td className="px-4 py-3.5 align-middle text-xs text-[#6b7280]">
+                          {o.paymentOption || '—'}
+                        </td>
+                        <td className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3.5 align-middle text-xs text-[#6b7280]" title={o.storeName}>
+                          {o.storeName || '—'}
+                        </td>
+                        <td className="max-w-0 px-4 py-3.5 align-middle text-xs text-[#6b7280]">
+                          <div className="truncate" title={o.message}>{o.message || '—'}</div>
                         </td>
                         {/* Đã bỏ nút "Tra cứu" ở đây — bấm vào cả dòng đã mở Chi tiết, mà
                             trong Chi tiết đã có sẵn hành động tra cứu MoMo rồi, nên nút
