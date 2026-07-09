@@ -173,8 +173,12 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
   const [payInfoError, setPayInfoError] = useState('')
   const [loadingPayInfo, setLoadingPayInfo] = useState(true)
   const [remainingMs, setRemainingMs] = useState(null)
+  const [manualChecking, setManualChecking] = useState(false)
   const pollRef = useRef(null)
   const redirectRef = useRef(null)
+  // Dùng chung 1 hàm check status cho cả vòng poll tự động lẫn nút bấm thủ
+  // công, để không lặp code và đảm bảo 2 nơi xử lý kết quả giống hệt nhau.
+  const checkStatusRef = useRef(null)
 
   // Điều hướng sang /result — chờ 1.2s để khách kịp thấy dòng "Thanh toán
   // thành công" ngay trên trang /pay, sau đó mới chuyển qua /result để xem
@@ -255,11 +259,14 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
     if (!initialOrder) return
     if (TERMINAL_STATUSES.includes(initialOrder.status)) return // đã kết luận từ SSR, khỏi poll
 
-    async function tick() {
+    // silent = true khi gọi từ vòng poll tự động (không hiện spinner trên
+    // nút, không set lỗi ra UI — lỗi tạm thời cứ để lần poll 1s sau tự thử
+    // lại). silent = false khi khách chủ động bấm nút "Kiểm tra giao dịch".
+    async function checkStatus({ silent } = { silent: true }) {
       try {
         const r = await fetch(`/api/momo/status?orderId=${encodeURIComponent(initialOrder.orderId)}`)
         const data = await r.json()
-        if (!r.ok) return // lỗi tạm thời, thử lại ở lần poll sau
+        if (!r.ok) return false // lỗi tạm thời, thử lại ở lần poll/bấm sau
         setOrder((prev) => ({ ...prev, ...data }))
         if (TERMINAL_STATUSES.includes(data.status)) {
           clearInterval(pollRef.current)
@@ -270,15 +277,36 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
             goToResult(initialOrder.orderId)
           }
         }
+        return true
       } catch {
-        // Lỗi mạng tạm thời — bỏ qua, lần poll sau (1s tới) thử lại.
+        // Lỗi mạng tạm thời (kể cả khi server đang nghẽn) — bỏ qua, vòng
+        // poll 1s tự thử lại; nếu khách vừa bấm nút thủ công thì coi như
+        // lần bấm đó không lấy được gì, khách có thể bấm lại.
+        return false
       }
     }
 
-    tick() // gọi ngay lần đầu, không đợi hết 1s mới có dữ liệu
-    pollRef.current = setInterval(tick, POLL_INTERVAL_MS)
+    // Cho phép nút "Kiểm tra giao dịch" ở phần render bên dưới gọi lại đúng
+    // hàm này, thay vì phải viết riêng 1 bản fetch khác.
+    checkStatusRef.current = checkStatus
+
+    checkStatus({ silent: true }) // gọi ngay lần đầu, không đợi hết 1s mới có dữ liệu
+    pollRef.current = setInterval(() => checkStatus({ silent: true }), POLL_INTERVAL_MS)
     return () => clearInterval(pollRef.current)
   }, [initialOrder])
+
+  // Trường hợp server/route status.js đang nghẽn (Puppeteer/MoMo phản hồi
+  // chậm...) khiến vòng poll 1s bị trễ hoặc rớt vài nhịp — khách có thể chủ
+  // động bấm nút này để ép kiểm tra ngay lập tức thay vì ngồi chờ.
+  async function handleManualCheck() {
+    if (manualChecking || !checkStatusRef.current) return
+    setManualChecking(true)
+    try {
+      await checkStatusRef.current({ silent: false })
+    } finally {
+      setManualChecking(false)
+    }
+  }
 
   if (!initialOrder) {
     return (
@@ -325,13 +353,41 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
               fontFamily: '"JetBrains Mono", monospace',
               fontSize: 13,
               color: remainingMs > 0 ? '#888' : '#dc2626',
-              marginBottom: 16,
+              marginBottom: 12,
             }}
           >
             {remainingMs > 0
               ? `Còn lại ${formatCountdown(remainingMs)}`
               : 'Đã hết thời gian — đang kiểm tra kết quả…'}
           </div>
+        )}
+
+        {/* Hệ thống đã tự poll /api/momo/status mỗi 1s ở trên rồi — nút này
+            dành cho lúc server nghẽn (route status.js phải verify thật với
+            MoMo nên đôi khi chậm), khách vừa chuyển khoản xong có thể bấm để
+            ép kiểm tra ngay thay vì ngồi chờ vòng poll tự động. */}
+        {order.status === 'PENDING' && (
+          <button
+            type="button"
+            onClick={handleManualCheck}
+            disabled={manualChecking}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'center',
+              background: 'transparent',
+              border: '1px solid #d1d5db',
+              color: manualChecking ? '#aaa' : '#374151',
+              fontWeight: 600,
+              fontSize: 14,
+              padding: '10px 0',
+              borderRadius: 10,
+              cursor: manualChecking ? 'default' : 'pointer',
+              marginBottom: 16,
+            }}
+          >
+            {manualChecking ? 'Đang kiểm tra…' : '🔄 Kiểm tra giao dịch'}
+          </button>
         )}
 
         {/* Chỉ hiện QR + thông tin chuyển khoản khi đơn còn đang chờ —
