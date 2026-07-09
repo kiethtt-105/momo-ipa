@@ -22,41 +22,35 @@ const STILL_PROCESSING_CODES = [1000, 7000, 7002, 9000]
 // 1005: Giao dịch thất bại do url hoặc QR code đã hết hạn.
 const EXPIRED_CODES = [1005]
 
-export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end()
+// ── Chế độ "wait=1": thay vì client tự setInterval poll mỗi 1s, route tự
+// lặp bên trong 1 request duy nhất, mỗi 1s tự kiểm tra lại và trả về NGAY
+// khi có kết luận cuối (PAID/FAILED/EXPIRED), không cần client tự bấm/gọi
+// lại. Nếu hết ngân sách thời gian mà vẫn PENDING thì trả PENDING, client
+// tự gọi lại route (xem ghi chú cuối file) để tiếp tục.
+const WAIT_POLL_INTERVAL_MS = 1000
+const WAIT_BUDGET_MS        = 25_000 // chừa buffer so với maxDuration (30s)
 
-  const { orderId, open } = req.query
-  if (!orderId) return res.status(400).json({ error: 'Thiếu orderId' })
+export const config = {
+  maxDuration: 30,
+}
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Kiểm tra 1 lần cho 1 orderId — y hệt logic gốc của status.js, tách ra
+// thành hàm riêng để dùng được cả ở chế độ bình thường lẫn chế độ "wait=1".
+// Trả về { order, isFinal } — isFinal = true khi đã PAID/FAILED/EXPIRED.
+async function checkOnce(orderId) {
   const raw = await redis.hget('momo:orders', orderId)
-
-  // ── Chế độ "open=1": redirect thẳng sang payUrl/deeplink MoMo, dùng cho
-  // link "Mở trang thanh toán trong tab mới" bên create-transaction.js —
-  // tận dụng lại logic tra Redis của route status.js sẵn có, không tạo
-  // route riêng, đồng thời ẩn payUrl/deeplink thật (query string dài) khỏi
-  // thanh địa chỉ ngay lúc bấm, chỉ để lộ "…/api/momo/status?orderId=…&open=1".
-  if (open) {
-    if (!raw) return res.status(404).send('Không tìm thấy đơn hàng hoặc đã hết hạn')
-    const o = typeof raw === 'string' ? JSON.parse(raw) : raw
-    // Đơn đã có kết luận cuối → đưa về trang result thay vì mở lại link MoMo cũ/hết hạn.
-    if (o.status === 'PAID' || o.status === 'FAILED' || o.status === 'EXPIRED') {
-      return res.redirect(302, `/result?orderId=${encodeURIComponent(orderId)}`)
-    }
-    const target = o.deeplink || o.payUrl
-    if (!target) return res.status(404).send('Đơn hàng chưa có link thanh toán')
-    return res.redirect(302, target)
-  }
-
-  if (!raw) return res.status(200).json({ status: 'PENDING', orderId })
+  if (!raw) return { order: { status: 'PENDING', orderId }, isFinal: false }
 
   let order = typeof raw === 'string' ? JSON.parse(raw) : raw
 
   // Đã có kết luận cuối cùng (do IPN hoặc lần verify trước) → trả ngay, không cần gọi MoMo nữa.
   if (order.status === 'PAID' || order.status === 'FAILED') {
-    // Tự chữa lành: đảm bảo đơn đã có kết luận cuối không còn sót lại
-    // trong index "đang mở" (an toàn, gọi nhiều lần vô hại).
     await markOrderClosed(redis, orderId)
-    return res.status(200).json(order)
+    return { order, isFinal: true }
   }
 
   // status local đang PENDING — không tin tưởng tuyệt đối, vì IPN có thể bị trễ/rớt.
@@ -101,7 +95,7 @@ export default async function handler(req, res) {
           await redis.hset('momo:orders', { [orderId]: JSON.stringify(order) })
           // Kết luận cuối (PAID/EXPIRED/FAILED) → gỡ khỏi danh sách đang mở.
           await markOrderClosed(redis, orderId)
-          return res.status(200).json(order)
+          return { order, isFinal: true }
         }
 
         // MoMo vẫn đang xử lý (1000/7000/7002) → chỉ cập nhật mốc lastCheckedAt để throttle,
@@ -123,7 +117,64 @@ export default async function handler(req, res) {
     await redis.hset('momo:orders', { [orderId]: JSON.stringify(order) })
     // Hết hạn cũng là kết luận cuối → gỡ khỏi danh sách đang mở.
     await markOrderClosed(redis, orderId)
+    return { order, isFinal: true }
   }
 
-  return res.status(200).json(order)
+  return { order, isFinal: false }
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'GET') return res.status(405).end()
+
+  const { orderId, open, wait } = req.query
+  if (!orderId) return res.status(400).json({ error: 'Thiếu orderId' })
+
+  // ── Chế độ "open=1": redirect thẳng sang payUrl/deeplink MoMo, dùng cho
+  // link "Mở trang thanh toán trong tab mới" bên create-transaction.js —
+  // tận dụng lại logic tra Redis của route status.js sẵn có, không tạo
+  // route riêng, đồng thời ẩn payUrl/deeplink thật (query string dài) khỏi
+  // thanh địa chỉ ngay lúc bấm, chỉ để lộ "…/api/momo/status?orderId=…&open=1".
+  if (open) {
+    const raw = await redis.hget('momo:orders', orderId)
+    if (!raw) return res.status(404).send('Không tìm thấy đơn hàng hoặc đã hết hạn')
+    const o = typeof raw === 'string' ? JSON.parse(raw) : raw
+    // Đơn đã có kết luận cuối → đưa về trang result thay vì mở lại link MoMo cũ/hết hạn.
+    if (o.status === 'PAID' || o.status === 'FAILED' || o.status === 'EXPIRED') {
+      return res.redirect(302, `/result?orderId=${encodeURIComponent(orderId)}`)
+    }
+    const target = o.deeplink || o.payUrl
+    if (!target) return res.status(404).send('Đơn hàng chưa có link thanh toán')
+    return res.redirect(302, target)
+  }
+
+  // ── Chế độ mặc định (không có wait=1): giữ nguyên hành vi cũ — kiểm tra
+  // 1 lần rồi trả về ngay, client tự polling phía trình duyệt như trước giờ.
+  if (!wait) {
+    const { order } = await checkOnce(orderId)
+    return res.status(200).json(order)
+  }
+
+  // ── Chế độ "wait=1": tự lặp mỗi 1s bên trong request này, không cần
+  // client tự gọi lại liên tục — trả về NGAY khi có kết luận cuối.
+  const startedAt = Date.now()
+  let lastOrder = null
+
+  while (Date.now() - startedAt < WAIT_BUDGET_MS) {
+    const roundStart = Date.now()
+    const { order, isFinal } = await checkOnce(orderId)
+    lastOrder = order
+
+    if (isFinal) {
+      return res.status(200).json(order)
+    }
+
+    const elapsed = Date.now() - roundStart
+    const waitFor = Math.max(0, WAIT_POLL_INTERVAL_MS - elapsed)
+    if (Date.now() - startedAt + waitFor >= WAIT_BUDGET_MS) break
+    await sleep(waitFor)
+  }
+
+  // Hết ngân sách thời gian mà vẫn chưa có kết luận cuối → trả PENDING,
+  // client gọi lại route (cùng orderId, wait=1) để tiếp tục chờ.
+  return res.status(200).json(lastOrder || { status: 'PENDING', orderId })
 }
