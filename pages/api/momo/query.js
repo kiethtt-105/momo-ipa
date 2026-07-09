@@ -1,6 +1,7 @@
 // pages/api/momo/query.js
 import crypto from 'crypto'
 import { Redis } from '@upstash/redis'
+import { verifySession, refreshSession } from '../admin/login'
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL,
@@ -45,6 +46,23 @@ function buildSignature({ accessKey, orderId, partnerCode, requestId }) {
   return crypto.createHmac('sha256', SECRET_KEY).update(raw).digest('hex')
 }
 
+// Rút gọn response cho phía KHÔNG phải admin (luồng /result public — người quét
+// mã hoặc người trả tiền, không có session admin). Chỉ trả đúng những gì UI kết
+// quả thanh toán cần để hiển thị — KHÔNG trả transId, requestId, signature-liên-quan,
+// extraData, orderType, hay các field debug nội bộ (_reconciled/_previousStatus/...),
+// vì đây là endpoint public (không có requireAdmin) nên response đi thẳng ra ngoài
+// trình duyệt của bất kỳ ai gọi được orderId.
+function buildPublicResponse(momoData, statusForResponse) {
+  return {
+    orderId:    momoData.orderId,
+    status:     statusForResponse,
+    resultCode: momoData.resultCode,
+    message:    momoData.message || '',
+    amount:     momoData.amount != null ? parseInt(momoData.amount) : null,
+    payType:    momoData.payType || '',
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json')
 
@@ -53,15 +71,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: `Method ${req.method} không được hỗ trợ` })
   }
 
-
-  // Đã bỏ check requireAdmin: endpoint này giờ public. Lý do an toàn để bỏ:
-  //  - Luồng P2P: /result (frontend) không còn gọi endpoint này nữa (chỉ dùng
-  //    /api/momo/status), nên request tới đây gần như chỉ đến từ luồng Scan QR.
-  //  - Luồng Scan QR: trang /result chỉ được mở trên chính máy/trình duyệt của
-  //    admin (người cầm máy quét), nên yêu cầu đăng nhập admin không còn cần
-  //    thiết — về bản chất chỉ admin mới ở vị trí gọi được request này.
-  //  - orderId vẫn phải khớp 1 đơn có thật trong Redis (không đoán được), và
-  //    response không chứa secret/signature nội bộ nào lộ ra ngoài.
+  // Endpoint public — KHÔNG dùng requireAdmin() vì hàm đó tự trả 401 và sẽ chặn
+  // hẳn luồng Scan QR / P2P (nơi người gọi không có session admin). Thay vào đó
+  // chỉ kiểm tra session để BIẾT có phải admin hay không (isAdmin = true/false),
+  // rồi quyết định trả full data (admin) hay bản rút gọn (không admin) — request
+  // vẫn luôn được xử lý, chỉ khác nhau ở LƯỢNG THÔNG TIN trả về.
+  const isAdmin = verifySession(req)
+  if (isAdmin) refreshSession(req, res) // rolling session, giống requireAdmin() — chỉ áp dụng khi thực sự là admin
 
   if (!PARTNER_CODE || !ACCESS_KEY || !SECRET_KEY) {
     console.error('[momo/query] Thiếu env: MOMO_PARTNER_CODE / MOMO_ACCESS_KEY / MOMO_SECRET_KEY')
@@ -106,7 +122,7 @@ export default async function handler(req, res) {
 })
 
   try {
-    console.log('[momo/query] Gọi MoMo:', MOMO_ENDPOINT, 'orderId=', orderId, 'requestId=', requestId)
+    console.log('[momo/query] Gọi MoMo:', MOMO_ENDPOINT, 'orderId=', orderId, 'requestId=', requestId, 'isAdmin=', isAdmin)
     const momoRes = await fetch(MOMO_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -134,22 +150,25 @@ export default async function handler(req, res) {
       paymentOption: data.paymentOption,
     })
 
-    const responseData = {
+    const fullResponseData = {
       ...data,
       paymentOption: data.paymentOption ?? null,
     }
 
     // ===== Đối chiếu (reconcile) với dữ liệu đang lưu trong Redis =====
     // Trường hợp IPN bị rớt/lỗi → trạng thái local có thể sai (vd: vẫn PENDING rồi tự
-    // chuyển EXPIRED theo thời gian, dù MoMo đã báo thành công). Khi admin bấm "tra cứu",
-    // ta lấy kết quả thật từ MoMo và so sánh với bản ghi hiện tại; nếu lệch thì cập nhật lại.
+    // chuyển EXPIRED theo thời gian, dù MoMo đã báo thành công). Khi có ai đó tra cứu
+    // (admin bấm nút, hoặc luồng scan/P2P tự poll), ta lấy kết quả thật từ MoMo và so
+    // sánh với bản ghi hiện tại; nếu lệch thì cập nhật lại — việc reconcile Redis này
+    // chạy như nhau bất kể isAdmin, chỉ có RESPONSE trả ra ngoài là khác nhau.
+    let correctStatus = null
     try {
       const rc = data.resultCode
       if (rc !== undefined && rc !== null && !STILL_PROCESSING_CODES.includes(parseInt(rc))) {
+        correctStatus = resolveStatusFromResultCode(rc)
         const raw = await redis.hget('momo:orders', orderId)
         if (raw) {
           let existing = typeof raw === 'string' ? JSON.parse(raw) : raw
-          const correctStatus = resolveStatusFromResultCode(rc)
           const isPaid = correctStatus === 'PAID'
 
           // Không tự "hạ cấp" một đơn đã PAID trước đó dựa trên 1 lần tra cứu khác —
@@ -177,9 +196,11 @@ export default async function handler(req, res) {
             }
             await redis.hset('momo:orders', { [orderId]: JSON.stringify(reconciled) })
             console.log(`[momo/query] Reconciled ${orderId}: ${existing.status} -> ${correctStatus} (IPN bị rớt hoặc sai lệch)`)
-            responseData._reconciled = true
-            responseData._previousStatus = existing.status
-            responseData._newStatus = correctStatus
+            fullResponseData._reconciled = true
+            fullResponseData._previousStatus = existing.status
+            fullResponseData._newStatus = correctStatus
+          } else {
+            correctStatus = existing.status
           }
         }
       }
@@ -187,6 +208,16 @@ export default async function handler(req, res) {
       // Lỗi reconcile không được làm hỏng response tra cứu — chỉ log lại.
       console.error('[momo/query] Lỗi reconcile với Redis:', reconcileErr.message)
     }
+
+    // correctStatus có thể vẫn null nếu MoMo còn đang xử lý (STILL_PROCESSING_CODES) —
+    // trường hợp đó fallback 'PENDING' để bên public vẫn biết là "chưa xong".
+    const statusForResponse = correctStatus || (
+      STILL_PROCESSING_CODES.includes(parseInt(data.resultCode)) ? 'PENDING' : resolveStatusFromResultCode(data.resultCode)
+    )
+
+    const responseData = isAdmin
+      ? fullResponseData
+      : buildPublicResponse({ ...fullResponseData, orderId }, statusForResponse)
 
     return res.status(momoRes.ok ? 200 : momoRes.status).json(responseData)
   } catch (err) {
