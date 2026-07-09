@@ -58,7 +58,14 @@ export async function getServerSideProps({ params }) {
         orderInfo: order.orderInfo || '',
         storeName: order.storeName || '',
         status: order.status || 'PENDING',
+        // Cần cho đếm ngược ở client — createdAt phải khớp với giá trị
+        // status.js dùng để tính "age" (age = Date.now() - createdAt), nếu
+        // thiếu thì coi như "vừa tạo" (Date.now()) để không đếm ngược âm.
+        createdAt: order.createdAt || new Date().toISOString(),
       },
+      // Phải khớp EXPIRE_MINUTES bên status.js / admin-dashboard.js — cùng
+      // đọc từ 1 biến env để 2 nơi không bao giờ lệch nhau.
+      expireMinutes: parseInt(process.env.MOMO_EXPIRE_MINUTES || '10', 10),
       loadError: null,
     },
   }
@@ -68,6 +75,14 @@ function formatVnd(amount) {
   const n = Number(amount)
   if (Number.isNaN(n)) return String(amount ?? '')
   return new Intl.NumberFormat('vi-VN').format(n) + ' đ'
+}
+
+// mm:ss từ số giây còn lại, không âm.
+function formatCountdown(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000))
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
 function statusLabel(status) {
@@ -150,12 +165,37 @@ function CopyField({ label, value }) {
   )
 }
 
-export default function PayPage({ order: initialOrder, loadError }) {
+export default function PayPage({ order: initialOrder, expireMinutes, loadError }) {
   const [order, setOrder] = useState(initialOrder)
   const [payInfo, setPayInfo] = useState(null)
   const [payInfoError, setPayInfoError] = useState('')
   const [loadingPayInfo, setLoadingPayInfo] = useState(true)
+  const [remainingMs, setRemainingMs] = useState(null)
   const pollRef = useRef(null)
+
+  // Mốc hết hạn tính 1 lần từ createdAt + expireMinutes — không phụ thuộc
+  // đồng hồ máy khách chạy nhanh/chậm vì vẫn so với Date.now() mỗi tick,
+  // chỉ lệch nếu đồng hồ máy khách sai hẳn (chấp nhận được, vì status.js
+  // ở server mới là nguồn xác thực cuối cùng, đếm ngược chỉ mang tính UX).
+  const expireAtMs = initialOrder
+    ? new Date(initialOrder.createdAt).getTime() + expireMinutes * 60 * 1000
+    : null
+
+  // 3) Đếm ngược mỗi giây tới mốc hết hạn — chỉ để hiển thị UX, KHÔNG tự ý
+  // kết luận EXPIRED ở client (việc đó do status.js/poll quyết định, vì
+  // server còn verify thật với MoMo trước khi kết luận).
+  useEffect(() => {
+    if (!initialOrder || !expireAtMs) return
+    if (TERMINAL_STATUSES.includes(initialOrder.status)) return
+
+    function tick() {
+      setRemainingMs(expireAtMs - Date.now())
+    }
+
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [initialOrder, expireAtMs])
 
   // 1) Lấy thông tin chuyển khoản (vietqr-pay) — CHỈ 1 LẦN lúc mount.
   useEffect(() => {
@@ -240,11 +280,27 @@ export default function PayPage({ order: initialOrder, loadError }) {
             textAlign: 'center',
             fontWeight: 600,
             color: toneColor,
-            marginBottom: 16,
+            marginBottom: order.status === 'PENDING' && remainingMs != null ? 4 : 16,
           }}
         >
           {statusText}
         </div>
+
+        {order.status === 'PENDING' && remainingMs != null && (
+          <div
+            style={{
+              textAlign: 'center',
+              fontFamily: '"JetBrains Mono", monospace',
+              fontSize: 13,
+              color: remainingMs > 0 ? '#888' : '#dc2626',
+              marginBottom: 16,
+            }}
+          >
+            {remainingMs > 0
+              ? `Còn lại ${formatCountdown(remainingMs)}`
+              : 'Đã hết thời gian — đang kiểm tra kết quả…'}
+          </div>
+        )}
 
         {/* Chỉ hiện QR + thông tin chuyển khoản khi đơn còn đang chờ —
             đã có kết luận cuối thì quét cũng vô nghĩa. */}
