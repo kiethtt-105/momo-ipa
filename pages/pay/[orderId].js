@@ -19,6 +19,7 @@
 // trên môi trường Turbopack của project này.
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/router'
 import { Redis } from '@upstash/redis'
 import styles from '../../styles/pay.module.css'
 
@@ -166,12 +167,37 @@ function CopyField({ label, value }) {
 }
 
 export default function PayPage({ order: initialOrder, expireMinutes, loadError }) {
+  const router = useRouter()
   const [order, setOrder] = useState(initialOrder)
   const [payInfo, setPayInfo] = useState(null)
   const [payInfoError, setPayInfoError] = useState('')
   const [loadingPayInfo, setLoadingPayInfo] = useState(true)
   const [remainingMs, setRemainingMs] = useState(null)
   const pollRef = useRef(null)
+  const redirectRef = useRef(null)
+
+  // Điều hướng sang /result — chờ 1.2s để khách kịp thấy dòng "Thanh toán
+  // thành công" ngay trên trang /pay, sau đó mới chuyển qua /result để xem
+  // chi tiết đầy đủ (transId, thời gian thanh toán...). /result sẽ tự gọi
+  // lại /api/momo/status với orderId này, lúc đó đơn đã PAID sẵn nên resolve
+  // ngay ở lần poll đầu, không phải chờ thêm.
+  function goToResult(orderId) {
+    if (redirectRef.current) return // tránh điều hướng 2 lần
+    redirectRef.current = true
+    setTimeout(() => {
+      router.replace(`/result?orderId=${encodeURIComponent(orderId)}`)
+    }, 1200)
+  }
+
+  // Trường hợp trang được mở/refresh khi đơn ĐÃ SẴN PAID từ SSR (ví dụ khách
+  // bấm back rồi forward, hoặc mở lại link cũ) — không có vòng poll nào chạy
+  // để bắt sự kiện chuyển trạng thái nữa, nên phải điều hướng ngay ở đây.
+  useEffect(() => {
+    if (initialOrder && initialOrder.status === 'PAID') {
+      goToResult(initialOrder.orderId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Mốc hết hạn tính 1 lần từ createdAt + expireMinutes — không phụ thuộc
   // đồng hồ máy khách chạy nhanh/chậm vì vẫn so với Date.now() mỗi tick,
@@ -237,6 +263,12 @@ export default function PayPage({ order: initialOrder, expireMinutes, loadError 
         setOrder((prev) => ({ ...prev, ...data }))
         if (TERMINAL_STATUSES.includes(data.status)) {
           clearInterval(pollRef.current)
+          // Thanh toán thành công -> trả khách về trang /result để xem kết
+          // quả đầy đủ. FAILED/EXPIRED vẫn ở lại trang /pay như cũ vì khách
+          // có thể cần thử quét lại hoặc chờ đơn mới.
+          if (data.status === 'PAID') {
+            goToResult(initialOrder.orderId)
+          }
         }
       } catch {
         // Lỗi mạng tạm thời — bỏ qua, lần poll sau (1s tới) thử lại.
