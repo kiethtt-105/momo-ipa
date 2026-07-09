@@ -26,8 +26,14 @@
 
 import jsQR from 'jsqr'
 import { PNG } from 'pngjs'
+import { Redis } from '@upstash/redis'
 import { parseVietQR } from '../../../lib/momo/vietqr-parser'
 import { lookupBankByBin } from '../../../lib/momo/vietqr-bank-directory'
+
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+})
 
 export const config = {
   api: {
@@ -104,9 +110,7 @@ export default async function handler(req, res) {
     const parsed = parseVietQR(qrString)
     const bank = await lookupBankByBin(parsed.bankBin)
 
-    res.setHeader('Cache-Control', 'no-store')
-    return res.status(200).json({
-      orderId,
+    const vietqrData = {
       bank,
       accountNumber: parsed.accountNumber,
       amount: parsed.amount,
@@ -115,6 +119,33 @@ export default async function handler(req, res) {
       serviceCode: parsed.serviceCode, // QRIBFTTA (TK) | QRIBFTTC (thẻ)
       merchantName: parsed.merchantName,
       raw: parsed.raw,
+    }
+
+    // Lưu lại vào order trong Redis để cache — trước đây mỗi lần gọi route
+    // này đều phải chạy lại toàn bộ pipeline (qr-extract → Puppeteer →
+    // decode PNG → jsQR → parse EMV), dù cùng 1 đơn hàng không đổi payUrl.
+    // Không chặn response nếu bước lưu lỗi (best-effort, không phải dữ
+    // liệu bắt buộc phải có để trả lời client).
+    try {
+      const raw = await redis.hget('momo:orders', orderId)
+      if (raw) {
+        const existing = typeof raw === 'string' ? JSON.parse(raw) : raw
+        await redis.hset('momo:orders', {
+          [orderId]: JSON.stringify({
+            ...existing,
+            vietqr: vietqrData,
+            vietqrCheckedAt: new Date().toISOString(),
+          }),
+        })
+      }
+    } catch (cacheErr) {
+      console.error('[vietqr-pay] Lỗi lưu cache vào Redis (không ảnh hưởng response):', cacheErr.message)
+    }
+
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).json({
+      orderId,
+      ...vietqrData,
     })
   } catch (err) {
     console.error('[vietqr-pay] error:', err)

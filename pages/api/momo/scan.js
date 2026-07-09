@@ -136,6 +136,7 @@ async function handlePosCharge(req, res) {
         payType: '',
         paymentOption: '',
         source: 'pos', storeId: store.id, storeName: store.name,
+        partnerName: store.partnerName || '',
         type: 'scan',
 
         submittedCode: paymentCode,
@@ -164,6 +165,7 @@ async function handlePosCharge(req, res) {
           transId: '', payType: 'pos', paymentOption: '',
           resultCode: -1, message: '⚠ Lỗi hệ thống MoMo — MoMo trả về dữ liệu không hợp lệ (không phải JSON). Thử lại sau, nếu lặp lại nhiều lần thì liên hệ MoMo.',
           source: 'pos', storeId: store.id, storeName: store.name,
+          partnerName: store.partnerName || '',
           type: 'scan', submittedCode: paymentCode,
         }),
       })
@@ -188,7 +190,11 @@ async function handlePosCharge(req, res) {
       // (nhiều khi cộc lốc hoặc không đủ rõ để admin xử lý ngay).
       message: data.resultCode === 0 ? (data.message || 'Thanh toán thành công') : formatResultCodeMessage(data.resultCode, data.message),
       responseTime: data.responseTime,
+      // Trước đây bỏ sót 2 field này dù MoMo POS API vẫn trả về.
+      orderType: data.orderType || '',
+      extraData: data.extraData || '',
       source: 'pos', storeId: store.id, storeName: store.name,
+      partnerName: store.partnerName || '',
       type: 'scan', submittedCode: paymentCode,
     }
 
@@ -217,6 +223,7 @@ async function handlePosCharge(req, res) {
             ? '⚠ Lỗi hệ thống MoMo — Timeout khi gọi MoMo (15s), không rõ giao dịch có được xử lý phía MoMo hay không. Kiểm tra lại bằng mã đơn hàng trước khi tạo lại.'
             : `⚠ Lỗi hệ thống (server) — ADMIN cần kiểm tra log server: ${err.message || 'Lỗi server'}`,
           source: 'pos', storeId: store.id, storeName: store.name,
+          partnerName: store.partnerName || '',
           type: 'scan', submittedCode: paymentCode,
         }),
       })

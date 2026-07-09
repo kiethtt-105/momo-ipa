@@ -89,6 +89,12 @@ export default async function handler(req, res) {
           paymentOption: '', source: 'create-p2p',
           storeId, storeName, partnerName, error: result.message || '',
           message: finalMessage, resultCode: result.resultCode,
+          // Trước đây bỏ sót các field này ở nhánh FAILED dù MoMo vẫn trả
+          // về — giữ lại đầy đủ để admin tra cứu/đối chiếu sau này.
+          requestId: result.requestId || '',
+          responseTime: result.responseTime || null,
+          orderType: result.orderType || '',
+          extraData: result.extraData || '',
           type: 'p2p',
         }),
       })
@@ -125,6 +131,18 @@ export default async function handler(req, res) {
         qrCodeUrl: result.qrCodeUrl || '',
         qrCodeImage,
         requestId: result.requestId || '',
+        // Bổ sung toàn bộ field còn lại MoMo trả về ở bước tạo giao dịch
+        // mà trước đây bị bỏ qua — resultCode lúc này luôn là 0 (thành
+        // công) nhưng vẫn lưu lại để đồng nhất cấu trúc với nhánh FAILED,
+        // dễ debug/đối chiếu. applink/deeplinkMiniApp: một số merchant có
+        // được MoMo trả, một số thì không (tuỳ cấu hình) — lưu phòng khi có.
+        resultCode: result.resultCode ?? 0,
+        message: result.message || '',
+        responseTime: result.responseTime || null,
+        orderType: result.orderType || '',
+        extraData: result.extraData || '',
+        applink: result.applink || '',
+        deeplinkMiniApp: result.deeplinkMiniApp || '',
         type: 'p2p',
       }),
     })

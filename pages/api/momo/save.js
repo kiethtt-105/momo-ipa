@@ -79,6 +79,16 @@ export default async function handler(req, res) {
     qrCodeUrl:    existing?.qrCodeUrl    || '',
     qrCodeImage:  existing?.qrCodeImage  || '',
     type:         existing?.type         || '',
+    // BUG FIX: 5 field này trước đây bị bỏ sót — vì record được build mới
+    // hoàn toàn (không spread existing), nên mỗi lần save.js chạy (khách
+    // thanh toán xong redirect về /result) sẽ XÓA MẤT các field này dù
+    // create-p2p.js đã lưu sẵn từ lúc tạo đơn. Giữ lại nguyên từ existing,
+    // đồng thời lấy thêm paymentOption từ chính response MoMo trả (route
+    // này trước giờ nhận nhưng không lưu field đó vào Redis).
+    storeId:       existing?.storeId       || '',
+    storeName:     existing?.storeName     || '',
+    partnerName:   existing?.partnerName   || '',
+    paymentOption: momoResult.paymentOption ?? existing?.paymentOption ?? null,
   }
 
   await redis.hset('momo:orders', { [orderId]: JSON.stringify(record) })

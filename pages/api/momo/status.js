@@ -82,6 +82,10 @@ export default async function handler(req, res) {
             transId:       momoResult.transId      || order.transId      || '',
             amount:        parseInt(momoResult.amount || order.amount    || 0),
             payType:       momoResult.payType       || order.payType     || '',
+            // Trước đây bỏ sót 3 field này dù MoMo query API vẫn trả về.
+            paymentOption: momoResult.paymentOption ?? order.paymentOption ?? null,
+            orderType:     momoResult.orderType      || order.orderType     || '',
+            extraData:     momoResult.extraData      || order.extraData     || '',
             resultCode:    parseInt(rc),
             message:       momoResult.message       || order.message     || '',
             responseTime:  momoResult.responseTime  || order.responseTime|| null,

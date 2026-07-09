@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
   if (!requireAdmin(req, res)) return
 
-  const { orderId, amount, orderInfo } = req.body
+  const { orderId, amount, orderInfo, storeId, storeName } = req.body
 
   if (!orderId || !amount) {
     return res.status(400).json({ error: 'Thiếu orderId hoặc amount' })
@@ -35,6 +35,12 @@ export default async function handler(req, res) {
         transId: '',
         payType: 'pos',
         source: 'pos',
+        // Trước đây không nhận/lưu storeId/storeName ở bước tạo nháp này
+        // (chỉ có ở scan.js sau khi xác nhận) — bổ sung để nếu trang gọi
+        // route này có sẵn thông tin cửa hàng thì lưu luôn từ đầu, không
+        // phải đợi tới lúc scan.js ghi đè.
+        storeId: storeId || '',
+        storeName: storeName || '',
         // "type" để mọi client (kể cả đồng bộ qua list-open) biết đây là
         // giao dịch Scan mà không cần đoán qua các field khác (payUrl...).
         type: 'scan',

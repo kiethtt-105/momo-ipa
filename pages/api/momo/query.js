@@ -161,6 +161,11 @@ export default async function handler(req, res) {
               transId:       data.transId      || existing.transId      || '',
               amount:        parseInt(data.amount || existing.amount    || 0),
               payType:       data.payType       || existing.payType     || '',
+              // Trước đây bỏ sót 3 field này dù MoMo vẫn trả về ở response
+              // query — giữ lại đầy đủ để không mất thông tin khi reconcile.
+              paymentOption: data.paymentOption ?? existing.paymentOption ?? null,
+              orderType:     data.orderType     || existing.orderType    || '',
+              extraData:     data.extraData     || existing.extraData    || '',
               resultCode:    parseInt(rc),
               message:       data.message       || existing.message     || '',
               responseTime:  data.responseTime  || existing.responseTime || null,
