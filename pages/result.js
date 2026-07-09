@@ -207,8 +207,6 @@ export default function ResultPage() {
     const mergedQuery = { ...fullQuery, orderId: orderId || fullQuery.orderId, requestId }
     lastQueryRef.current = mergedQuery
 
-    const cleanUrl = () => setTimeout(() => router.replace('/result', undefined, { shallow: true }), 500)
-
     const resolve = (st, infoData) => {
       resolvedRef.current = true
       setStatus(st)
@@ -244,7 +242,7 @@ export default function ResultPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...fullQuery, resultCode: code === 0 ? 0 : code }),
-      }).finally(cleanUrl)
+      })
     } else {
       // ── Luồng không có resultCode ngay: đơn được tạo bằng mã QR / P2P và
       // trang phải poll trạng thái. KHÔNG tự đóng, KHÔNG dừng hẳn sau vài lần —
@@ -270,16 +268,16 @@ export default function ResultPage() {
           const data = await res.json()
 
           if (data.status === 'PAID') {
-            resolve('success', data); clearInterval(pollRef.current); cleanUrl(); return
+            resolve('success', data); clearInterval(pollRef.current); return
           }
           if (data.status === 'FAILED') {
-            resolve('failed', data); clearInterval(pollRef.current); cleanUrl(); return
+            resolve('failed', data); clearInterval(pollRef.current); return
           }
           if (data.status === 'EXPIRED') {
             resolvedRef.current = true
             updateInfo(prev => ({ ...mergedQuery, ...(prev || {}), ...data }))
             setStatus('expired')
-            clearInterval(pollRef.current); cleanUrl(); return
+            clearInterval(pollRef.current); return
           }
 
           attempts++
