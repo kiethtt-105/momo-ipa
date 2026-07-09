@@ -69,7 +69,7 @@ function deserializeTxs(arr) {
   if (!Array.isArray(arr)) return []
   return arr.map(t => ({
     ...t,
-    checkMsg: '', checking: false, cancelling: false, copied: false,
+    checkMsg: '', checking: false, cancelling: false, copied: false, copiedPage: false,
     manualCode: t.submittedCode || '', manualErr: '', isSubmittingCode: false, camError: '',
     pos: t.pos || { x: 24, y: 24 }, zIndex: t.zIndex || 10, minimized: !!t.minimized, userPositioned: !!t.userPositioned,
   }))
@@ -770,7 +770,7 @@ export default function CreateTransactionPage() {
             storeName: stores.find(s => s.id === finalStoreId)?.name || '',
             status: 'PENDING', checkMsg: '', checking: false, cancelling: false,
             payUrl: data.payUrl, deeplink: data.deeplink || '',
-            expiresAt: Date.now() + P2P_DURATION_MS, copied: false,
+            expiresAt: Date.now() + P2P_DURATION_MS, copied: false, copiedPage: false,
             pos: { x: 24, y: 24 }, zIndex: zCounterRef.current, minimized: false, userPositioned: false,
           }]
         })
@@ -976,21 +976,44 @@ export default function CreateTransactionPage() {
     removeTx(txId)
   }
 
-  async function copyPayUrl(txId) {
-    const tx = txsRef.current.find(t => t.id === txId)
-    if (!tx?.payUrl) return
+  // Helper copy dùng chung — cả copyPayUrl lẫn copyPayPageLink đều gọi qua
+  // đây, tránh lặp lại 2 lần đoạn try/catch + fallback textarea.
+  async function copyText(text) {
     try {
-      await navigator.clipboard.writeText(tx.payUrl)
+      await navigator.clipboard.writeText(text)
+      return true
     } catch (e) {
       try {
         const ta = document.createElement('textarea')
-        ta.value = tx.payUrl; ta.style.position = 'fixed'; ta.style.opacity = '0'
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'
         document.body.appendChild(ta); ta.focus(); ta.select()
         document.execCommand('copy'); document.body.removeChild(ta)
-      } catch { return }
+        return true
+      } catch { return false }
     }
+  }
+
+  async function copyPayUrl(txId) {
+    const tx = txsRef.current.find(t => t.id === txId)
+    if (!tx?.payUrl) return
+    const ok = await copyText(tx.payUrl)
+    if (!ok) return
     updateTx(txId, { copied: true })
     setTimeout(() => updateTx(txId, { copied: false }), 2000)
+  }
+
+  // Copy link trang thanh toán TỰ CODE (/pay/[orderId]) — khác với
+  // copyPayUrl ở trên (copy thẳng payUrl gốc của MoMo). Link này dẫn tới
+  // trang public tự dựng, hiện 1 QR duy nhất + thông tin chuyển khoản +
+  // nút "Tiếp tục với App MoMo", phù hợp gửi cho khách qua Zalo/tin nhắn
+  // thay vì gửi thẳng link MoMo.
+  async function copyPayPageLink(txId) {
+    const tx = txsRef.current.find(t => t.id === txId)
+    if (!tx?.orderId) return
+    const ok = await copyText(`${TX_BASE_URL}/pay/${tx.orderId}`)
+    if (!ok) return
+    updateTx(txId, { copiedPage: true })
+    setTimeout(() => updateTx(txId, { copiedPage: false }), 2000)
   }
 
   const currentStoreName = stores.find(s => s.id === storeId)?.name || ''
@@ -1321,6 +1344,8 @@ export default function CreateTransactionPage() {
           background: transparent; font-size: 11.5px; font-weight: 700; color: var(--muted); cursor: pointer;
         }
         .copy-link-btn.copied { color: #1e8449; border-color: #1e8449; }
+        .copy-btn-row { display: flex; gap: 8px; margin-top: 8px; }
+        .copy-btn-row .copy-link-btn { width: auto; flex: 1; margin-top: 0; }
 
         .code-input {
           width: 100%; padding: 10px; border: 1.5px solid var(--border); border-radius: 9px;
@@ -1572,9 +1597,14 @@ export default function CreateTransactionPage() {
                       <div className={`check-msg${tx.status === 'PAID' ? ' ok' : tx.status === 'FAILED' ? ' err' : ''}`}>{tx.checkMsg}</div>
                     )}
                     {tx.payUrl && tx.status !== 'PAID' && (
-                      <button className={`copy-link-btn${tx.copied ? ' copied' : ''}`} onClick={() => copyPayUrl(tx.id)}>
-                        {tx.copied ? '✓ Đã copy link thanh toán' : '📋 Copy link thanh toán'}
-                      </button>
+                      <div className="copy-btn-row">
+                        <button className={`copy-link-btn${tx.copied ? ' copied' : ''}`} onClick={() => copyPayUrl(tx.id)}>
+                          {tx.copied ? '✓ Đã copy link MoMo' : '📋 Copy link MoMo'}
+                        </button>
+                        <button className={`copy-link-btn${tx.copiedPage ? ' copied' : ''}`} onClick={() => copyPayPageLink(tx.id)}>
+                          {tx.copiedPage ? '✓ Đã copy link trang' : '🔗 Copy link trang'}
+                        </button>
+                      </div>
                     )}
                     <div className="btn-row">
                       {tx.status !== 'FAILED' && (
