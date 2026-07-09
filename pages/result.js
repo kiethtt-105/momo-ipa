@@ -251,9 +251,14 @@ export default function ResultPage() {
       // chuyển sang "pending" sau pha nhanh rồi tiếp tục poll nền chậm hơn để
       // vẫn tự cập nhật khi khách quét/chuyển khoản xong. ──
       let attempts = 0
-      const FAST_ATTEMPTS = 10   // ~15s đầu, poll nhanh
-      const FAST_INTERVAL = 1500
-      const SLOW_INTERVAL = 4000
+      // Poll đều mỗi 1 giây trong suốt quá trình chờ — khớp với nhịp poll
+      // 1s đang dùng ở /pay/[orderId] (status.js) và admin dashboard, để
+      // kết quả hiện ra ngay khi có phản hồi thay vì phải đợi thêm.
+      // FAST_ATTEMPTS chỉ còn tác dụng đổi UI text/màu sang "đang chờ" sau
+      // ~10s đầu (poll vẫn tiếp tục đều đặn, không đổi nhịp).
+      const FAST_ATTEMPTS = 10
+      const FAST_INTERVAL = 1000
+      const SLOW_INTERVAL = 1000
 
       const runPoll = async () => {
         try {
