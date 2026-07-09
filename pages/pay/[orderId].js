@@ -1,308 +1,298 @@
 // pages/pay/[orderId].js
 //
-// TRANG THANH TOÁN RIÊNG (public, dành cho khách hàng)
-// ───────────────────────────────────────────────────────────────────────
-// Đây là trang KHÔNG thuộc khu vực admin — khách hàng mở qua 1 link dạng
-// {TX_BASE_URL}/pay/{orderId} (link này được copy ra từ trang tạo giao dịch,
-// CHỈ áp dụng cho giao dịch loại P2P). Trang tự poll trạng thái + hiện QR
-// có sẵn (dùng lại đúng 2 API cũ: /api/momo/status và /api/momo/qr-extract),
-// không đụng vào logic tạo/xử lý giao dịch hiện tại.
+// Bản UI đơn giản trước: hiện song song 2 mã QR cho 1 đơn hàng.
+//   - QR 1 "Quét bằng App MoMo": ảnh lấy thẳng từ /api/momo/qr-extract
+//     (mã do MoMo tự vẽ trên trang thanh toán của họ).
+//   - QR 2 "Quét bằng App ngân hàng": KHÔNG lấy lại ảnh từ MoMo, mà tự vẽ
+//     mới bằng thư viện `qrcode` từ chuỗi EMV gốc (`raw`) đã đọc/parse
+//     được ở /api/momo/vietqr-pay. Cùng 1 nội dung QR, chỉ khác nguồn vẽ —
+//     tách riêng để sau này có thể tối ưu (vd bỏ hẳn bước gọi qr-extract
+//     cho luồng ngân hàng, không cần Puppeteer nữa).
 //
-// Phần "chọn ngân hàng để mở app" dùng dịch vụ deeplink công khai của
-// VietQR.io (https://dl.vietqr.io/pay?app=<mã>) — dịch vụ này tự mở đúng
-// app ngân hàng nếu đã cài, hoặc đưa về App Store/CH Play nếu chưa cài.
-// Lưu ý thật: hiện chưa ngân hàng nào cho phép tự động điền sẵn số tiền/
-// nội dung khi mở app theo cách này (kể cả VNPAY cũng chỉ mở app, không tự
-// điền) — khách vẫn cần tự quét QR hiển thị ở trên hoặc quét thủ công trong
-// app. Không dùng logo thật của ngân hàng (bản quyền/thương hiệu), thay vào
-// đó dùng huy hiệu chữ viết tắt tự thiết kế.
+// Chưa làm: chọn app ngân hàng / mở deeplink autofill — để bước sau,
+// hiện tại tập trung UI hiển thị 2 mã trước theo yêu cầu.
 
-import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/router'
-import Head from 'next/head'
+import { useEffect, useState } from 'react'
+import { Redis } from '@upstash/redis'
+import QRCode from 'qrcode'
 
-const POLL_MS = 2000
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+})
 
-function formatAmount(raw) {
-  const n = parseInt(raw, 10)
-  if (!n) return '0'
-  return n.toLocaleString('en-US')
+export async function getServerSideProps({ params }) {
+  const orderId = (params.orderId || '').toString().trim()
+  if (!orderId) return { notFound: true }
+
+  const raw = await redis.hget('momo:orders', orderId)
+  if (!raw) return { notFound: true }
+
+  const order = typeof raw === 'string' ? JSON.parse(raw) : raw
+
+  return {
+    props: {
+      order: {
+        orderId: order.orderId || orderId,
+        amount: order.amount ?? null,
+        orderInfo: order.orderInfo || '',
+        storeName: order.storeName || '',
+        status: order.status || 'UNKNOWN',
+        payUrl: order.payUrl || '',
+      },
+    },
+  }
 }
 
-// ─── DANH SÁCH NGÂN HÀNG (mã app theo VietQR deeplink) ──────────────
-// Đổi/thêm/bớt tùy nhu cầu — mã "code" phải đúng theo api.vietqr.io/v2/*-app-deeplinks
-const BANKS = [
-  { code: 'vcb',     short: 'VCB',   name: 'Vietcombank',  color: '#00693c' },
-  { code: 'vba',     short: 'AGB',   name: 'Agribank',     color: '#7a1f2b' },
-  { code: 'bidv',    short: 'BIDV',  name: 'BIDV',         color: '#00558c' },
-  { code: 'icb',     short: 'ICB',   name: 'VietinBank',   color: '#0a3a82' },
-  { code: 'vpb',     short: 'VPB',   name: 'VPBank',       color: '#1a7a3c' },
-  { code: 'scb',     short: 'SCB',   name: 'SCB',          color: '#c0272d' },
-  { code: 'vietbank',short: 'VBB',   name: 'VietBank',     color: '#b8860b' },
-  { code: 'eib',     short: 'EIB',   name: 'Eximbank',     color: '#f47b20' },
-  { code: 'nab',     short: 'NAB',   name: 'Nam A Bank',   color: '#0067ac' },
-  { code: 'bvb',     short: 'BVB',   name: 'BaoViet Bank', color: '#b8860b' },
-  { code: 'hdb',     short: 'HDB',   name: 'HDBank',       color: '#e2001a' },
-  { code: 'sgicb',   short: 'SGB',   name: 'SaigonBank',   color: '#004b93' },
-  { code: 'klb',     short: 'KLB',   name: 'KienlongBank', color: '#f47b20' },
-  { code: 'vab',     short: 'VAB',   name: 'VietABank',    color: '#c0272d' },
-  { code: 'vib-2',   short: 'VIB',   name: 'VIB',          color: '#00539f' },
-  { code: 'acb',     short: 'ACB',   name: 'ACB',          color: '#0033a0' },
-  { code: 'wvn',     short: 'WOORI', name: 'Woori Bank',   color: '#0057a8' },
-  { code: 'shbvn',   short: 'SHB',   name: 'Shinhan Bank', color: '#0033a0' },
-]
+function formatVnd(amount) {
+  const n = Number(amount)
+  if (Number.isNaN(n)) return String(amount ?? '')
+  return new Intl.NumberFormat('vi-VN').format(n) + ' đ'
+}
 
-export default function PayOrderPage() {
-  const router = useRouter()
-  const { orderId } = router.query
-
-  const [status, setStatus] = useState('PENDING')
-  const [amount, setAmount] = useState(null)
-  const [message, setMessage] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [notFound, setNotFound] = useState(false)
-  const pollRef = useRef(null)
-  const qrTick = useRef(0)
-  const [qrBust, setQrBust] = useState(0)
+export default function PayPage({ order }) {
+  const [payInfo, setPayInfo] = useState(null)
+  const [payInfoError, setPayInfoError] = useState('')
+  const [loadingPayInfo, setLoadingPayInfo] = useState(true)
+  const [vietqrImg, setVietqrImg] = useState('')
 
   useEffect(() => {
-    if (!orderId) return
     let cancelled = false
 
-    async function poll() {
+    async function load() {
+      setLoadingPayInfo(true)
+      setPayInfoError('')
       try {
-        const res = await fetch(`/api/momo/status?orderId=${encodeURIComponent(orderId)}`)
-        if (res.status === 404) {
-          if (!cancelled) { setNotFound(true); setLoading(false) }
-          clearInterval(pollRef.current)
-          return
-        }
-        const data = await res.json()
+        const r = await fetch(`/api/momo/vietqr-pay?orderId=${encodeURIComponent(order.orderId)}`)
+        const data = await r.json()
+        if (!r.ok) throw new Error(data.error || 'Không lấy được thông tin VietQR')
         if (cancelled) return
-        const s = data.status || 'PENDING'
-        setStatus(s)
-        if (data.amount) setAmount(data.amount)
-        setMessage(
-          s === 'PAID' ? '✓ Thanh toán thành công!' :
-          s === 'EXPIRED' ? '⚠ Mã QR đã hết hạn, vui lòng liên hệ để được tạo lại.' :
-          s === 'FAILED' ? `✗ Giao dịch thất bại${data.message ? `: ${data.message}` : ''}` :
-          ''
-        )
-        setLoading(false)
-        if (s !== 'PENDING') clearInterval(pollRef.current)
-      } catch (e) {
-        if (!cancelled) setLoading(false)
+        setPayInfo(data)
+
+        if (data.raw) {
+          const dataUrl = await QRCode.toDataURL(data.raw, {
+            errorCorrectionLevel: 'M',
+            margin: 1,
+            width: 400,
+          })
+          if (!cancelled) setVietqrImg(dataUrl)
+        }
+      } catch (err) {
+        if (!cancelled) setPayInfoError(err.message || 'Có lỗi xảy ra, thử lại sau')
+      } finally {
+        if (!cancelled) setLoadingPayInfo(false)
       }
     }
 
-    poll()
-    pollRef.current = setInterval(poll, POLL_MS)
-    return () => { cancelled = true; clearInterval(pollRef.current) }
-  }, [orderId])
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [order.orderId])
 
-  // QR ảnh đôi khi cache cứng ở vài trình duyệt di động — refresh nhẹ mỗi 15s khi còn PENDING
-  useEffect(() => {
-    if (status !== 'PENDING') return
-    const id = setInterval(() => {
-      qrTick.current += 1
-      setQrBust(qrTick.current)
-    }, 15000)
-    return () => clearInterval(id)
-  }, [status])
-
-  function openBankApp(code) {
-    window.location.href = `https://dl.vietqr.io/pay?app=${code}`
-  }
-
-  const isPending = status === 'PENDING'
-  const isPaid = status === 'PAID'
-  const isDone = status === 'PAID' || status === 'FAILED' || status === 'EXPIRED'
+  const isPending = order.status === 'PENDING'
 
   return (
-    <>
-      <Head>
-        <title>Thanh toán {orderId ? `#${orderId}` : ''}</title>
-        <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" />
-      </Head>
+    <div className="page">
+      <div className="card">
+        <div className="header">
+          <div className="badge">Đơn hàng</div>
+          <div className="storeName">{order.storeName || 'Thanh toán'}</div>
+          <div className="orderId">#{order.orderId}</div>
+        </div>
 
-      <style jsx global>{`
-        *, *::before, *::after { box-sizing: border-box; }
-        html, body, #__next { margin: 0; padding: 0; min-height: 100%; width: 100%; font-family: 'Outfit', -apple-system, sans-serif; background: #f4ede9; }
-        :root {
-          --mm: #ae0070; --mm-light: rgba(174,0,112,0.08); --mm-mid: rgba(174,0,112,0.15);
-          --paper: #fffaf6; --bg: #f4ede9; --border: #ece1e6; --text: #1a0f16; --muted: #9c8094;
-          --mono: 'JetBrains Mono', ui-monospace, monospace;
-        }
+        <div className="amountBlock">
+          <div className="amount">{formatVnd(order.amount)}</div>
+          {order.orderInfo && <div className="orderInfo">{order.orderInfo}</div>}
+        </div>
 
-        .pay-shell { min-height: 100dvh; background: var(--bg); display: flex; justify-content: center; padding: 0 0 40px; }
-        .pay-page { width: 100%; max-width: 440px; background: var(--bg); }
+        {!isPending && (
+          <div className="statusBanner">
+            Đơn hàng hiện ở trạng thái <b>{order.status}</b> — có thể đã hết hạn hoặc đã thanh toán.
+          </div>
+        )}
 
-        .pay-topbar {
-          display: flex; align-items: center; gap: 12px; padding: 16px 18px;
-          position: sticky; top: 0; background: var(--bg); z-index: 5;
-        }
-        .pay-back {
-          width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border);
-          background: var(--paper); display: flex; align-items: center; justify-content: center;
-          color: var(--text); cursor: pointer; flex-shrink: 0;
-        }
-        .pay-topbar-title { font-size: 15px; font-weight: 800; color: var(--text); }
-
-        .pay-card {
-          margin: 0 18px 18px; background: var(--paper); border-radius: 18px; border: 1px solid var(--border);
-          box-shadow: 0 4px 16px rgba(26,15,22,0.06); overflow: hidden; position: relative;
-        }
-        .pay-card-notch { position: absolute; top: 96px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg); border: 1px solid var(--border); z-index: 1; }
-        .pay-card-notch.left { left: -10px; }
-        .pay-card-notch.right { right: -10px; }
-
-        .pay-amount-block { padding: 22px 20px 16px; text-align: center; }
-        .pay-eyebrow { font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mm); margin-bottom: 8px; }
-        .pay-amount { font-family: var(--mono); font-size: 34px; font-weight: 800; color: var(--text); line-height: 1.1; }
-        .pay-order-id { margin-top: 6px; font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--muted); }
-
-        .pay-status-row { display: flex; justify-content: center; margin-top: 12px; }
-        .pay-status { font-size: 11px; font-weight: 800; padding: 4px 12px; border-radius: 999px; }
-        .pay-status.pending { background: rgba(214,158,46,0.15); color: #b9770e; }
-        .pay-status.paid { background: rgba(39,174,96,0.15); color: #1e8449; }
-        .pay-status.failed { background: rgba(192,57,43,0.15); color: #c0392b; }
-        .pay-status.expired { background: rgba(120,120,120,0.15); color: #6b6b6b; }
-
-        .pay-perf { height: 0; border-top: 2px dashed var(--border); margin: 4px 20px 0; }
-
-        .pay-qr-wrap { display: flex; justify-content: center; padding: 22px 20px 8px; }
-        .pay-qr-wrap img { width: 220px; height: 220px; border-radius: 12px; border: 1px solid var(--border); background: #fff; }
-
-        .pay-msg { margin: 6px 20px 18px; padding: 10px 12px; border-radius: 10px; background: #f2eaf0; color: var(--text); font-size: 12.5px; font-weight: 600; text-align: center; }
-        .pay-msg.ok { background: rgba(39,174,96,0.1); color: #1e8449; }
-        .pay-msg.err { background: rgba(192,57,43,0.1); color: #c0392b; }
-
-        .pay-success { padding: 40px 24px; text-align: center; }
-        .pay-success-icon {
-          width: 64px; height: 64px; border-radius: 50%; background: rgba(39,174,96,0.12); color: #1e8449;
-          display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;
-        }
-        .pay-success-title { font-size: 17px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
-        .pay-success-desc { font-size: 12.5px; color: var(--muted); }
-
-        .pay-hint {
-          margin: 0 18px 14px; font-size: 12.5px; color: var(--muted); line-height: 1.6; padding: 0 2px;
-        }
-        .pay-hint b { color: var(--text); }
-
-        .pay-section-label {
-          margin: 4px 18px 10px; font-size: 11px; font-weight: 700; color: var(--muted);
-          text-transform: uppercase; letter-spacing: 0.05em;
-        }
-
-        .bank-grid {
-          margin: 0 18px 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-        }
-        .bank-btn {
-          display: flex; flex-direction: column; align-items: center; gap: 6px;
-          background: var(--paper); border: 1px solid var(--border); border-radius: 12px;
-          padding: 12px 6px; cursor: pointer; transition: border-color 0.15s, transform 0.1s;
-        }
-        .bank-btn:active { transform: scale(0.96); }
-        .bank-btn:hover { border-color: var(--mm-mid); }
-        .bank-badge {
-          width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
-          font-family: var(--mono); font-size: 10.5px; font-weight: 800; color: #fff; letter-spacing: 0.01em;
-        }
-        .bank-label { font-size: 10px; font-weight: 700; color: var(--text); text-align: center; line-height: 1.25; }
-
-        .pay-footnote { margin: 6px 18px 0; font-size: 11px; color: var(--muted); text-align: center; line-height: 1.5; }
-
-        .pay-loading, .pay-notfound {
-          min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
-          gap: 10px; color: var(--muted); font-size: 13px; font-weight: 600; text-align: center; padding: 40px 20px;
-        }
-        .spinner { width: 18px; height: 18px; border: 2.5px solid var(--mm-mid); border-top-color: var(--mm); border-radius: 50%; animation: spin 0.7s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
-
-      <div className="pay-shell">
-        <div className="pay-page">
-          <div className="pay-topbar">
-            <button className="pay-back" onClick={() => router.back()} aria-label="Quay lại">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                <path d="M15 18l-6-6 6-6" />
-              </svg>
-            </button>
-            <span className="pay-topbar-title">Thanh toán</span>
+        <div className="qrColumns">
+          <div className="qrCol">
+            <div className="qrLabel">
+              <span className="dot momoDot" />
+              Quét bằng App MoMo
+            </div>
+            <div className="qrFrame">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                className="qrImg"
+                src={`/api/momo/qr-extract?orderId=${encodeURIComponent(order.orderId)}`}
+                alt="Mã QR MoMo"
+              />
+            </div>
+            <div className="qrSub">Mở app MoMo → Quét mã</div>
           </div>
 
-          {loading ? (
-            <div className="pay-loading"><div className="spinner" /> Đang tải thông tin giao dịch…</div>
-          ) : notFound ? (
-            <div className="pay-notfound">Không tìm thấy giao dịch này.<br />Liên kết có thể đã hết hạn hoặc sai.</div>
-          ) : isPaid ? (
-            <div className="pay-card">
-              <div className="pay-success">
-                <div className="pay-success-icon">
-                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6"><path d="M20 6 9 17l-5-5" /></svg>
-                </div>
-                <div className="pay-success-title">Thanh toán thành công</div>
-                <div className="pay-success-desc">
-                  {amount ? `${formatAmount(amount)}₫ — ` : ''}Đơn <span style={{ fontFamily: 'var(--mono)' }}>{orderId}</span>
-                </div>
-              </div>
+          <div className="qrCol">
+            <div className="qrLabel">
+              <span className="dot bankDot" />
+              Quét bằng App ngân hàng
             </div>
-          ) : (
-            <div className="pay-card">
-              <div className="pay-card-notch left" />
-              <div className="pay-card-notch right" />
-              <div className="pay-amount-block">
-                <div className="pay-eyebrow">Số tiền cần thanh toán</div>
-                <div className="pay-amount">{amount ? `${formatAmount(amount)}₫` : '—'}</div>
-                <div className="pay-order-id">Đơn hàng {orderId}</div>
-                <div className="pay-status-row">
-                  <span className={`pay-status ${status.toLowerCase()}`}>
-                    {isPending ? 'Đang chờ thanh toán' : status === 'FAILED' ? 'Thất bại' : 'Hết hạn'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="pay-perf" />
-
-              {isPending && (
-                <div className="pay-qr-wrap">
-                  <img
-                    src={`/api/momo/qr-extract?orderId=${encodeURIComponent(orderId)}${qrBust ? `&t=${qrBust}` : ''}`}
-                    alt="QR thanh toán"
-                    onError={e => { e.currentTarget.style.display = 'none' }}
-                  />
-                </div>
+            <div className="qrFrame">
+              {loadingPayInfo && <div className="qrPlaceholder">Đang tải…</div>}
+              {!loadingPayInfo && payInfoError && (
+                <div className="qrPlaceholder error">{payInfoError}</div>
               )}
-
-              {message && <div className={`pay-msg${isPaid ? ' ok' : isDone ? ' err' : ''}`}>{message}</div>}
-
-              {isPending && (
-                <>
-                  <div className="pay-hint">
-                    Mở <b>App hỗ trợ</b> để quét mã QR ở trên, hoặc bấm vào ngân hàng bạn đang dùng bên dưới để mở nhanh ứng dụng.
-                  </div>
-                  <div className="pay-section-label">Chọn ngân hàng của bạn</div>
-                  <div className="bank-grid">
-                    {BANKS.map(b => (
-                      <button key={b.code} className="bank-btn" onClick={() => openBankApp(b.code)}>
-                        <span className="bank-badge" style={{ background: b.color }}>{b.short}</span>
-                        <span className="bank-label">{b.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="pay-footnote">
-                    Bấm vào ngân hàng sẽ mở app tương ứng nếu đã cài (hoặc đưa tới App Store/CH Play nếu chưa cài).<br />
-                    Bạn vẫn cần tự quét mã QR trong app — hệ thống ngân hàng chưa hỗ trợ tự điền số tiền.
-                  </div>
-                </>
+              {!loadingPayInfo && !payInfoError && vietqrImg && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="qrImg" src={vietqrImg} alt="Mã VietQR" />
               )}
             </div>
-          )}
+            <div className="qrSub">
+              {payInfo?.bank?.name ? `App ngân hàng bất kỳ hỗ trợ VietQR · ${payInfo.bank.name}` : 'App ngân hàng bất kỳ hỗ trợ VietQR'}
+            </div>
+          </div>
         </div>
       </div>
-    </>
+
+      <style jsx>{`
+        .page {
+          min-height: 100vh;
+          background: linear-gradient(180deg, #fdf4fa 0%, #f6f4fb 100%);
+          display: flex;
+          justify-content: center;
+          padding: 32px 16px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        .card {
+          width: 100%;
+          max-width: 460px;
+          background: #fff;
+          border-radius: 20px;
+          box-shadow: 0 12px 32px rgba(161, 0, 107, 0.08);
+          padding: 24px 20px 28px;
+          height: fit-content;
+        }
+        .header {
+          text-align: center;
+          margin-bottom: 18px;
+        }
+        .badge {
+          display: inline-block;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: #a1006b;
+          background: #fbeaf5;
+          padding: 3px 10px;
+          border-radius: 999px;
+          margin-bottom: 8px;
+        }
+        .storeName {
+          font-size: 17px;
+          font-weight: 700;
+          color: #241a2b;
+        }
+        .orderId {
+          font-size: 12px;
+          color: #9c95a6;
+          margin-top: 2px;
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        .amountBlock {
+          text-align: center;
+          padding: 18px 0 20px;
+          border-bottom: 1px dashed #ecdff0;
+          margin-bottom: 20px;
+        }
+        .amount {
+          font-size: 32px;
+          font-weight: 800;
+          color: #a1006b;
+          letter-spacing: -0.01em;
+        }
+        .orderInfo {
+          margin-top: 6px;
+          font-size: 13px;
+          color: #7b7484;
+        }
+        .statusBanner {
+          background: #fff5e6;
+          color: #8a5a00;
+          font-size: 13px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          margin-bottom: 16px;
+        }
+        .qrColumns {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+        }
+        @media (max-width: 380px) {
+          .qrColumns {
+            grid-template-columns: 1fr;
+          }
+        }
+        .qrCol {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          background: #faf7fb;
+          border-radius: 14px;
+          padding: 14px 10px;
+        }
+        .qrLabel {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12.5px;
+          font-weight: 700;
+          color: #241a2b;
+          margin-bottom: 10px;
+          text-align: center;
+        }
+        .dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 999px;
+          flex-shrink: 0;
+        }
+        .momoDot {
+          background: #a1006b;
+        }
+        .bankDot {
+          background: #2b6fe0;
+        }
+        .qrFrame {
+          width: 100%;
+          aspect-ratio: 1 / 1;
+          background: #fff;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 8px;
+        }
+        .qrImg {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+        .qrPlaceholder {
+          font-size: 11.5px;
+          color: #b0aab8;
+          text-align: center;
+          padding: 0 6px;
+        }
+        .qrPlaceholder.error {
+          color: #a12020;
+        }
+        .qrSub {
+          margin-top: 8px;
+          font-size: 10.5px;
+          color: #948d9e;
+          text-align: center;
+          line-height: 1.4;
+        }
+      `}</style>
+    </div>
   )
 }
