@@ -1,21 +1,25 @@
 // pages/pay/[orderId].js
 //
-// Hiện song song 2 mã QR cho 1 đơn hàng:
-//   - QR 1 "Quét bằng App MoMo": ảnh lấy thẳng từ /api/momo/qr-extract
-//     (mã do MoMo tự vẽ trên trang thanh toán của họ).
-//   - QR 2 "Quét bằng App ngân hàng": tự vẽ mới bằng thư viện `qrcode` từ
-//     chuỗi EMV gốc (`raw`) đọc được ở /api/momo/vietqr-pay.
+// Trang thanh toán công khai cho khách quét mã:
+//   - QR: lấy THẲNG ảnh PNG từ /api/momo/qr-extract?orderId=... (ảnh do
+//     MoMo tự vẽ trên trang thanh toán của họ, đã hỗ trợ quét được bằng cả
+//     app MoMo lẫn app ngân hàng bất kỳ theo chuẩn VietQR/NAPAS 247).
+//     KHÔNG tự vẽ lại QR thứ 2 nữa — chỉ 1 mã QR duy nhất.
+//   - Thông tin chuyển khoản (ngân hàng, số tài khoản, số tiền, nội dung)
+//     + nút sao chép: lấy từ /api/momo/vietqr-pay, gọi ĐÚNG 1 LẦN lúc
+//     mount. Route này kéo theo cả chuỗi qr-extract (Puppeteer) nên tuyệt
+//     đối không gọi lại theo interval.
+//   - Trạng thái đơn hàng: poll /api/momo/status?orderId=... mỗi 1 giây —
+//     route này chỉ đọc Redis (kèm verify thật với MoMo khi gần hết hạn),
+//     rất nhẹ, an toàn để poll liên tục. Tự dừng polling khi đơn đã có kết
+//     luận cuối (PAID/FAILED/EXPIRED).
 //
-// LƯU Ý: dùng CSS Module (styles/pay.module.css) thay vì `<style jsx>`.
-// Bản trước dùng styled-jsx và bị lỗi lúc chạy trên môi trường Turbopack
-// của project này:
-//   "Cannot find module 'styled-jsx/style.js'"
-// CSS Module là tính năng built-in của Next.js (không cần cài thêm gói),
-// nên tránh được lỗi thiếu dependency đó hoàn toàn.
+// LƯU Ý: dùng CSS Module (styles/pay.module.css) thay vì `<style jsx>` —
+// bản trước dùng styled-jsx bị lỗi "Cannot find module 'styled-jsx/style.js'"
+// trên môi trường Turbopack của project này.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Redis } from '@upstash/redis'
-import QRCode from 'qrcode'
 import styles from '../../styles/pay.module.css'
 
 const redis = new Redis({
@@ -23,14 +27,14 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 })
 
+const POLL_INTERVAL_MS = 1000
+// Đơn đã có 1 trong các trạng thái này coi như kết luận cuối -> dừng poll.
+const TERMINAL_STATUSES = ['PAID', 'FAILED', 'EXPIRED']
+
 export async function getServerSideProps({ params }) {
   const orderId = (params.orderId || '').toString().trim()
   if (!orderId) return { notFound: true }
 
-  // Bọc try/catch để nếu Redis lỗi (sai/thiếu env KV_REST_API_URL,
-  // KV_REST_API_TOKEN, mất kết nối...) thì trang vẫn render ra thông báo
-  // lỗi rõ ràng thay vì Next.js quăng 500 trắng không log gì cho người
-  // dùng thấy. Chi tiết lỗi thật vẫn nằm trong Vercel Function Logs.
   let order
   try {
     const raw = await redis.hget('momo:orders', orderId)
@@ -53,8 +57,7 @@ export async function getServerSideProps({ params }) {
         amount: order.amount ?? null,
         orderInfo: order.orderInfo || '',
         storeName: order.storeName || '',
-        status: order.status || 'UNKNOWN',
-        payUrl: order.payUrl || '',
+        status: order.status || 'PENDING',
       },
       loadError: null,
     },
@@ -67,34 +70,106 @@ function formatVnd(amount) {
   return new Intl.NumberFormat('vi-VN').format(n) + ' đ'
 }
 
-export default function PayPage({ order, loadError }) {
+function statusLabel(status) {
+  switch (status) {
+    case 'PAID':
+      return { text: 'Thanh toán thành công', tone: 'success' }
+    case 'FAILED':
+      return { text: 'Thanh toán thất bại', tone: 'error' }
+    case 'EXPIRED':
+      return { text: 'Đơn hàng đã hết hạn', tone: 'error' }
+    default:
+      return { text: 'Đang chờ thanh toán…', tone: 'pending' }
+  }
+}
+
+// Ô thông tin có nút sao chép — dùng chung cho ngân hàng / STK / số tiền / nội dung.
+function CopyField({ label, value }) {
+  const [copied, setCopied] = useState(false)
+  if (!value) return null
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(String(value))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Trình duyệt chặn clipboard (hiếm, thường do không phải HTTPS hoặc
+      // thiếu permission) — bỏ qua, người dùng vẫn tự bôi đen copy được.
+    }
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        padding: '10px 14px',
+        borderRadius: 10,
+        background: '#f7f7f9',
+        marginBottom: 8,
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, color: '#888' }}>{label}</div>
+        <div
+          style={{
+            fontSize: 15,
+            fontWeight: 600,
+            fontFamily: '"JetBrains Mono", monospace',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={String(value)}
+        >
+          {value}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={handleCopy}
+        style={{
+          flexShrink: 0,
+          border: 'none',
+          borderRadius: 8,
+          padding: '6px 12px',
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: 'pointer',
+          background: copied ? '#22c55e' : '#111',
+          color: '#fff',
+          transition: 'background 0.15s',
+        }}
+      >
+        {copied ? 'Đã chép' : 'Sao chép'}
+      </button>
+    </div>
+  )
+}
+
+export default function PayPage({ order: initialOrder, loadError }) {
+  const [order, setOrder] = useState(initialOrder)
   const [payInfo, setPayInfo] = useState(null)
   const [payInfoError, setPayInfoError] = useState('')
   const [loadingPayInfo, setLoadingPayInfo] = useState(true)
-  const [vietqrImg, setVietqrImg] = useState('')
+  const pollRef = useRef(null)
 
+  // 1) Lấy thông tin chuyển khoản (vietqr-pay) — CHỈ 1 LẦN lúc mount.
   useEffect(() => {
-    if (!order) return // trang đang ở trạng thái lỗi tải đơn hàng, không có gì để gọi tiếp
+    if (!initialOrder) return
     let cancelled = false
 
-    async function load() {
+    async function loadPayInfo() {
       setLoadingPayInfo(true)
       setPayInfoError('')
       try {
-        const r = await fetch(`/api/momo/vietqr-pay?orderId=${encodeURIComponent(order.orderId)}`)
+        const r = await fetch(`/api/momo/vietqr-pay?orderId=${encodeURIComponent(initialOrder.orderId)}`)
         const data = await r.json()
-        if (!r.ok) throw new Error(data.error || 'Không lấy được thông tin VietQR')
-        if (cancelled) return
-        setPayInfo(data)
-
-        if (data.raw) {
-          const dataUrl = await QRCode.toDataURL(data.raw, {
-            errorCorrectionLevel: 'M',
-            margin: 1,
-            width: 400,
-          })
-          if (!cancelled) setVietqrImg(dataUrl)
-        }
+        if (!r.ok) throw new Error(data.error || 'Không lấy được thông tin chuyển khoản')
+        if (!cancelled) setPayInfo(data)
       } catch (err) {
         if (!cancelled) setPayInfoError(err.message || 'Có lỗi xảy ra, thử lại sau')
       } finally {
@@ -102,13 +177,38 @@ export default function PayPage({ order, loadError }) {
       }
     }
 
-    load()
+    loadPayInfo()
     return () => {
       cancelled = true
     }
-  }, [order])
+  }, [initialOrder])
 
-  if (!order) {
+  // 2) Poll trạng thái đơn hàng mỗi 1s (route nhẹ, tự verify với MoMo khi
+  // gần hết hạn) — tự dừng khi đơn đã có kết luận cuối.
+  useEffect(() => {
+    if (!initialOrder) return
+    if (TERMINAL_STATUSES.includes(initialOrder.status)) return // đã kết luận từ SSR, khỏi poll
+
+    async function tick() {
+      try {
+        const r = await fetch(`/api/momo/status?orderId=${encodeURIComponent(initialOrder.orderId)}`)
+        const data = await r.json()
+        if (!r.ok) return // lỗi tạm thời, thử lại ở lần poll sau
+        setOrder((prev) => ({ ...prev, ...data }))
+        if (TERMINAL_STATUSES.includes(data.status)) {
+          clearInterval(pollRef.current)
+        }
+      } catch {
+        // Lỗi mạng tạm thời — bỏ qua, lần poll sau (1s tới) thử lại.
+      }
+    }
+
+    tick() // gọi ngay lần đầu, không đợi hết 1s mới có dữ liệu
+    pollRef.current = setInterval(tick, POLL_INTERVAL_MS)
+    return () => clearInterval(pollRef.current)
+  }, [initialOrder])
+
+  if (!initialOrder) {
     return (
       <div className={styles.page}>
         <div className={styles.card}>
@@ -118,7 +218,8 @@ export default function PayPage({ order, loadError }) {
     )
   }
 
-  const isPending = order.status === 'PENDING'
+  const { text: statusText, tone } = statusLabel(order.status)
+  const toneColor = tone === 'success' ? '#16a34a' : tone === 'error' ? '#dc2626' : '#d97706'
 
   return (
     <div className={styles.page}>
@@ -134,51 +235,53 @@ export default function PayPage({ order, loadError }) {
           {order.orderInfo && <div className={styles.orderInfo}>{order.orderInfo}</div>}
         </div>
 
-        {!isPending && (
-          <div className={styles.statusBanner}>
-            Đơn hàng hiện ở trạng thái <b>{order.status}</b> — có thể đã hết hạn hoặc đã thanh toán.
-          </div>
-        )}
+        <div
+          style={{
+            textAlign: 'center',
+            fontWeight: 600,
+            color: toneColor,
+            marginBottom: 16,
+          }}
+        >
+          {statusText}
+        </div>
 
-        <div className={styles.qrColumns}>
-          <div className={styles.qrCol}>
-            <div className={styles.qrLabel}>
-              <span className={`${styles.dot} ${styles.momoDot}`} />
-              Quét bằng App MoMo
-            </div>
-            <div className={styles.qrFrame}>
+        {/* Chỉ hiện QR + thông tin chuyển khoản khi đơn còn đang chờ —
+            đã có kết luận cuối thì quét cũng vô nghĩa. */}
+        {order.status === 'PENDING' && (
+          <>
+            <div className={styles.qrFrame} style={{ margin: '0 auto 16px', maxWidth: 280 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 className={styles.qrImg}
                 src={`/api/momo/qr-extract?orderId=${encodeURIComponent(order.orderId)}`}
-                alt="Mã QR MoMo"
+                alt="Mã QR thanh toán"
               />
             </div>
-            <div className={styles.qrSub}>Mở app MoMo → Quét mã</div>
-          </div>
+            <div className={styles.qrSub} style={{ textAlign: 'center', marginBottom: 20 }}>
+              Mở app MoMo hoặc app ngân hàng bất kỳ hỗ trợ VietQR để quét
+            </div>
 
-          <div className={styles.qrCol}>
-            <div className={styles.qrLabel}>
-              <span className={`${styles.dot} ${styles.bankDot}`} />
-              Quét bằng App ngân hàng
-            </div>
-            <div className={styles.qrFrame}>
-              {loadingPayInfo && <div className={styles.qrPlaceholder}>Đang tải…</div>}
+            <div>
+              {loadingPayInfo && (
+                <div style={{ textAlign: 'center', color: '#888', padding: '12px 0' }}>
+                  Đang tải thông tin chuyển khoản…
+                </div>
+              )}
               {!loadingPayInfo && payInfoError && (
-                <div className={`${styles.qrPlaceholder} ${styles.qrPlaceholderError}`}>{payInfoError}</div>
+                <div className={styles.errorBanner}>{payInfoError}</div>
               )}
-              {!loadingPayInfo && !payInfoError && vietqrImg && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img className={styles.qrImg} src={vietqrImg} alt="Mã VietQR" />
+              {!loadingPayInfo && !payInfoError && payInfo && (
+                <>
+                  <CopyField label="Ngân hàng" value={payInfo.bank?.fullName || payInfo.bank?.name} />
+                  <CopyField label="Số tài khoản" value={payInfo.accountNumber} />
+                  <CopyField label="Số tiền" value={payInfo.amount ? formatVnd(payInfo.amount) : null} />
+                  <CopyField label="Nội dung chuyển khoản" value={payInfo.content} />
+                </>
               )}
             </div>
-            <div className={styles.qrSub}>
-              {payInfo?.bank?.name
-                ? `App ngân hàng bất kỳ hỗ trợ VietQR · ${payInfo.bank.name}`
-                : 'App ngân hàng bất kỳ hỗ trợ VietQR'}
-            </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   )
