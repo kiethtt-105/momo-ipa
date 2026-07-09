@@ -1830,6 +1830,36 @@ export default function AdminDashboardPage() {
     }
   }, [fetchOrders])
 
+  // Đồng bộ TOÀN BỘ đơn PENDING với MoMo ngay khi admin MỞ TRANG dashboard —
+  // gọi /api/admin/admin-sync (server-side, quét thẳng hgetall Redis, không
+  // phụ thuộc danh sách/bộ lọc đang hiển thị trên UI) thay vì phải đợi vòng
+  // lặp polling 1s ở dưới quét lần lượt từng đơn qua /api/momo/query. Nhờ
+  // vậy các đơn PENDING tồn đọng từ trước khi admin mở trang (kể cả hôm
+  // qua/tuần trước) cũng được đối chiếu ngay lập tức. didInitialSyncRef
+  // đảm bảo chỉ chạy đúng 1 lần cho mỗi lượt đăng nhập.
+  const didInitialSyncRef = useRef(false)
+  useEffect(() => {
+    if (!authed || didInitialSyncRef.current) return
+    didInitialSyncRef.current = true
+    ;(async () => {
+      try {
+        const res = await fetch('/api/admin/admin-sync', { method: 'POST' })
+        if (res.status === 401) { setAuthed(false); return }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json().catch(() => null)
+        if (data?.updated > 0) {
+          console.log(`[AdminDashboard] admin-sync: đã đối chiếu và cập nhật ${data.updated}/${data.checked} đơn PENDING khi mở trang.`)
+        }
+      } catch (err) {
+        console.error('[AdminDashboard] admin-sync lỗi:', err)
+      } finally {
+        // Luôn tải lại danh sách sau khi sync xong (kể cả khi lỗi/không có
+        // gì thay đổi) để đảm bảo dashboard hiển thị dữ liệu mới nhất.
+        fetchOrders({ force: true })
+      }
+    })()
+  }, [authed, fetchOrders])
+
   // Vòng lặp tự làm mới duy nhất: mỗi 1 giây vừa tải lại danh sách đơn hàng vừa
   // đối chiếu lại các đơn đang chờ xử lý với MoMo — không cần người dùng bấm gì.
   //
