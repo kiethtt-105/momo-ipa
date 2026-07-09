@@ -67,33 +67,61 @@ function sign(payload) {
   return `${data}.${sig}`
 }
 
-export function verifySession(req) {
+// Trả về payload nếu cookie hợp lệ, ngược lại trả về null.
+// Dùng nội bộ cho cả verifySession() và refreshSession().
+function getValidPayload(req) {
   const raw = req.cookies?.[COOKIE_NAME]
-  if (!raw) return false
+  if (!raw) return null
 
   const [data, sig] = raw.split('.')
-  if (!data || !sig) return false
+  if (!data || !sig) return null
 
   const expected = crypto.createHmac('sha256', COOKIE_SECRET).update(data).digest('base64url')
-  if (sig.length !== expected.length) return false
+  if (sig.length !== expected.length) return null
 
   const ok = crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))
-  if (!ok) return false
+  if (!ok) return null
 
   let payload
   try {
     payload = JSON.parse(Buffer.from(data, 'base64url').toString())
   } catch {
-    return false
+    return null
   }
 
-  // Không còn check payload.exp — session sống mãi tới khi logout.
-  // Không còn check IP — đổi mạng/wifi/4G không làm văng session.
+  // Không check payload.exp — session sống mãi tới khi logout.
 
   if (BIND_TO_DEVICE) {
     const currentDevice = getDeviceHash(req)
-    if (!payload.device || payload.device !== currentDevice) return false
+    if (!payload.device || payload.device !== currentDevice) return null
   }
+
+  return payload
+}
+
+export function verifySession(req) {
+  return getValidPayload(req) !== null
+}
+
+// Gọi sau khi verifySession() == true, trong các route cần giữ phiên "rolling":
+// cấp lại cookie mới với Max-Age=400 ngày tính lại từ thời điểm hiện tại.
+// Nhờ vậy chỉ cần admin còn thao tác (dù cách nhau bao lâu, miễn < 400 ngày/lần)
+// thì session không bao giờ tự rụng — chỉ mất khi bấm logout.
+export function refreshSession(req, res) {
+  const payload = getValidPayload(req)
+  if (!payload) return false
+
+  const token = sign({
+    device: payload.device,
+    loginAt: payload.loginAt, // giữ nguyên mốc login gốc để biết đăng nhập từ khi nào
+    lastSeenAt: Date.now(),   // chỉ để hiển thị/log, không dùng để tính hết hạn
+  })
+
+  res.setHeader('Set-Cookie', [
+    `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${COOKIE_MAX_AGE_SEC}${
+      process.env.NODE_ENV === 'production' ? '; Secure' : ''
+    }`,
+  ])
 
   return true
 }

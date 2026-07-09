@@ -1,12 +1,14 @@
 // pages/api/admin/session.js
 
-import { verifySession } from './login'
+import { verifySession, refreshSession } from './login'
 
 const COOKIE_NAME = 'momo_admin_session'
 
 export default function handler(req, res) {
   if (req.method === 'GET') {
-    return res.status(200).json({ authed: verifySession(req) })
+    const authed = verifySession(req)
+    if (authed) refreshSession(req, res) // rolling: mở dashboard cũng tính là "còn hoạt động"
+    return res.status(200).json({ authed })
   }
 
   if (req.method === 'DELETE') {
